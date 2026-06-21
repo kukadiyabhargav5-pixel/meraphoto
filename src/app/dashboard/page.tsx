@@ -1033,11 +1033,11 @@ export default function Dashboard() {
                               acc[fp].push(m);
                               return acc;
                             }, {} as Record<string, any[]>)
-                          ).map(([folder, items]: [string, any[]]) => (
+                          ).map(([folder, items]: any) => (
                             <div key={folder} className="flex flex-col gap-3">
                               <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">{folder} ({items.length})</h4>
                               <div className="grid grid-cols-4 gap-4">
-                                {items.map((m) => (
+                                {items.map((m: any) => (
                                   <div 
                                     key={m._id} 
                                     className={`aspect-square rounded-xl overflow-hidden relative group cursor-pointer transition-all ${selectedMediaIds.has(m._id) ? 'ring-4 ring-blue-500 ring-offset-2' : 'border border-slate-250 hover:border-blue-400'}`}
