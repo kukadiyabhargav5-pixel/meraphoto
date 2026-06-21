@@ -1033,7 +1033,7 @@ export default function Dashboard() {
                               acc[fp].push(m);
                               return acc;
                             }, {} as Record<string, any[]>)
-                          ).map(([folder, items]) => (
+                          ).map(([folder, items]: [string, any[]]) => (
                             <div key={folder} className="flex flex-col gap-3">
                               <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">{folder} ({items.length})</h4>
                               <div className="grid grid-cols-4 gap-4">
