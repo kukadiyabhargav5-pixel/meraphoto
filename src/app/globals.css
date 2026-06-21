@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-primary: #2563EB;   /* Royal Blue */
+  --color-brand-secondary: #0F172A; /* Dark Navy */
+  --color-brand-accent: #22D3EE;    /* Electric Cyan */
+  
+  --color-glass-bg: rgba(15, 23, 42, 0.45);
+  --color-glass-border: rgba(255, 255, 255, 0.08);
+}
+
+:root {
+  --background: #F8FAFC; /* Light Gray */
+  --foreground: #0F172A; /* Dark Navy */
+  
+  --card-bg: rgba(255, 255, 255, 0.85);
+  --card-border: rgba(37, 99, 235, 0.1);
+  --card-glow: rgba(37, 99, 235, 0.03);
+
+  --accent-glow: radial-gradient(circle, rgba(37, 99, 235, 0.08) 0%, rgba(34, 211, 238, 0.0) 70%);
+}
+
+/* Dark mode uses the Dark Navy as background */
+.dark {
+  --background: #0F172A; /* Dark Navy */
+  --foreground: #F8FAFC; /* Light Gray */
+  
+  --card-bg: rgba(30, 41, 59, 0.6);
+  --card-border: rgba(255, 255, 255, 0.06);
+  --card-glow: rgba(34, 211, 238, 0.15);
+
+  --accent-glow: radial-gradient(circle, rgba(37, 99, 235, 0.22) 0%, rgba(34, 211, 238, 0.0) 70%);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--card-border);
+  box-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.04);
+}
+
+.dark .glass-panel {
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  background: rgba(15, 23, 42, 0.65);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2563EB;
+}
+
+/* Custom Glow */
+.glow-bg {
+  background: var(--accent-glow);
+}
+
+/* Custom animations */
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.pulse-glow {
+  animation: pulseGlow 4s infinite ease-in-out;
+}
