@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, User, Eye, EyeOff, Loader, Camera, AlertCircle, CheckCircle2, ShieldCheck, ArrowRight, X } from 'lucide-react';
 import { apiClient } from '../../../lib/api';
 import PublicWrapper from '../../../components/PublicWrapper';
+import Script from 'next/script';
 
 // --- Professional Outlined Input Component ---
 const GlassInput = ({ id, type, value, onChange, label, required = true, isPassword = false }: any) => {
@@ -79,6 +80,67 @@ function AuthContentGlassy() {
   const [customGoogleEmail, setCustomGoogleEmail] = useState('');
   const [customGoogleName, setCustomGoogleName] = useState('');
   const [isCustomGoogleForm, setIsCustomGoogleForm] = useState(false);
+
+  const decodeJwt = (token: string) => {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        window
+          .atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      return JSON.parse(jsonPayload);
+    } catch (e) {
+      console.error('Error decoding JWT', e);
+      return null;
+    }
+  };
+
+  const handleGoogleSignInClick = () => {
+    setError('');
+    setGooglePopupActive(true);
+  };
+
+  const handleRealGoogleSignIn = () => {
+    if (typeof window === 'undefined' || !(window as any).google) {
+      setError('Google Sign-In is loading, please try again in a moment.');
+      return;
+    }
+
+    try {
+      const client = (window as any).google.accounts.oauth2.initTokenClient({
+        client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '433730596349-gd7b6pup1pdmaob733sjq35m48mohf9j.apps.googleusercontent.com',
+        scope: 'email profile openid',
+        callback: async (tokenResponse: any) => {
+          if (tokenResponse && tokenResponse.access_token) {
+            setLoading(true);
+            setGooglePopupActive(false);
+            try {
+              const res = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${tokenResponse.access_token}`);
+              const profile = await res.json();
+              if (profile && profile.email) {
+                handleGoogleLogin(profile.email, profile.name || profile.email.split('@')[0], profile.sub);
+              } else {
+                setError('Failed to retrieve user profile from Google.');
+              }
+            } catch (err) {
+              console.error('Error fetching Google userinfo', err);
+              setError('Failed to retrieve user info from Google.');
+            } finally {
+              setLoading(false);
+            }
+          }
+        },
+      });
+      client.requestAccessToken();
+    } catch (e) {
+      console.error('Error initializing Google client', e);
+      setError('Failed to initialize Google Sign-In.');
+    }
+  };
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
@@ -296,7 +358,7 @@ function AuthContentGlassy() {
                       <motion.button
                         variants={itemVars}
                         type="button"
-                        onClick={() => setGooglePopupActive(true)}
+                        onClick={handleGoogleSignInClick}
                         className="w-full flex items-center justify-center gap-3 border border-slate-300 rounded-[12px] bg-white text-slate-700 font-bold h-[56px] hover:bg-slate-50 transition-all duration-300 cursor-pointer"
                       >
                         <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -337,12 +399,12 @@ function AuthContentGlassy() {
                       <motion.button
                         variants={itemVars}
                         type="button"
-                        onClick={() => setGooglePopupActive(true)}
+                        onClick={handleGoogleSignInClick}
                         className="w-full flex items-center justify-center gap-3 border border-slate-355 rounded-[12px] bg-white text-slate-700 font-bold h-[56px] hover:bg-slate-50 transition-all duration-300 cursor-pointer"
                       >
                         <svg className="w-5 h-5" viewBox="0 0 24 24">
                           <path fill="#EA4335" d="M5.266,9.765 C6.199,6.97 8.795,5 12,5 C13.79,5 15.353,5.64 16.587,6.728 L20.21,3.105 C18.012,1.18 15.15,0 12,0 C7.303,0 3.268,2.69 1.258,6.619 L5.266,9.765 Z" />
-                          <path fill="#34A853" d="M16.04,18.013 C14.95,18.73 13.565,19 12,19 C8.795,19 6.198,17.03 5.266,14.235 L1.258,17.38 C3.268,21.31 7.303,24 12,24 C15.02,24 17.756,22.925 19.825,21.05 L16.04,18.013 Z" />
+                          <path fill="#34A853" d="M16.04,18.013 C14.95,18.73 13.565,19 12,19 C8.795,19 6.198,17.03 5.266,14.235 L1.258,17.38 L5.266,14.235 Z" />
                           <path fill="#4285F4" d="M23.49,12.275 C23.49,11.49 23.415,10.73 23.3,10 L12,10 L12,14.515 L18.447,14.515 C18.16,16.085 17.275,17.22 16.04,18.013 L19.825,21.05 C22.037,19.01 23.49,16.005 23.49,12.275 Z" />
                           <path fill="#FBBC05" d="M5.266,14.235 C5.024,13.52 4.885,12.775 4.885,12 C4.885,11.225 5.024,10.48 5.266,9.765 L1.258,6.62 C0.46,8.215 0,10.035 0,12 C0,13.965 0.46,15.785 1.258,17.38 L5.266,14.235 Z" />
                         </svg>
@@ -408,6 +470,30 @@ function AuthContentGlassy() {
               <div className="max-w-md w-full mx-auto">
                 {!isCustomGoogleForm ? (
                   <div className="space-y-0.5 divide-y divide-slate-100">
+                    {/* Launch Real Google popup button */}
+                    <button
+                      onClick={handleRealGoogleSignIn}
+                      className="w-full flex items-center p-4 hover:bg-[#c5a880]/10 transition-all text-left cursor-pointer rounded-xl bg-slate-50 border border-slate-200 mb-3 shadow-sm group"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center font-black text-sm select-none shadow-sm group-hover:scale-105 transition-transform">
+                        <svg className="w-5 h-5" viewBox="0 0 24 24">
+                          <path fill="#4285F4" d="M23.49,12.275 C23.49,11.49 23.415,10.73 23.3,10 L12,10 L12,14.515 L18.447,14.515 C18.16,16.085 17.275,17.22 16.04,18.013 L19.825,21.05 C22.037,19.01 23.49,16.005 23.49,12.275 Z" />
+                          <path fill="#EA4335" d="M5.266,9.765 C6.199,6.97 8.795,5 12,5 C13.79,5 15.353,5.64 16.587,6.728 L20.21,3.105 C18.012,1.18 15.15,0 12,0 C7.303,0 3.268,2.69 1.258,6.619 L5.266,9.765 Z" />
+                          <path fill="#FBBC05" d="M5.266,14.235 C5.024,13.52 4.885,12.775 4.885,12 C4.885,11.225 5.024,10.48 5.266,9.765 L1.258,6.62 C0.46,8.215 0,10.035 0,12 C0,13.965 0.46,15.785 1.258,17.38 L5.266,14.235 Z" />
+                          <path fill="#34A853" d="M16.04,18.013 C14.95,18.73 13.565,19 12,19 C8.795,19 6.198,17.03 5.266,14.235 L1.258,17.38 C3.268,21.31 7.303,24 12,24 C15.02,24 17.756,22.925 19.825,21.05 L16.04,18.013 Z" />
+                        </svg>
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-bold text-slate-800">Launch Real Google Popup</p>
+                        <p className="text-xs text-[#c5a880] font-bold mt-0.5">Use if localhost is authorized in Google Cloud Console</p>
+                      </div>
+                    </button>
+
+                    {/* Separator line */}
+                    <div className="py-2 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white select-none">
+                      🧪 Local Bypass Simulation
+                    </div>
+
                     {/* Mara Photo Team */}
                     <button
                       onClick={() => handleGoogleLogin('maraphoto303@gmail.com', 'Mara Photo Team', 'google_maraphoto_303')}
@@ -564,6 +650,7 @@ function AuthContentGlassy() {
           </div>
         </div>
       )}
+      <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
     </PublicWrapper>
   );
 }

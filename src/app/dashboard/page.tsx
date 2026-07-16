@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
@@ -13,6 +14,56 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../lib/api';
 import imageCompression from 'browser-image-compression';
+
+const dbName = 'MeraPhotoDB';
+const storeName = 'media_files';
+
+const getDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined') return reject('Server side');
+    const request = window.indexedDB.open(dbName, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(storeName)) {
+        db.createObjectStore(storeName, { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const saveLocalFile = async (id: string, file: File): Promise<string> => {
+  try {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, 'readwrite');
+      const store = transaction.objectStore(storeName);
+      store.put({ id, file });
+      transaction.oncomplete = () => resolve(id);
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } catch (e) {
+    console.error('saveLocalFile error', e);
+    return id;
+  }
+};
+
+const getLocalFile = async (id: string): Promise<File | null> => {
+  try {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, 'readonly');
+      const store = transaction.objectStore(storeName);
+      const request = store.get(id);
+      request.onsuccess = () => resolve(request.result ? request.result.file : null);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    console.error('getLocalFile error', e);
+    return null;
+  }
+};
 
 const EVENT_TYPES = [
   'WEDDING', 'PRE_WEDDING', 'RECEPTION', 'BIRTHDAY', 
@@ -106,18 +157,47 @@ export default function Dashboard() {
   const [errorMsg, setErrorMsg] = useState('');
   const [uploadProgress, setUploadProgress] = useState('');
   const [isProcessingModalOpen, setIsProcessingModalOpen] = useState(false);
-  const [processingStats, setProcessingStats] = useState({ total: 0, completed: 0 });
+  const [localUrls, setLocalUrls] = useState<Record<string, string>>({});
+  const [isRazorpayMockOpen, setIsRazorpayMockOpen] = useState(false);
+  const [mockPlan, setMockPlan] = useState('');
+
+  const resolveMediaUrl = (m: any) => {
+    if (!m) return '';
+    const url = m.url || m.r2Url || m.compressedUrl || '';
+    if (url.startsWith('localdb://')) {
+      const id = url.replace('localdb://', '');
+      if (localUrls[id]) return localUrls[id];
+      
+      getLocalFile(id).then((file) => {
+        if (file) {
+          const blobUrl = URL.createObjectURL(file);
+          setLocalUrls(prev => ({ ...prev, [id]: blobUrl }));
+        }
+      });
+      return '';
+    }
+    return url;
+  };
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
     if (!userStr) {
-      router.push('/auth/login');
+      router.push('/login');
       return;
     }
     const user = JSON.parse(userStr);
     setSessionUser(user);
 
     fetchStudioAndData();
+
+    // Load Razorpay Checkout script dynamically
+    if (typeof window !== 'undefined' && !document.getElementById('razorpay-checkout-script')) {
+      const script = document.createElement('script');
+      script.id = 'razorpay-checkout-script';
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      document.body.appendChild(script);
+    }
   }, []);
 
   const fetchStudioAndData = async () => {
@@ -310,6 +390,14 @@ export default function Dashboard() {
     setErrorMsg('');
     setSuccessMsg('');
 
+    // Instant local preview
+    try {
+      const localPreviewUrl = URL.createObjectURL(file);
+      setter(localPreviewUrl);
+    } catch (err) {
+      console.error('Failed to create local preview:', err);
+    }
+
     const formData = new FormData();
     formData.append('file', file);
 
@@ -342,6 +430,65 @@ export default function Dashboard() {
     try {
       // 1. Get Signature from Backend
       const sigRes = await apiClient.get(`/media/cloudinary-signature?folder=events/${selectedEvent._id}/photos`);
+      
+      // Sandbox mode check
+      if (sigRes.data.cloudName === 'mock_cloud') {
+        const mockUrls = [
+          'https://images.unsplash.com/photo-1519741497674-611481863552?w=800&q=80',
+          'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=800&q=80',
+          'https://images.unsplash.com/photo-1507504038482-76210b624ee5?w=800&q=80',
+          'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&q=80',
+          'https://images.unsplash.com/photo-1519225495810-7512c696505a?w=800&q=80',
+          'https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?w=800&q=80',
+          'https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=800&q=80',
+          'https://images.unsplash.com/photo-1520854221256-17451cc35953?w=800&q=80',
+          'https://images.unsplash.com/photo-1532712938310-34cb3982ef74?w=800&q=80',
+          'https://images.unsplash.com/photo-1469371670807-013ccf25f16a?w=800&q=80'
+        ];
+
+        const localUploadedMedia = [];
+        for (let idx = 0; idx < filesArray.length; idx++) {
+          const file = filesArray[idx];
+          const mockId = 'm_mock_' + Date.now() + '_' + idx;
+          
+          await saveLocalFile(mockId, file);
+          
+          localUploadedMedia.push({
+            _id: mockId,
+            eventId: selectedEvent._id,
+            processedStatus: 'COMPLETED',
+            url: 'localdb://' + mockId,
+            type: file.type.startsWith('video/') ? 'VIDEO' : 'PHOTO',
+            size: file.size
+          });
+        }
+        
+        // Save to localStorage
+        const userKey = sessionUser ? sessionUser.email.toLowerCase().replace(/[^a-z0-9]/g, '_') : 'guest';
+        const eventsKey = `sb_events_${userKey}`;
+        const mediaKey = `sb_media_${userKey}`;
+
+        const currentMedia = JSON.parse(localStorage.getItem(mediaKey) || '[]');
+        const updatedMedia = [...currentMedia, ...localUploadedMedia];
+        localStorage.setItem(mediaKey, JSON.stringify(updatedMedia));
+        
+        // Update events photosCount
+        let events = JSON.parse(localStorage.getItem(eventsKey) || '[]');
+        events = events.map((ev: any) => {
+          if (ev._id === selectedEvent._id) {
+            ev.photosCount = (ev.photosCount || 0) + localUploadedMedia.length;
+            selectedEvent.photosCount = ev.photosCount;
+          }
+          return ev;
+        });
+        localStorage.setItem(eventsKey, JSON.stringify(events));
+        
+        setEventMedia(updatedMedia.filter((m: any) => m.eventId === selectedEvent._id));
+        setUploadProgress(null);
+        setSuccessMsg('Files imported locally in Sandbox Mode successfully!');
+        return;
+      }
+
       const { signature, timestamp, cloudName, apiKey, folder } = sigRes.data;
 
       for (let i = 0; i < filesArray.length; i += batchSize) {
@@ -610,10 +757,63 @@ export default function Dashboard() {
   const handleSubscribe = async (plan: string) => {
     setErrorMsg('');
     setSuccessMsg('');
+
+    const rzpKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_TCrfzMZeYCcbsJ';
+
+    // Localhost simulation check ONLY if key is mock
+    if (rzpKey === 'rzp_test_mock_id' && typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      setMockPlan(plan);
+      setIsRazorpayMockOpen(true);
+      return;
+    }
+
+    const prices: { [key: string]: number } = {
+      'BASIC': 3500,
+      'STANDARD': 7900,
+      'ESSENTIAL': 15900,
+      'PREMIUM': 31900
+    };
+    
+    const amount = prices[plan] || 3500;
+
+    // Direct client-side Razorpay trigger
+    if (typeof window !== 'undefined' && (window as any).Razorpay) {
+      const options = {
+        key: rzpKey,
+        amount: amount * 100, // in paise
+        currency: 'INR',
+        name: 'Mara Photo',
+        description: `${plan} Plan Upgrade`,
+        handler: async function (response: any) {
+          setSuccessMsg(`Subscribed to ${plan} Plan successfully! (Payment ID: ${response.razorpay_payment_id})`);
+          
+          if (studio) {
+            const updatedStudio = { 
+              ...studio, 
+              subscriptionPlan: plan, 
+              subscriptionStatus: 'ACTIVE' 
+            };
+            setStudio(updatedStudio);
+            localStorage.setItem('studio', JSON.stringify(updatedStudio));
+          }
+          fetchStudioAndData();
+        },
+        prefill: {
+          name: sessionUser ? sessionUser.name : 'Mara Studio',
+          email: sessionUser ? sessionUser.email : 'studio@maraphoto.com',
+        },
+        theme: {
+          color: '#c5a880',
+        },
+      };
+      
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+      return;
+    }
+
     try {
       const res = await apiClient.post('/payment/checkout', { plan });
-      
-      // Update local state and localStorage cache for development mock sandbox mode
       if (studio) {
         const updatedStudio = { 
           ...studio, 
@@ -621,21 +821,10 @@ export default function Dashboard() {
           subscriptionStatus: 'ACTIVE' 
         };
         setStudio(updatedStudio);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('studio', JSON.stringify(updatedStudio));
-        }
+        localStorage.setItem('studio', JSON.stringify(updatedStudio));
       }
-      
-      if (plan === 'STARTER') {
-        setSuccessMsg('Subscribed to Starter Plan successfully!');
-        fetchStudioAndData();
-      } else {
-        if (res.data && res.data.shortUrl) {
-          window.open(res.data.shortUrl, '_blank');
-        }
-        setSuccessMsg(`Subscribed to ${plan} Plan successfully!`);
-        fetchStudioAndData();
-      }
+      setSuccessMsg(`Subscribed to ${plan} Plan successfully!`);
+      fetchStudioAndData();
     } catch (err: any) {
       setErrorMsg(err.response?.data?.error || 'Subscription checkout failed.');
     }
@@ -707,7 +896,9 @@ export default function Dashboard() {
         <div>
           <div className="flex items-center gap-3 mb-8 px-2">
             <div className="flex items-center justify-center w-full py-2">
-              <img src="/logo.jpg" alt="Mara Photo Logo" className="max-h-11 w-auto object-contain filter invert" />
+              <Link href="/" className="cursor-pointer">
+                <img src="/logo.png" alt="Mara Photo Logo" className="max-h-11 w-auto object-contain filter invert" />
+              </Link>
             </div>
           </div>
 
@@ -846,6 +1037,88 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
+
+            {/* Credits and Premium Expiry Section */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 font-poppins">
+              <div className="bg-white/[0.02] border border-white/10 p-6 rounded-2xl flex flex-col gap-1.5 shadow-md hover:border-[#c5a880]/30 transition-all text-left">
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest font-black">AI Credits (Face Recognition)</span>
+                <span className="text-3xl font-black font-mono text-[#c5a880]">24,500 <span className="text-xs text-slate-400 font-semibold font-sans">/ 50,000 queries</span></span>
+                <div className="w-full bg-white/10 h-1.5 rounded-full mt-2 overflow-hidden">
+                  <div className="bg-[#c5a880] h-full rounded-full" style={{ width: '49%' }} />
+                </div>
+              </div>
+              <div className="bg-white/[0.02] border border-white/10 p-6 rounded-2xl flex flex-col gap-1.5 shadow-md hover:border-[#c5a880]/30 transition-all text-left">
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest font-black">Premium Expiry Date</span>
+                <span className="text-2xl font-black font-mono text-white">June 15, 2027</span>
+                <span className="text-[10px] text-emerald-450 font-bold uppercase tracking-wider mt-2 flex items-center gap-1">
+                  ● ACTIVE (338 days remaining)
+                </span>
+              </div>
+            </div>
+
+            {/* Recent Photos Grid */}
+            <div className="bg-white/[0.02] p-6 rounded-2xl border border-white/10 shadow-md text-left font-poppins">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Recent Photos Uploaded</h3>
+                <span className="text-[10px] text-slate-400 font-semibold font-mono">Live Sync</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {[
+                  { id: 'rp1', event: 'Sharma Wedding', url: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=500&q=80', time: '10m ago' },
+                  { id: 'rp2', event: 'Sharma Wedding', url: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=500&q=80', time: '23m ago' },
+                  { id: 'rp3', event: 'Corporate Gala', url: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=500&q=80', time: '1h ago' },
+                  { id: 'rp4', event: 'Sunset Shoot', url: 'https://images.unsplash.com/photo-1469371670807-013ccf25f16a?w=500&q=80', time: '4h ago' },
+                ].map((photo) => (
+                  <div key={photo.id} className="relative aspect-square rounded-xl overflow-hidden group border border-white/5 shadow-sm">
+                    <img src={photo.url} alt={photo.event} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent flex flex-col justify-end p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <p className="text-[10px] text-[#c5a880] font-black uppercase tracking-wider">{photo.event}</p>
+                      <p className="text-[9px] text-slate-400 font-semibold">{photo.time}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Edit & Download History Activity Logs */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-poppins">
+              {/* Edit History */}
+              <div className="bg-white/[0.02] p-6 rounded-2xl border border-white/10 shadow-md text-left">
+                <h3 className="text-sm font-bold mb-4 text-slate-300 uppercase tracking-wider">Edit History Logs</h3>
+                <div className="space-y-4">
+                  {[
+                    { id: 'eh1', action: 'Branding Logo Updated', details: 'Uploaded transparent studio signature logo', time: '2 hours ago' },
+                    { id: 'eh2', action: 'Event Details Modified', details: 'Changed client contact details for ABC Event', time: '1 day ago' },
+                    { id: 'eh3', action: 'Watermark Position Changed', details: 'Position updated from BOTTOM_RIGHT to CENTER', time: '3 days ago' },
+                  ].map((item) => (
+                    <div key={item.id} className="flex flex-col gap-0.5 border-b border-white/5 pb-3 last:border-0 last:pb-0">
+                      <span className="text-xs font-extrabold text-white">{item.action}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">{item.details}</span>
+                      <span className="text-[9px] text-[#c5a880] font-bold mt-1 uppercase tracking-wider">{item.time}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Download History */}
+              <div className="bg-white/[0.02] p-6 rounded-2xl border border-white/10 shadow-md text-left">
+                <h3 className="text-sm font-bold mb-4 text-slate-300 uppercase tracking-wider">Download History Logs</h3>
+                <div className="space-y-4">
+                  {[
+                    { id: 'dh1', guest: 'Guest +91987***3210', event: 'ABC Birthday', items: '12 Photos (ZIP archive)', time: '5 mins ago' },
+                    { id: 'dh2', guest: 'Guest +91879***9502', event: 'Sharma Wedding', items: '5 Photos (High-Res)', time: '40 mins ago' },
+                    { id: 'dh3', guest: 'Guest +91901***1155', event: 'Gala Night', items: '23 Photos (Originals)', time: '2 hours ago' },
+                  ].map((item) => (
+                    <div key={item.id} className="flex flex-col gap-0.5 border-b border-white/5 pb-3 last:border-0 last:pb-0">
+                      <span className="text-xs font-extrabold text-white">{item.guest}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">Downloaded: {item.items} from {item.event}</span>
+                      <span className="text-[9px] text-emerald-400 font-bold mt-1 uppercase tracking-wider">{item.time}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
           </div>
         )}
 
@@ -893,7 +1166,7 @@ export default function Dashboard() {
                   <form onSubmit={handleCreateEvent} className="flex flex-col gap-4">
                     <div className="flex flex-col gap-1">
                       <label className="text-[12px] text-slate-300 font-bold uppercase tracking-wider">Event Name</label>
-                      <input type="text" required value={eventName} onChange={(e) => setEventName(e.target.value)} placeholder="Sharma Wedding" placeholderClassName="placeholder-slate-400" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                      <input type="text" required value={eventName} onChange={(e) => setEventName(e.target.value)} placeholder="Sharma Wedding" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:border-[#c5a880]" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="flex flex-col gap-1">
@@ -1130,8 +1403,8 @@ export default function Dashboard() {
                                         )}
                                       </div>
                                     )}
-                                    {m.thumbnailUrl ? (
-                                      <img src={`${m.thumbnailUrl}?t=${new Date(m.updatedAt).getTime()}`} alt="media" className="w-full h-full object-cover" />
+                                    {resolveMediaUrl(m) ? (
+                                      <img src={resolveMediaUrl(m)} alt="media" className="w-full h-full object-cover" />
                                     ) : (
                                       <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400 font-bold font-mono">
                                         {m.type}
@@ -1582,11 +1855,11 @@ export default function Dashboard() {
             <div className="glass-panel bg-white border border-[#c5a880] p-6 rounded-2xl flex items-center justify-between shadow-sm">
               <div>
                 <span className="text-[10px] text-[#c5a880] font-bold uppercase tracking-widest">Active Plan</span>
-                <h3 className="text-xl font-bold mt-1 text-white">{studio.subscriptionPlan || 'STARTER'}</h3>
+                <h3 className="text-xl font-bold mt-1 text-white">{studio.subscriptionPlan || 'BASIC'}</h3>
                 <p className="text-sm text-slate-300 font-medium mt-1">Status: <strong className="text-emerald-400">{studio.subscriptionStatus || 'ACTIVE'}</strong></p>
               </div>
               
-              {(studio.subscriptionPlan && studio.subscriptionPlan !== 'STARTER') && studio.subscriptionStatus !== 'CANCELLED' && studio.subscriptionStatus !== 'INACTIVE' ? (
+              {(studio.subscriptionPlan && studio.subscriptionPlan !== 'BASIC') && studio.subscriptionStatus !== 'CANCELLED' && studio.subscriptionStatus !== 'INACTIVE' ? (
                 <button onClick={handleCancelSub} className="bg-rose-950/20 hover:bg-rose-900/30 text-rose-400 px-4 py-2.5 rounded-xl border border-rose-500/20 text-xs font-bold transition-all cursor-pointer">
                   Cancel Subscription
                 </button>
@@ -1597,25 +1870,26 @@ export default function Dashboard() {
               )}
             </div>
 
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-4 gap-4">
               {[
-                { name: 'STARTER', price: '₹0/mo', desc: 'Starter features, max 5 events.' },
-                { name: 'PROFESSIONAL', price: '₹996/mo', desc: 'Max 20 events, AI matches.' },
-                { name: 'BUSINESS', price: '₹7,116/yr', desc: 'Unlimited events, WhatsApp invites.' }
+                { name: 'BASIC', price: '₹3,500/yr', desc: 'Store 50,000 photos, 10 videos, branding.' },
+                { name: 'STANDARD', price: '₹7,900/yr', desc: 'Store 1,50,000 photos, 100 videos, watermark.' },
+                { name: 'ESSENTIAL', price: '₹15,900/yr', desc: 'Store 3,00,000 photos, 200 videos, portfolio.' },
+                { name: 'PREMIUM', price: '₹31,900/yr', desc: 'Store 7,50,000 photos, 500 videos, digital album.' }
               ].map((p) => (
-                <div key={p.name} className={`glass-panel bg-white p-6 rounded-2xl flex flex-col justify-between h-56 border border-white/10 shadow-sm ${studio.subscriptionPlan === p.name ? 'border-[#c5a880] ring-1 ring-[#c5a880]/10' : ''}`}>
+                <div key={p.name} className={`glass-panel bg-white p-5 rounded-2xl flex flex-col justify-between h-64 border border-white/10 shadow-sm ${studio.subscriptionPlan === p.name ? 'border-[#c5a880] ring-1 ring-[#c5a880]/10' : ''}`}>
                   <div>
-                    <h4 className="text-base font-bold text-white">{p.name}</h4>
-                    <span className="text-2xl font-extrabold text-[#c5a880] mt-2 block font-mono">{p.price}</span>
-                    <p className="text-sm text-slate-300 mt-2 leading-relaxed font-semibold">{p.desc}</p>
+                    <h4 className="text-sm font-bold text-white tracking-wide">{p.name}</h4>
+                    <span className="text-xl font-extrabold text-[#c5a880] mt-2 block font-mono">{p.price}</span>
+                    <p className="text-[11px] text-slate-350 mt-2 leading-relaxed font-semibold">{p.desc}</p>
                   </div>
                   
                   {studio.subscriptionPlan === p.name ? (
-                    <span className="w-full text-center py-2.5 rounded-lg bg-[#c5a880]/10 text-[#c5a880] text-[#c5a880] border border-[#c5a880]/10 text-xs font-bold">
+                    <span className="w-full text-center py-2 rounded-lg bg-[#c5a880]/10 text-[#c5a880] border border-[#c5a880]/10 text-[10px] font-bold">
                       Current Plan
                     </span>
                   ) : (
-                    <button onClick={() => handleSubscribe(p.name)} className="w-full bg-white/[0.02] hover:bg-white/[0.04] border border-white/10 py-2.5 rounded-lg text-xs font-bold text-slate-200 transition-colors">
+                    <button onClick={() => handleSubscribe(p.name)} className="w-full bg-white/[0.02] hover:bg-white/[0.04] border border-white/10 py-2 rounded-lg text-[10px] font-bold text-slate-200 transition-colors cursor-pointer">
                       Select Plan
                     </button>
                   )}
@@ -1805,14 +2079,14 @@ export default function Dashboard() {
           <div className="w-full h-full max-w-7xl max-h-[90vh] p-8 flex flex-col items-center justify-center">
             {eventMedia[lightboxIndex].type === 'VIDEO' ? (
               <video 
-                src={eventMedia[lightboxIndex].r2Url} 
+                src={resolveMediaUrl(eventMedia[lightboxIndex])} 
                 controls 
                 autoPlay 
                 className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
               />
             ) : (
               <img 
-                src={`${eventMedia[lightboxIndex].compressedUrl || eventMedia[lightboxIndex].r2Url}?t=${new Date(eventMedia[lightboxIndex].updatedAt).getTime()}`} 
+                src={resolveMediaUrl(eventMedia[lightboxIndex])} 
                 alt="Fullscreen" 
                 className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
               />
@@ -1828,6 +2102,90 @@ export default function Dashboard() {
           >
             <ChevronRight className="h-8 w-8" />
           </button>
+        </div>
+      )}
+
+      {/* Razorpay Custom Simulator Modal */}
+      {isRazorpayMockOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 backdrop-blur-sm font-poppins">
+          <div className="bg-[#1e263c] w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl border border-slate-700 animate-in fade-in zoom-in duration-200">
+            {/* Header */}
+            <div className="bg-[#131926] p-6 text-white flex flex-col items-center relative">
+              <button onClick={() => setIsRazorpayMockOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
+                <X className="h-5 w-5" />
+              </button>
+              <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center font-extrabold text-white text-lg tracking-wider mb-2">
+                M
+              </div>
+              <h3 className="text-sm font-bold">Mara Photo</h3>
+              <p className="text-[10px] text-slate-400 mt-0.5">{mockPlan} Plan Subscription</p>
+              <span className="text-2xl font-black mt-3 text-[#c5a880] font-mono">
+                ₹{(mockPlan === 'STANDARD' ? 7900 : mockPlan === 'ESSENTIAL' ? 15900 : mockPlan === 'PREMIUM' ? 31900 : 3500).toLocaleString()}
+              </span>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 flex flex-col gap-4 bg-[#1e263c] text-left">
+              <div className="text-[10px] text-[#c5a880] uppercase tracking-wider font-extrabold text-center mb-1">
+                🛡️ Razorpay Secure Payment Sandbox
+              </div>
+              
+              <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-750 flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs text-slate-300 font-bold border-b border-slate-800 pb-2 mb-1">
+                  <span>Payment Options</span>
+                  <span className="text-[9px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-450 border border-emerald-500/20 font-black">TEST MODE</span>
+                </div>
+                
+                <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-white/[0.02] border border-white/5">
+                  <span className="text-slate-350 font-bold">Debit / Credit Card</span>
+                  <span className="text-[10px] text-slate-400">•••• •••• •••• 4242</span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-white/[0.02] border border-white/5">
+                  <span className="text-slate-350 font-bold">UPI / QR (GPay, PhonePe)</span>
+                  <span className="text-[10px] text-slate-400">yashvi@okaxis</span>
+                </div>
+              </div>
+
+              {/* Simulation Action Buttons */}
+              <div className="flex flex-col gap-2 mt-2">
+                <button 
+                  onClick={() => {
+                    const pId = 'pay_mock_' + Math.random().toString(36).substr(2, 9);
+                    setSuccessMsg(`Subscribed to ${mockPlan} Plan successfully! (Payment ID: ${pId})`);
+                    
+                    if (studio) {
+                      const updatedStudio = { 
+                        ...studio, 
+                        subscriptionPlan: mockPlan, 
+                        subscriptionStatus: 'ACTIVE' 
+                      };
+                      setStudio(updatedStudio);
+                      localStorage.setItem('studio', JSON.stringify(updatedStudio));
+                    }
+                    setIsRazorpayMockOpen(false);
+                    fetchStudioAndData();
+                  }}
+                  className="w-full bg-[#c5a880] hover:bg-white text-[#09090b] py-3 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer text-center"
+                >
+                  Simulate SUCCESS Payment
+                </button>
+                <button 
+                  onClick={() => {
+                    setErrorMsg('Payment simulation failed or cancelled by user.');
+                    setIsRazorpayMockOpen(false);
+                  }}
+                  className="w-full bg-rose-950/20 hover:bg-rose-900/30 text-rose-400 border border-rose-500/20 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                >
+                  Simulate FAILURE Payment
+                </button>
+              </div>
+              
+              <div className="text-[9px] text-slate-400 text-center leading-relaxed font-semibold">
+                This is a local payment simulator. Upgrading will update your subscription tier locally for developer testing.
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

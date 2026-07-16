@@ -7,6 +7,40 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { apiClient } from '../../../../lib/api';
 
+const dbName = 'MeraPhotoDB';
+const storeName = 'media_files';
+
+const getDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined') return reject('Server side');
+    const request = window.indexedDB.open(dbName, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(storeName)) {
+        db.createObjectStore(storeName, { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const getLocalFile = async (id: string): Promise<File | null> => {
+  try {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, 'readonly');
+      const store = transaction.objectStore(storeName);
+      const request = store.get(id);
+      request.onsuccess = () => resolve(request.result ? request.result.file : null);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    console.error('getLocalFile error', e);
+    return null;
+  }
+};
+
 export default function EventPhotosPage() {
   const params = useParams();
   const slug = params.slug as string;
@@ -42,6 +76,26 @@ export default function EventPhotosPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const [localUrls, setLocalUrls] = useState<Record<string, string>>({});
+
+  const resolveMediaUrl = (m: any) => {
+    if (!m) return '';
+    const url = m.url || m.r2Url || m.compressedUrl || '';
+    if (url.startsWith('localdb://')) {
+      const id = url.replace('localdb://', '');
+      if (localUrls[id]) return localUrls[id];
+      
+      getLocalFile(id).then((file) => {
+        if (file) {
+          const blobUrl = URL.createObjectURL(file);
+          setLocalUrls(prev => ({ ...prev, [id]: blobUrl }));
+        }
+      });
+      return '';
+    }
+    return url;
+  };
 
   const fetchPhotos = async (eventId: string) => {
     try {
@@ -440,7 +494,7 @@ export default function EventPhotosPage() {
         {media.length > 0 ? (
           <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-6">
             {media.map((m, index) => {
-              const imgSrc = `${m.compressedUrl || m.r2Url}?t=${new Date(m.updatedAt).getTime()}`;
+              const imgSrc = resolveMediaUrl(m);
 
               return (
                 <div
@@ -501,7 +555,7 @@ export default function EventPhotosPage() {
 
           <div className="w-full h-full p-4 sm:p-16 flex items-center justify-center relative">
             <img
-              src={`${currentLightboxMedia.compressedUrl || currentLightboxMedia.r2Url}?t=${new Date(currentLightboxMedia.updatedAt).getTime()}`}
+              src={resolveMediaUrl(currentLightboxMedia)}
               alt={`Photo ${lightboxIndex + 1}`}
               className="max-w-full max-h-full object-contain select-none shadow-2xl"
               draggable={false}

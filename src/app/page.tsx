@@ -52,44 +52,44 @@ const features = [
 
 const plans = [
   {
-    name: 'Free Trial',
-    price: '₹0',
-    period: 'forever',
-    desc: 'Perfect to experience the magic',
+    name: 'Basic',
+    price: '₹3,500',
+    period: '/year',
+    desc: 'Store 50,000 photos & store 10 videos',
     highlight: false,
-    features: ['1 Active Event Gallery', '200 High-Res Photos', 'Branded QR Code', 'Basic Face Recognition', 'Instant Guest Downloads'],
-    cta: 'Start Free Trial',
+    features: ['Store 50,000 photos', 'Store 10 videos', 'Business Branding', 'Bulk Download', 'Web Mode'],
+    cta: 'Choose Basic',
     href: '/signup',
   },
   {
-    name: 'Starter Studio',
-    price: '₹996',
-    period: '/month',
-    desc: 'For professional portrait & event creators',
+    name: 'Standard',
+    price: '₹7,900',
+    period: '/year',
+    desc: 'Store 1,50,000 photos & store 100 videos',
     highlight: true,
-    features: ['5 Active Event Galleries', '2,000 High-Res Photos/Event', 'Custom Logo on QR Code', 'Advanced Face Recognition Engine', 'Priority Email Support', 'Event Analytics Dashboard'],
-    cta: 'Choose Starter',
+    features: ['Store 1,50,000 photos', 'Store 100 videos', 'Watermarks', 'Includes all Basic features'],
+    cta: 'Choose Standard',
     href: '/signup',
   },
   {
-    name: 'Professional',
-    price: '₹7,116',
+    name: 'Essential',
+    price: '₹15,900',
     period: '/year',
-    desc: 'Best value for active luxury studios',
+    desc: 'Store 3,00,000 photos & store 200 videos',
     highlight: false,
-    features: ['20 Active Event Galleries', '10,000 High-Res Photos/Event', 'Full White-Labeled Gallery UI', 'Bulk Guest ZIP Downloads', 'Integrated Invoice Generator', 'Studio Portfolio Webpage'],
-    cta: 'Choose Professional',
+    features: ['Store 3,00,000 photos', 'Store 200 videos', 'View Client Favourites', 'Switch on/off Downloads', 'Portfolio Website', 'Includes all Standard features'],
+    cta: 'Choose Essential',
     href: '/signup',
   },
   {
-    name: 'Enterprise',
-    price: '₹15,108',
+    name: 'Premium',
+    price: '₹31,900',
     period: '/year',
-    desc: 'For massive agencies & production houses',
+    desc: 'Store 7,50,000 photos & store 500 videos',
     highlight: false,
-    features: ['Unlimited Event Galleries', 'Unlimited High-Res Photos', 'Custom Dedicated Domain Support', 'Developer API Access', 'Dedicated Account Manager', 'Multi-user Team Accounts'],
-    cta: 'Contact Sales',
-    href: '/contact',
+    features: ['Store 7,50,000 photos', 'Store 500 videos', 'Digital Album', 'Includes all Essential features'],
+    cta: 'Choose Premium',
+    href: '/signup',
   },
 ];
 
@@ -407,6 +407,8 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 export default function HomePage() {
   const [simState, setSimState] = useState<'idle' | 'scanning' | 'success'>('idle');
   const [activeFeatureTab, setActiveFeatureTab] = useState(0);
+  const [sliderVal, setSliderVal] = useState<number>(50);
+  const [heroTab, setHeroTab] = useState<'scanner' | 'enhancer'>('scanner');
 
   const startSimulation = () => {
     setSimState('scanning');
@@ -450,11 +452,11 @@ export default function HomePage() {
 
               {/* Luxury Editorial Headline */}
               <h1 className="font-serif-luxury text-5xl sm:text-6xl lg:text-7xl font-light text-[#09090b] leading-[1.12] mb-8">
-                Deliver wedding & event photos <span className="italic text-[#c5a880]">instantly</span> with AI.
+                Transform Event Photos & <span className="italic text-[#c5a880]">Deliver with AI</span> in Seconds.
               </h1>
 
               <p className="font-poppins text-base sm:text-lg text-gray-500 mb-10 leading-relaxed max-w-xl mx-auto lg:mx-0 font-medium">
-                Deliver a luxury experience. Guests scan a custom QR code, upload a selfie, and instantly receive their matched images. Save hours of manual sorting and drive studio growth.
+                The ultimate AI platform for event photographers. Guests scan a custom QR code, upload a selfie, and instantly receive their matched photos. Save hours of sorting and deliver a luxury client experience.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
@@ -462,15 +464,18 @@ export default function HomePage() {
                   href="/signup"
                   className="font-poppins inline-flex items-center justify-center gap-2 text-base font-bold text-white bg-[#09090b] hover:bg-[#c5a880] px-9 py-4.5 rounded-full transition-all duration-300 shadow-md hover:-translate-y-0.5"
                 >
-                  Create Free Account
+                  Start Editing Free
                   <ArrowRight className="w-5 h-5" />
                 </Link>
-                <Link
-                  href="#how-it-works"
-                  className="font-poppins inline-flex items-center justify-center gap-2 text-base font-bold text-[#09090b] bg-white border border-[#e3d8c8]/60 px-9 py-4.5 rounded-full hover:bg-slate-50 transition-all duration-300"
+                <button
+                  onClick={() => {
+                    const section = document.getElementById('how-it-works');
+                    if (section) section.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="font-poppins inline-flex items-center justify-center gap-2 text-base font-bold text-[#09090b] bg-white border border-[#e3d8c8]/60 px-9 py-4.5 rounded-full hover:bg-slate-50 transition-all duration-300 cursor-pointer"
                 >
-                  Watch How It Works
-                </Link>
+                  Try AI Simulator
+                </button>
               </div>
 
               {/* Social trust badge */}
@@ -508,110 +513,199 @@ export default function HomePage() {
 
                 {/* Inner screen content */}
                 <div className="w-full h-full bg-[#faf9f6] rounded-[40px] overflow-hidden relative flex flex-col pt-10 px-4 pb-4">
-                  {simState === 'idle' && (
-                    <div className="flex-1 flex flex-col justify-between py-4 animate-fade-in">
-                      <div className="text-center">
-                        <img src="/logo.jpg" alt="Mara Photo Logo" className="h-7 w-auto mx-auto object-contain mb-4" />
-                        <h3 className="font-serif-luxury text-xl font-light text-[#09090b] mb-1">Guest Photo Search</h3>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-poppins">Click scanner button to test</p>
-                      </div>
+                  
+                  {/* Tab controls */}
+                  <div className="flex bg-white/60 backdrop-blur-sm border border-[#e3d8c8]/40 rounded-full p-0.5 mb-3 shrink-0 z-20">
+                    <button 
+                      onClick={() => setHeroTab('scanner')}
+                      className={`flex-1 py-1 rounded-full text-[8.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${heroTab === 'scanner' ? 'bg-[#c5a880] text-[#09090b] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                      Face Match
+                    </button>
+                    <button 
+                      onClick={() => setHeroTab('enhancer')}
+                      className={`flex-1 py-1 rounded-full text-[8.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${heroTab === 'enhancer' ? 'bg-[#c5a880] text-[#09090b] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                      AI Enhancer
+                    </button>
+                  </div>
 
-                      {/* Viewfinder frame */}
-                      <div className="relative aspect-square w-full rounded-2xl border-2 border-dashed border-[#c5a880]/40 overflow-hidden bg-[#f3f0e8] flex items-center justify-center p-1">
-                        <img src="/portrait.jpg" alt="Guest Selfie" className="w-full h-full object-cover rounded-xl" />
-                        <div className="absolute inset-0 border-2 border-white/40 rounded-xl pointer-events-none" />
-                        
-                        <div className="absolute top-2 left-2 text-[#c5a880]"><Camera className="w-4 h-4 opacity-60" /></div>
-                        <div className="absolute bottom-2 right-2 text-[9px] font-bold text-white bg-black/40 px-2 py-0.5 rounded-full backdrop-blur-sm">Viewfinder</div>
-                      </div>
-
-                      <button
-                        onClick={startSimulation}
-                        className="w-full bg-[#09090b] hover:bg-[#c5a880] text-white hover:text-[#09090b] font-bold text-xs uppercase tracking-wider py-4 rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer font-poppins"
-                      >
-                        <Zap className="w-4 h-4 text-[#c5a880] animate-pulse" />
-                        Try AI Face Scanner
-                      </button>
-                    </div>
-                  )}
-
-                  {simState === 'scanning' && (
-                    <div className="flex-1 flex flex-col justify-between py-4">
-                      <div className="text-center">
-                        <img src="/logo.jpg" alt="Mara Photo Logo" className="h-7 w-auto mx-auto object-contain mb-4" />
-                        <h3 className="font-serif-luxury text-xl font-light text-[#09090b] mb-1">Scanning Face...</h3>
-                        <p className="text-[10px] text-[#c5a880] font-bold uppercase tracking-wider animate-pulse">Analyzing structures</p>
-                      </div>
-
-                      {/* Frame view with scanning laser line */}
-                      <div className="relative aspect-square w-full rounded-2xl border-2 border-[#c5a880] overflow-hidden bg-[#f3f0e8] p-1">
-                        <img src="/portrait.jpg" alt="Guest Selfie" className="w-full h-full object-cover rounded-xl brightness-90" />
-                        
-                        {/* Scanning Laser Line */}
-                        <div className="absolute left-0 right-0 h-1 bg-[#c5a880] shadow-[0_0_15px_#c5a880] animate-scan-laser z-20" />
-                        
-                        {/* Analyzing overlay */}
-                        <div className="absolute inset-0 flex items-center justify-center bg-[#09090b]/15 backdrop-blur-[1px]">
-                          <div className="w-16 h-16 rounded-full border-2 border-dashed border-[#c5a880] animate-spin flex items-center justify-center">
-                            <ScanFace className="w-6 h-6 text-white" />
+                  {heroTab === 'scanner' ? (
+                    <>
+                      {simState === 'idle' && (
+                        <div className="flex-1 flex flex-col justify-between py-4 animate-fade-in">
+                          <div className="text-center">
+                            <img src="/logo.png" alt="Mara Photo Logo" className="h-7 w-auto mx-auto object-contain mb-4" />
+                            <h3 className="font-serif-luxury text-xl font-light text-[#09090b] mb-1">Guest Photo Search</h3>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-poppins">Click scanner button to test</p>
                           </div>
+
+                          {/* Viewfinder frame */}
+                          <div className="relative aspect-square w-full rounded-2xl border-2 border-dashed border-[#c5a880]/40 overflow-hidden bg-[#f3f0e8] flex items-center justify-center p-1">
+                            <img src="/portrait.jpg" alt="Guest Selfie" className="w-full h-full object-cover rounded-xl" />
+                            <div className="absolute inset-0 border-2 border-white/40 rounded-xl pointer-events-none" />
+                            
+                            <div className="absolute top-2 left-2 text-[#c5a880]"><Camera className="w-4 h-4 opacity-60" /></div>
+                            <div className="absolute bottom-2 right-2 text-[9px] font-bold text-white bg-black/40 px-2 py-0.5 rounded-full backdrop-blur-sm">Viewfinder</div>
+                          </div>
+
+                          <button
+                            onClick={startSimulation}
+                            className="w-full bg-[#09090b] hover:bg-[#c5a880] text-white hover:text-[#09090b] font-bold text-xs uppercase tracking-wider py-4 rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer font-poppins"
+                          >
+                            <Zap className="w-4 h-4 text-[#c5a880] animate-pulse" />
+                            Try AI Face Scanner
+                          </button>
                         </div>
-                      </div>
+                      )}
 
-                      <div className="text-center px-2 py-4">
-                        <div className="flex items-center justify-center gap-2 text-xs font-bold text-gray-500 font-poppins uppercase tracking-wider">
-                          <span className="w-2 h-2 rounded-full bg-[#c5a880] animate-ping" />
-                          Matching 1,247 photos...
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                      {simState === 'scanning' && (
+                        <div className="flex-1 flex flex-col justify-between py-4">
+                          <div className="text-center">
+                            <img src="/logo.png" alt="Mara Photo Logo" className="h-7 w-auto mx-auto object-contain mb-4" />
+                            <h3 className="font-serif-luxury text-xl font-light text-[#09090b] mb-1">Scanning Face...</h3>
+                            <p className="text-[10px] text-[#c5a880] font-bold uppercase tracking-wider animate-pulse">Analyzing structures</p>
+                          </div>
 
-                  {simState === 'success' && (
-                    <div className="flex-1 flex flex-col justify-between py-4 animate-fade-in">
-                      <div className="text-center">
-                        <img src="/logo.jpg" alt="Mara Photo Logo" className="h-7 w-auto mx-auto object-contain mb-4" />
-                        <h3 className="font-serif-luxury text-xl font-light text-[#09090b] mb-1">Matches Found!</h3>
-                        <p className="text-[10px] text-green-600 font-bold uppercase tracking-wider">Analysis complete</p>
-                      </div>
-
-                      {/* Matched grid */}
-                      <div className="grid grid-cols-2 gap-2 my-2">
-                        {[
-                          "/wedding.jpg",
-                          "/gala.jpg",
-                          "/party.jpg",
-                          "/rings.jpg"
-                        ].map((url, i) => (
-                          <div key={i} className="aspect-square rounded-xl bg-[#faf9f6] relative overflow-hidden group shadow-sm border border-[#e3d8c8]/25">
-                            <img
-                              src={url}
-                              alt="Matched Photo"
-                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                            />
-                            <div className="absolute top-1.5 right-1.5 bg-[#c5a880] text-white p-1 rounded-full shadow-sm">
-                              <Check className="w-2.5 h-2.5" />
+                          {/* Frame view with scanning laser line */}
+                          <div className="relative aspect-square w-full rounded-2xl border-2 border-[#c5a880] overflow-hidden bg-[#f3f0e8] p-1">
+                            <img src="/portrait.jpg" alt="Guest Selfie" className="w-full h-full object-cover rounded-xl brightness-90" />
+                            
+                            {/* Scanning Laser Line */}
+                            <div className="absolute left-0 right-0 h-1 bg-[#c5a880] shadow-[0_0_15px_#c5a880] animate-scan-laser z-20" />
+                            
+                            {/* Analyzing overlay */}
+                            <div className="absolute inset-0 flex items-center justify-center bg-[#09090b]/15 backdrop-blur-[1px]">
+                              <div className="w-16 h-16 rounded-full border-2 border-dashed border-[#c5a880] animate-spin flex items-center justify-center">
+                                <ScanFace className="w-6 h-6 text-white" />
+                              </div>
                             </div>
                           </div>
-                        ))}
+
+                          <div className="text-center px-2 py-4">
+                            <div className="flex items-center justify-center gap-2 text-xs font-bold text-gray-500 font-poppins uppercase tracking-wider">
+                              <span className="w-2 h-2 rounded-full bg-[#c5a880] animate-ping" />
+                              Matching 1,247 photos...
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {simState === 'success' && (
+                        <div className="flex-1 flex flex-col justify-between py-4 animate-fade-in">
+                          <div className="text-center">
+                            <img src="/logo.png" alt="Mara Photo Logo" className="h-7 w-auto mx-auto object-contain mb-4" />
+                            <h3 className="font-serif-luxury text-xl font-light text-[#09090b] mb-1">Matches Found!</h3>
+                            <p className="text-[10px] text-green-600 font-bold uppercase tracking-wider">Analysis complete</p>
+                          </div>
+
+                          {/* Matched grid */}
+                          <div className="grid grid-cols-2 gap-2 my-2">
+                            {[
+                              "/wedding.jpg",
+                              "/gala.jpg",
+                              "/party.jpg",
+                              "/rings.jpg"
+                            ].map((url, i) => (
+                              <div key={i} className="aspect-square rounded-xl bg-[#faf9f6] relative overflow-hidden group shadow-sm border border-[#e3d8c8]/25">
+                                <img
+                                  src={url}
+                                  alt="Matched Photo"
+                                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                />
+                                <div className="absolute top-1.5 right-1.5 bg-[#c5a880] text-white p-1 rounded-full shadow-sm">
+                                  <Check className="w-2.5 h-2.5" />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Action buttons */}
+                          <div className="space-y-2">
+                            <div className="bg-[#f5f2eb] border border-[#e3d8c8]/40 rounded-xl px-3 py-2 flex items-center justify-between">
+                              <div>
+                                <p className="text-[9px] font-bold text-[#09090b] uppercase tracking-wider">Matched Gallery</p>
+                                <p className="text-xs text-gray-500 font-bold">23 high-res images</p>
+                              </div>
+                              <span className="text-[9px] font-bold bg-green-50 text-green-600 px-2 py-0.5 rounded-full uppercase tracking-wider">100% Match</span>
+                            </div>
+                            <button
+                              onClick={resetSimulation}
+                              className="w-full bg-[#09090b] hover:bg-[#c5a880] text-white hover:text-[#09090b] font-bold text-xs uppercase tracking-wider py-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer font-poppins"
+                            >
+                              <Download className="w-4 h-4" />
+                              Download All (ZIP)
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex-1 flex flex-col justify-between py-2 animate-fade-in text-center">
+                      <div>
+                        <h3 className="font-serif-luxury text-lg font-light text-[#09090b] mb-1">AI Enhancer</h3>
+                        <p className="text-[9px] text-gray-405 font-bold uppercase tracking-wider font-poppins mb-3">Slide to color correct & watermark</p>
                       </div>
 
-                      {/* Action buttons */}
-                      <div className="space-y-2">
-                        <div className="bg-[#f5f2eb] border border-[#e3d8c8]/40 rounded-xl px-3 py-2 flex items-center justify-between">
-                          <div>
-                            <p className="text-[9px] font-bold text-[#09090b] uppercase tracking-wider">Matched Gallery</p>
-                            <p className="text-xs text-gray-500 font-bold">23 high-res images</p>
+                      <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-[#f3f0e8] select-none group border border-[#e3d8c8]/40 shadow-inner">
+                        {/* Before */}
+                        <img src="/wedding.jpg" alt="Original Photo" className="absolute inset-0 w-full h-full object-cover filter brightness-[0.75] contrast-[0.8] saturate-[0.5]" />
+                        
+                        {/* After */}
+                        <div 
+                          className="absolute inset-y-0 left-0 overflow-hidden"
+                          style={{ width: `${sliderVal}%` }}
+                        >
+                          <div className="absolute inset-0 w-[270px] h-[270px]">
+                            <img src="/wedding.jpg" alt="AI Color Corrected" className="w-full h-full object-cover filter brightness-[1.08] contrast-[1.05] saturate-[1.12]" />
+                            {/* Dynamic Watermark overlay */}
+                            <div className="absolute bottom-2.5 right-2.5 bg-black/45 px-2 py-1 rounded backdrop-blur-sm flex items-center gap-1 border border-white/10 scale-75 origin-bottom-right shadow-sm">
+                              <span className="text-[7.5px] font-bold text-white tracking-widest uppercase font-poppins">MARA PHOTO</span>
+                            </div>
                           </div>
-                          <span className="text-[9px] font-bold bg-green-50 text-green-600 px-2 py-0.5 rounded-full uppercase tracking-wider">100% Match</span>
                         </div>
-                        <button
-                          onClick={resetSimulation}
+
+                        {/* Slider line */}
+                        <div 
+                          className="absolute inset-y-0 w-0.5 bg-[#c5a880] shadow-[0_0_10px_#c5a880] pointer-events-none"
+                          style={{ left: `${sliderVal}%` }}
+                        />
+                        
+                        {/* Handle thumb */}
+                        <div 
+                          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-[#09090b] border border-[#c5a880] shadow-md flex items-center justify-center pointer-events-none"
+                          style={{ left: `${sliderVal}%` }}
+                        >
+                          <span className="text-[9px] text-[#c5a880] font-black">↔</span>
+                        </div>
+
+                        {/* Drag mouse interaction overlay */}
+                        <div 
+                          className="absolute inset-0 cursor-ew-resize"
+                          onMouseMove={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const x = e.clientX - rect.left;
+                            const pct = Math.max(0, Math.min(100, (x / rect.width) * 100));
+                            setSliderVal(pct);
+                          }}
+                          onTouchMove={(e) => {
+                            if (e.touches && e.touches[0]) {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const x = e.touches[0].clientX - rect.left;
+                              const pct = Math.max(0, Math.min(100, (x / rect.width) * 100));
+                              setSliderVal(pct);
+                            }
+                          }}
+                        />
+                      </div>
+
+                      <div className="mt-4">
+                        <Link
+                          href="/signup"
                           className="w-full bg-[#09090b] hover:bg-[#c5a880] text-white hover:text-[#09090b] font-bold text-xs uppercase tracking-wider py-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer font-poppins"
                         >
-                          <Download className="w-4 h-4" />
-                          Download All (ZIP)
-                        </button>
+                          Start Editing Free
+                        </Link>
                       </div>
                     </div>
                   )}
@@ -931,6 +1025,14 @@ export default function HomePage() {
             </div>
 
           </div>
+
+          <div className="w-full flex justify-center text-center mt-16 relative z-30">
+            <Link href="/signup" className="font-poppins inline-flex items-center justify-center gap-2 text-base font-bold text-white bg-[#09090b] hover:bg-[#c5a880] px-9 py-4 rounded-full transition-all duration-300 shadow-md">
+              Start Delivering Free
+              <ArrowRight className="w-5 h-5" />
+            </Link>
+          </div>
+
         </div>
       </section>
 
@@ -1029,8 +1131,15 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
-
           </div>
+
+          <div className="w-full flex justify-center text-center mt-16 relative z-30">
+            <Link href="/pricing" className="font-poppins inline-flex items-center justify-center gap-2 text-base font-bold text-white bg-[#09090b] hover:bg-[#c5a880] px-9 py-4 rounded-full transition-all duration-300 shadow-md">
+              Try Premium Features
+              <ArrowRight className="w-5 h-5" />
+            </Link>
+          </div>
+
         </div>
       </section>
 
@@ -1319,6 +1428,13 @@ export default function HomePage() {
           
           <div className="space-y-4">
             {faqs.map((faq) => <FAQItem key={faq.q} q={faq.q} a={faq.a} />)}
+          </div>
+
+          <div className="w-full flex justify-center text-center mt-12">
+            <Link href="/signup" className="font-poppins inline-flex items-center justify-center gap-2 text-base font-bold text-white bg-[#09090b] hover:bg-[#c5a880] px-9 py-4 rounded-full transition-all duration-300 shadow-md">
+              Start Delivering Free
+              <ArrowRight className="w-5 h-5" />
+            </Link>
           </div>
         </div>
       </section>

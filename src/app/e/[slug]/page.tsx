@@ -11,6 +11,40 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../../lib/api';
 
+const dbName = 'MeraPhotoDB';
+const storeName = 'media_files';
+
+const getDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined') return reject('Server side');
+    const request = window.indexedDB.open(dbName, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(storeName)) {
+        db.createObjectStore(storeName, { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const getLocalFile = async (id: string): Promise<File | null> => {
+  try {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, 'readonly');
+      const store = transaction.objectStore(storeName);
+      const request = store.get(id);
+      request.onsuccess = () => resolve(request.result ? request.result.file : null);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    console.error('getLocalFile error', e);
+    return null;
+  }
+};
+
 export default function ClientGallery() {
   const params = useParams();
   const slug = params.slug as string;
@@ -46,6 +80,26 @@ export default function ClientGallery() {
   const [searchActive, setSearchActive] = useState(false);
   const [matchedMedia, setMatchedMedia] = useState<any[]>([]);
   const [searchStats, setSearchStats] = useState<{ totalSearched: number; message: string } | null>(null);
+
+  const [localUrls, setLocalUrls] = useState<Record<string, string>>({});
+
+  const resolveMediaUrl = (m: any) => {
+    if (!m) return '';
+    const url = m.url || m.r2Url || m.compressedUrl || '';
+    if (url.startsWith('localdb://')) {
+      const id = url.replace('localdb://', '');
+      if (localUrls[id]) return localUrls[id];
+      
+      getLocalFile(id).then((file) => {
+        if (file) {
+          const blobUrl = URL.createObjectURL(file);
+          setLocalUrls(prev => ({ ...prev, [id]: blobUrl }));
+        }
+      });
+      return '';
+    }
+    return url;
+  };
 
   // Lightbox / Detail view
   const [selectedItem, setSelectedItem] = useState<any>(null);
@@ -453,7 +507,7 @@ export default function ClientGallery() {
                 const isSelected = selectedMediaIds.includes(m._id);
                 return (
                   <div key={m._id} className={`group rounded-2xl overflow-hidden bg-white border relative transition-all shadow-sm ${viewType === 'masonry' ? 'break-inside-avoid' : 'aspect-square'} ${isSelected ? 'border-[#FF6B00] ring-2 ring-[#FF6B00]/10' : 'border-slate-200 hover:border-slate-300'}`}>
-                    <img src={m.compressedUrl || m.thumbnailUrl || m.r2Url} alt="gallery" className="w-full h-full object-cover transition-transform duration-350 group-hover:scale-102" />
+                    <img src={resolveMediaUrl(m)} alt="gallery" className="w-full h-full object-cover transition-transform duration-350 group-hover:scale-102" />
                     
                     {/* Video overlay */}
                     {m.type === 'VIDEO' && (
@@ -732,7 +786,7 @@ export default function ClientGallery() {
               )}
             </span>
             <div className="flex items-center gap-4">
-              <a href={selectedItem.r2Url} target="_blank" className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-white/5">
+              <a href={resolveMediaUrl(selectedItem)} target="_blank" className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-white/5">
                 <Download className="h-5 w-5" />
               </a>
               <button onClick={() => setSelectedItem(null)} className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-white/5">
@@ -743,9 +797,9 @@ export default function ClientGallery() {
 
           <div className="flex-1 flex items-center justify-center p-4 max-h-[75vh]">
             {selectedItem.type === 'PHOTO' ? (
-              <img src={selectedItem.r2Url} alt="detailed preview" className="max-w-full max-h-full object-contain rounded-xl border border-white/5 shadow-2xl" />
+              <img src={resolveMediaUrl(selectedItem)} alt="detailed preview" className="max-w-full max-h-full object-contain rounded-xl border border-white/5 shadow-2xl" />
             ) : (
-              <video ref={playerRef} controls src={selectedItem.r2Url} className="max-w-full max-h-full object-contain rounded-xl border border-white/5 shadow-2xl" />
+              <video ref={playerRef} controls src={resolveMediaUrl(selectedItem)} className="max-w-full max-h-full object-contain rounded-xl border border-white/5 shadow-2xl" />
             )}
           </div>
 

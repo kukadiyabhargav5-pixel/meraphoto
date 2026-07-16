@@ -138,7 +138,7 @@ export default function ForgotPasswordPage() {
             className="w-full bg-white rounded-[24px] p-8 md:p-10 shadow-xl border border-slate-200 relative overflow-hidden"
           >
             <div className="relative z-10">
-              <Link href="/auth/login" className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 transition-colors mb-8">
+              <Link href="/login" className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 transition-colors mb-8">
                 <ArrowLeft className="h-4 w-4" /> Back to Login
               </Link>
 
@@ -245,7 +245,7 @@ export default function ForgotPasswordPage() {
                       <motion.button 
                         variants={itemVars} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
                         transition={{ type: "tween", ease: "easeOut", duration: 0.2 }}
-                        onClick={() => router.push('/auth/login')}
+                        onClick={() => router.push('/login')}
                         className="w-full bg-slate-900 rounded-[12px] text-white font-bold h-[56px] flex items-center justify-center gap-2 hover:bg-slate-800 transition-all duration-300"
                       >
                         Return to Login
