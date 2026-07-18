@@ -400,6 +400,10 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
             <form className="space-y-5" onSubmit={async (e) => {
               e.preventDefault();
+              if (!formData.clientMobile) {
+                alert('Client mobile number is required');
+                return;
+              }
               try {
                 setSaving(true);
                 

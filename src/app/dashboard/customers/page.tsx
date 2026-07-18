@@ -87,9 +87,13 @@ export default function CustomersPage() {
                   </div>
                 <form onSubmit={async (e) => {
                   e.preventDefault();
+                  if (!newCustPhone) {
+                    alert('Mobile phone number is required');
+                    return;
+                  }
                   if (newCustName) {
                     try {
-                      const res = await apiClient.post('/dashboard/customers', { name: newCustName, email: newCustEmail || 'n/a', phone: newCustPhone || 'n/a', totalEvents: 0, status: 'Active' });
+                      const res = await apiClient.post('/dashboard/customers', { name: newCustName, email: newCustEmail || 'n/a', phone: newCustPhone, totalEvents: 0, status: 'Active' });
                       setCustomers([res.data, ...customers]);
                       setNewCustName(''); setNewCustEmail(''); setNewCustPhone('');
                       setCustomerSubView('list');
@@ -110,7 +114,7 @@ export default function CustomersPage() {
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Mobile Phone</label>
-                    <input type="tel" value={newCustPhone} onChange={(e) => setNewCustPhone(e.target.value)} placeholder="9876543210" className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
+                    <input type="tel" required value={newCustPhone} onChange={(e) => setNewCustPhone(e.target.value)} placeholder="9876543210" className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
                   </div>
                   <button type="submit" className="w-full bg-[#c5a880] hover:bg-white text-[#09090b] font-bold py-3.5 rounded-lg text-xs mt-3 cursor-pointer transition-colors shadow-md">
                     Save Customer Profile

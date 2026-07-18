@@ -31,7 +31,7 @@ function getFirstDayOfMonth(year: number, month: number) {
 export default function CalendarPage() {
   const context = useDashboard();
   if (!context) return null;
-  const { shoots, setShoots } = context;
+  const { shoots, setShoots, bookings } = context;
 
   const today = new Date();
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
@@ -80,11 +80,32 @@ export default function CalendarPage() {
   // Get shoots for a specific date
   const getShootsForDate = (day: number) => {
     const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return shoots.filter((s: any) => {
+    
+    // Shoots from shoots state
+    const activeShoots = shoots.filter((s: any) => {
       const sDate = new Date(s.date);
       const sStr = `${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, '0')}-${String(sDate.getDate()).padStart(2, '0')}`;
       return sStr === dateStr;
     });
+
+    // Event bookings from bookings state
+    const activeBookings = bookings.filter((b: any) => {
+      if (!b.date) return false;
+      const bDate = new Date(b.date);
+      const bStr = `${bDate.getFullYear()}-${String(bDate.getMonth() + 1).padStart(2, '0')}-${String(bDate.getDate()).padStart(2, '0')}`;
+      return bStr === dateStr;
+    }).map((b: any) => ({
+      _id: b._id,
+      date: b.date,
+      eventName: b.name || `${b.clientName}'s ${b.type}`,
+      eventType: b.type || 'Event',
+      time: b.time || '09:00',
+      photographersNames: [],
+      videographersNames: [],
+      isFromBookings: true
+    }));
+
+    return [...activeShoots, ...activeBookings];
   };
 
   // Handle date click
@@ -184,8 +205,23 @@ export default function CalendarPage() {
     return day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear();
   };
 
+  // Merge shoots and bookings for upcoming list
+  const allEventsAndShoots = [
+    ...shoots,
+    ...bookings.map((b: any) => ({
+      _id: b._id,
+      date: b.date,
+      eventName: b.name || `${b.clientName}'s ${b.type}`,
+      eventType: b.type || 'Event',
+      time: b.time || '09:00',
+      photographersNames: [],
+      videographersNames: [],
+      isFromBookings: true
+    }))
+  ];
+
   // Upcoming shoots (from today onward, sorted)
-  const upcomingShoots = shoots
+  const upcomingShoots = allEventsAndShoots
     .filter((s: any) => new Date(s.date) >= new Date(today.toDateString()))
     .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .slice(0, 5);
