@@ -4,42 +4,40 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, User, Eye, EyeOff, Loader, Camera, AlertCircle, CheckCircle2, ShieldCheck, ArrowRight, X } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, Loader, Camera, AlertCircle, CheckCircle2, ShieldCheck, ArrowRight, X, Phone, Home } from 'lucide-react';
 import { apiClient } from '../../lib/api';
 import Header from '../../components/Header';
 import Script from 'next/script';
 
 // --- Professional Outlined Input Component ---
-const GlassInput = ({ id, type, value, onChange, label, required = true, isPassword = false }: any) => {
+const GlassInput = ({ id, type, value, onChange, label, placeholder, required = true, isPassword = false, icon: Icon }: any) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const inputType = isPassword ? (showPassword ? 'text' : 'password') : type;
-  const isFloating = isFocused || (value && value.length > 0);
 
   return (
-    <motion.div 
-      className="relative mb-6 z-10 pt-2"
-    >
-      <div className={`relative flex items-center bg-white border rounded-[12px] transition-all duration-300 ease-out group h-[56px] ${
-        isFocused ? 'border-slate-800 ring-1 ring-slate-800' : 'border-slate-300 hover:border-slate-400'
+    <div className="relative mb-5 text-left font-sans">
+      <label htmlFor={id} className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className={`relative flex items-center bg-[#faf9f6] border rounded-[12px] transition-all duration-300 ease-out group h-[56px] ${
+        isFocused ? 'border-[#c5a880] ring-1 ring-[#c5a880]' : 'border-slate-200 hover:border-slate-300'
       }`}>
-        <label 
-          htmlFor={id} 
-          className={`absolute left-3 transition-all duration-300 ease-out pointer-events-none z-10 bg-white px-1.5 ${
-            isFloating ? '-top-2.5 text-[11px] font-bold text-slate-800 uppercase tracking-widest' : 'top-4 text-[15px] font-medium text-slate-400'
-          }`}
-        >
-          {label}
-        </label>
+        {Icon && (
+          <div className="pl-4 flex items-center justify-center text-slate-400">
+            <Icon className="h-5 w-5 shrink-0" />
+          </div>
+        )}
         <input
           type={inputType}
           id={id}
           required={required}
           value={value}
           onChange={onChange}
+          placeholder={placeholder}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
-          className="w-full bg-transparent text-[15px] font-bold text-slate-900 focus:outline-none px-4 h-full rounded-[12px]"
+          className={`w-full bg-transparent text-[15px] font-semibold text-slate-800 placeholder-slate-400/80 focus:outline-none h-full rounded-[12px] ${Icon ? 'px-3' : 'px-4'}`}
         />
         {isPassword && (
           <button
@@ -51,7 +49,7 @@ const GlassInput = ({ id, type, value, onChange, label, required = true, isPassw
           </button>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 };
 
@@ -315,6 +313,17 @@ function AuthContentGlassy() {
           >
 
             <div className="relative z-10">
+              {/* Logo and Headings */}
+              <div className="flex flex-col items-center mb-8 select-none text-center">
+                <img src="/logo.png" alt="Mara Photo Logo" className="h-10 object-contain mb-4 shrink-0" />
+                <h2 className="font-serif text-3xl font-light text-slate-900 tracking-wide">
+                  {activeTab === 'login' ? 'Welcome Back' : 'Create Your Studio'}
+                </h2>
+                <p className="text-xs text-slate-400 font-bold mt-1.5 tracking-wide">
+                  {activeTab === 'login' ? 'Sign in to your Mara Photo studio' : 'Start delivering photos with AI in minutes'}
+                </p>
+              </div>
+
               {/* Rounded Tab Selector */}
               <div className="flex bg-slate-100 p-1 mb-8 border border-slate-200 rounded-[14px]">
                 {['login', 'register'].map((tab) => (
@@ -383,8 +392,8 @@ function AuthContentGlassy() {
                         </label>
                       </motion.div>
 
-                      <motion.div variants={itemVars}><GlassInput id="lEmail" type="email" label="Email Address" value={loginEmail} onChange={(e:any)=>setLoginEmail(e.target.value)} /></motion.div>
-                      <motion.div variants={itemVars}><GlassInput id="lPass" type="password" label="Password" isPassword value={loginPassword} onChange={(e:any)=>setLoginPassword(e.target.value)} /></motion.div>
+                      <motion.div variants={itemVars}><GlassInput id="lEmail" type="email" label="Email Address" placeholder="you@yourstudio.com" icon={Mail} value={loginEmail} onChange={(e:any)=>setLoginEmail(e.target.value)} /></motion.div>
+                      <motion.div variants={itemVars}><GlassInput id="lPass" type="password" label="Password" isPassword placeholder="Enter your password" icon={Lock} value={loginPassword} onChange={(e:any)=>setLoginPassword(e.target.value)} /></motion.div>
                       
                       <motion.div variants={itemVars} className="flex justify-end mb-6">
                         <Link href="/auth/forgot-password" className="text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors">Forgot Password?</Link>
@@ -461,13 +470,13 @@ function AuthContentGlassy() {
                         </label>
                       </motion.div>
 
-                      <motion.div variants={itemVars}><GlassInput id="rName" type="text" label="Full Name" value={regName} onChange={(e:any)=>setRegName(e.target.value)} /></motion.div>
-                      <motion.div variants={itemVars}><GlassInput id="rEmail" type="email" label="Email Address" value={regEmail} onChange={(e:any)=>setRegEmail(e.target.value)} /></motion.div>
-                      <motion.div variants={itemVars}><GlassInput id="rPhone" type="tel" label="Mobile Number" value={regPhone} onChange={(e:any)=>{ const val = e.target.value.replace(/\D/g, ''); if(val.length <= 10) setRegPhone(val); }} /></motion.div>
+                      <motion.div variants={itemVars}><GlassInput id="rName" type="text" label="Full Name" placeholder="Yashvi Changela" icon={User} value={regName} onChange={(e:any)=>setRegName(e.target.value)} /></motion.div>
+                      <motion.div variants={itemVars}><GlassInput id="rEmail" type="email" label="Email Address" placeholder="you@yourstudio.com" icon={Mail} value={regEmail} onChange={(e:any)=>setRegEmail(e.target.value)} /></motion.div>
+                      <motion.div variants={itemVars}><GlassInput id="rPhone" type="tel" label="Mobile Number" placeholder="9876543210" icon={Phone} value={regPhone} onChange={(e:any)=>{ const val = e.target.value.replace(/\D/g, ''); if(val.length <= 10) setRegPhone(val); }} /></motion.div>
                       {userRoleType !== 'client' && (
-                        <motion.div variants={itemVars}><GlassInput id="rStudio" type="text" label="Studio Name" value={regStudioName} onChange={(e:any)=>setRegStudioName(e.target.value)} /></motion.div>
+                        <motion.div variants={itemVars}><GlassInput id="rStudio" type="text" label="Studio Name" placeholder="Mara Photo Studio" icon={Home} value={regStudioName} onChange={(e:any)=>setRegStudioName(e.target.value)} /></motion.div>
                       )}
-                      <motion.div variants={itemVars}><GlassInput id="rPass" type="password" label="Password" isPassword value={regPassword} onChange={(e:any)=>setRegPassword(e.target.value)} /></motion.div>
+                      <motion.div variants={itemVars}><GlassInput id="rPass" type="password" label="Password" isPassword placeholder="Capital + small + number + special" icon={Lock} value={regPassword} onChange={(e:any)=>setRegPassword(e.target.value)} /></motion.div>
                       
                       <motion.button 
                         variants={itemVars} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
