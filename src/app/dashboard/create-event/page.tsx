@@ -93,10 +93,6 @@ export default function CreateEventPage() {
             alert('Event name is required');
             return;
           }
-          if (!clientMobile) {
-            alert('Client mobile number is required');
-            return;
-          }
           try {
             setLoading(true);
             await apiClient.post('/event', {

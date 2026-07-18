@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
 import { Camera, Upload, CheckCircle } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import Link from 'next/link';
 
 export default function ProfilePage() {
   const context = useDashboard();
@@ -18,7 +17,6 @@ export default function ProfilePage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [mobile, setMobile] = useState('');
-  const [password, setPassword] = useState('');
   const [studioName, setStudioName] = useState('');
   const [websiteLink, setWebsiteLink] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
@@ -35,10 +33,6 @@ export default function ProfilePage() {
       setStudioName(studio.name || '');
       setWebsiteLink(studio.customDomain || studio.websiteLink || '');
       setLogoUrl(studio.logoUrl || '');
-    }
-    if (typeof window !== 'undefined') {
-      const storedPass = localStorage.getItem('userPassword') || '';
-      setPassword(storedPass);
     }
   }, [sessionUser, studio]);
 
@@ -171,22 +165,6 @@ export default function ProfilePage() {
               value={email} 
               className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-500 cursor-not-allowed" 
             />
-          </div>
-
-          {/* Account Password */}
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] text-slate-450 font-bold uppercase tracking-wider">Account Password</label>
-            <input 
-              type="password" 
-              readOnly 
-              value={password} 
-              className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-500 cursor-not-allowed" 
-            />
-            <div className="mt-1">
-              <Link href="/auth/forgot-password" className="text-xs font-bold text-[#c5a880] hover:underline cursor-pointer">
-                Forgot Password? Reset credentials security
-              </Link>
-            </div>
           </div>
 
           {/* Studio Name */}
