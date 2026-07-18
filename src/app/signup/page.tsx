@@ -20,7 +20,7 @@ const GlassInput = ({ id, type, value, onChange, label, placeholder, required = 
       <label htmlFor={id} className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
-      <div className={`relative flex items-center bg-[#faf9f6] border rounded-[12px] transition-all duration-300 ease-out group h-[56px] ${
+      <div className={`relative flex items-center bg-white border rounded-[12px] transition-all duration-300 ease-out group h-[56px] ${
         isFocused ? 'border-[#c5a880] ring-1 ring-[#c5a880]' : 'border-slate-200 hover:border-slate-300'
       }`}>
         {Icon && (
@@ -70,6 +70,18 @@ function AuthContentGlassy() {
   const [regPassword, setRegPassword] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regStudioName, setRegStudioName] = useState('');
+  const [regWebsite, setRegWebsite] = useState('');
+  const [regLogo, setRegLogo] = useState('');
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setRegLogo(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
   const [otpEmail, setOtpEmail] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
@@ -237,7 +249,9 @@ function AuthContentGlassy() {
         phone: regPhone,
         studioName: !isClient ? regStudioName : undefined,
         subdomain: !isClient ? subdomain : undefined,
-        role: isClient ? 'CLIENT' : 'STUDIO_OWNER'
+        role: isClient ? 'CLIENT' : 'STUDIO_OWNER',
+        websiteLink: !isClient ? regWebsite : undefined,
+        logoUrl: !isClient ? regLogo : undefined
       });
       saveSession(res.data, regPassword);
     } catch (err: any) {
@@ -474,7 +488,47 @@ function AuthContentGlassy() {
                       <motion.div variants={itemVars}><GlassInput id="rEmail" type="email" label="Email Address" placeholder="you@yourstudio.com" icon={Mail} value={regEmail} onChange={(e:any)=>setRegEmail(e.target.value)} /></motion.div>
                       <motion.div variants={itemVars}><GlassInput id="rPhone" type="tel" label="Mobile Number" placeholder="9876543210" icon={Phone} value={regPhone} onChange={(e:any)=>{ const val = e.target.value.replace(/\D/g, ''); if(val.length <= 10) setRegPhone(val); }} /></motion.div>
                       {userRoleType !== 'client' && (
-                        <motion.div variants={itemVars}><GlassInput id="rStudio" type="text" label="Studio Name" placeholder="Mara Photo Studio" icon={Home} value={regStudioName} onChange={(e:any)=>setRegStudioName(e.target.value)} /></motion.div>
+                        <>
+                          <motion.div variants={itemVars}><GlassInput id="rStudio" type="text" label="Studio Name" placeholder="Mara Photo Studio" icon={Home} value={regStudioName} onChange={(e:any)=>setRegStudioName(e.target.value)} /></motion.div>
+                          
+                          <div className="border-t border-slate-150 my-6" />
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 px-1">Optional</div>
+                          
+                          <motion.div variants={itemVars}>
+                            <GlassInput 
+                              id="rWebsite" 
+                              type="url" 
+                              label="Studio Website Link" 
+                              placeholder="https://yourstudio.com" 
+                              required={false} 
+                              value={regWebsite} 
+                              onChange={(e:any)=>setRegWebsite(e.target.value)} 
+                            />
+                          </motion.div>
+
+                          <motion.div variants={itemVars} className="relative mb-5 text-left font-sans">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">
+                              Studio Logo
+                            </label>
+                            <div className="relative flex items-center bg-white border border-slate-200 border-dashed rounded-[12px] p-4 h-[72px] hover:border-slate-300 transition-colors">
+                              <label className="flex items-center gap-3 cursor-pointer w-full">
+                                {regLogo ? (
+                                  <img src={regLogo} alt="Studio Logo Preview" className="h-10 w-10 object-contain rounded-lg border border-slate-200" />
+                                ) : (
+                                  <div className="h-10 w-10 rounded-lg bg-[#c5a880]/10 flex items-center justify-center text-[#c5a880] hover:scale-105 transition-transform shrink-0">
+                                    <Upload className="h-5 w-5" />
+                                  </div>
+                                )}
+                                <span className="text-sm font-semibold text-slate-500 hover:text-slate-700">
+                                  {regLogo ? 'Change logo' : 'Upload your studio logo'}
+                                </span>
+                                <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                              </label>
+                            </div>
+                          </motion.div>
+
+                          <div className="border-t border-slate-150 my-6" />
+                        </>
                       )}
                       <motion.div variants={itemVars}><GlassInput id="rPass" type="password" label="Password" isPassword placeholder="Capital + small + number + special" icon={Lock} value={regPassword} onChange={(e:any)=>setRegPassword(e.target.value)} /></motion.div>
                       
