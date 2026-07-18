@@ -142,7 +142,7 @@ export default function Header() {
                   onClick={handleSignOut}
                   className="text-[15px] font-medium text-white bg-slate-900 hover:bg-[#c5a880] px-5 py-2.5 rounded-full hover:scale-105 active:scale-95 transition-all duration-300 border border-[#e3d8c8]/30 shadow-sm cursor-pointer"
                 >
-                  Sign Out ({user.name.split(' ')[0]})
+                  Sign Out ({user?.name ? user.name.split(' ')[0] : 'User'})
                 </button>
               </>
             ) : (
@@ -251,7 +251,7 @@ export default function Header() {
                     }}
                     className="w-full text-center py-3 bg-slate-900 text-white rounded-xl font-medium shadow-md hover:bg-[#c5a880] transition-all cursor-pointer"
                   >
-                    Sign Out ({user.name.split(' ')[0]})
+                    Sign Out ({user?.name ? user.name.split(' ')[0] : 'User'})
                   </button>
                 </>
               ) : (
