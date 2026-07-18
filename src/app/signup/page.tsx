@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, User, Eye, EyeOff, Loader, Camera, AlertCircle, CheckCircle2, ShieldCheck, ArrowRight, X, Phone, Home } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, Loader, Camera, AlertCircle, CheckCircle2, ShieldCheck, ArrowRight, X, Phone, Home, Upload } from 'lucide-react';
 import { apiClient } from '../../lib/api';
 import Header from '../../components/Header';
 import Script from 'next/script';
