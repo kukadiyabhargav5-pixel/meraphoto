@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, User, Eye, EyeOff, Loader, Camera, AlertCircle, CheckCircle2, ShieldCheck, ArrowRight, X } from 'lucide-react';
 import { apiClient } from '../../lib/api';
+import Header from '../../components/Header';
 import Script from 'next/script';
 
 // --- Professional Outlined Input Component ---
@@ -301,7 +302,8 @@ function AuthContentGlassy() {
 
   return (
     <>
-      <div className="flex-grow flex items-center justify-center p-6 relative min-h-screen font-sans overflow-hidden bg-[#faf9f6]">
+      <Header />
+      <div className="flex-grow flex items-center justify-center p-6 relative min-h-screen font-sans overflow-hidden bg-[#faf9f6] pt-20">
 
         {/* Glassmorphism Card */}
         <div className="relative z-10 w-full max-w-[460px]">
