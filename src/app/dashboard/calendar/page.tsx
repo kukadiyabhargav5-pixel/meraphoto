@@ -39,6 +39,7 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [workType, setWorkType] = useState<'Event' | 'Other'>('Event');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -90,17 +91,24 @@ export default function CalendarPage() {
   const handleDateClick = (day: number) => {
     const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     setSelectedDate(dateStr);
-    setFormData({
-      time: '09:00',
-      eventName: '',
-      eventType: 'Wedding',
-      photographersCount: 1,
-      videographersCount: 0,
-      photographersNames: [''],
-      videographersNames: [],
-      notes: ''
-    });
-    setShowForm(true);
+    
+    const shootsOnDate = getShootsForDate(day);
+    if (shootsOnDate.length > 0) {
+      setShowForm(false);
+    } else {
+      setWorkType('Event');
+      setFormData({
+        time: '09:00',
+        eventName: '',
+        eventType: 'Wedding',
+        photographersCount: 0,
+        videographersCount: 0,
+        photographersNames: [],
+        videographersNames: [],
+        notes: ''
+      });
+      setShowForm(true);
+    }
   };
 
   // Update photographer/videographer name arrays when count changes
@@ -141,18 +149,18 @@ export default function CalendarPage() {
         date: selectedDate,
         time: formData.time,
         eventName: formData.eventName,
-        eventType: formData.eventType,
-        photographersCount: formData.photographersCount,
-        videographersCount: formData.videographersCount,
+        eventType: workType === 'Other' ? 'Other Work' : formData.eventType,
+        photographersCount: workType === 'Other' ? 0 : formData.photographersNames.length,
+        videographersCount: workType === 'Other' ? 0 : formData.videographersNames.length,
         photographersNames: formData.photographersNames.filter(n => n.trim()),
-        videographersNames: formData.videographersNames.filter(n => n.trim()),
+        videographersNames: workType === 'Other' ? [] : formData.videographersNames.filter(n => n.trim()),
         notes: formData.notes
       };
 
       const res = await apiClient.post('/dashboard/shoots', payload);
       setShoots([...shoots, res.data]);
       setShowForm(false);
-      setSelectedDate(null);
+      // Stay on the selected date to show the updated list
     } catch (err) {
       alert('Error saving shoot. Please try again.');
     } finally {
@@ -367,11 +375,15 @@ export default function CalendarPage() {
                     onClick={() => cell.isCurrentMonth && handleDateClick(cell.day)}
                   >
                     <span className="cal-day-num">{cell.day}</span>
-                    {cell.shoots.slice(0, 2).map((s: any, i: number) => (
-                      <span key={i} className="shoot-pill">{s.eventName || 'Shoot'}</span>
-                    ))}
-                    {cell.shoots.length > 2 && (
-                      <span className="text-[8px] font-bold text-[#c5a880] mt-1 block">+{cell.shoots.length - 2} more</span>
+                    {cell.shoots.length > 0 && (
+                      <div className="mt-1 flex flex-col gap-1 w-full overflow-hidden">
+                        {cell.shoots.slice(0, 2).map((s: any, i: number) => (
+                          <span key={i} className="shoot-pill truncate w-full block">{s.eventName || 'Shoot'}</span>
+                        ))}
+                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 bg-[#c5a880]/10 text-[#b59a72] text-[9px] font-extrabold rounded w-full mt-0.5 border border-[#c5a880]/20">
+                          {cell.shoots.length} {cell.shoots.length === 1 ? 'Work' : 'Works'}
+                        </span>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -385,15 +397,31 @@ export default function CalendarPage() {
               <div className="form-panel bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
                 {/* Form Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/50">
-                  <div>
-                    <h3 className="text-sm font-extrabold text-slate-900">New Shoot</h3>
-                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                  <div className="flex flex-col gap-2">
+                    <h3 className="text-sm font-extrabold text-slate-900">
                       {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                    </p>
+                    </h3>
+                    <div className="flex bg-slate-200/60 rounded-lg p-1 w-fit">
+                      <button 
+                        type="button" 
+                        onClick={() => setWorkType('Event')}
+                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${workType === 'Event' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        Event Shoot
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => setWorkType('Other')}
+                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${workType === 'Other' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        Other Work
+                      </button>
+                    </div>
                   </div>
                   <button
+                    type="button"
                     onClick={() => { setShowForm(false); setSelectedDate(null); }}
-                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors self-start"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -401,118 +429,142 @@ export default function CalendarPage() {
 
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-                  {/* Time */}
-                  <div>
-                    <label className="form-label">
-                      <Clock className="inline h-3 w-3 mr-1 -mt-0.5" /> Shoot Time
-                    </label>
-                    <input
-                      type="time"
-                      className="form-input"
-                      value={formData.time}
-                      onChange={e => setFormData({ ...formData, time: e.target.value })}
-                      required
-                    />
-                  </div>
-
-                  {/* Event Name */}
-                  <div>
-                    <label className="form-label">Event Name</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="e.g. Sharma Wedding"
-                      value={formData.eventName}
-                      onChange={e => setFormData({ ...formData, eventName: e.target.value })}
-                      required
-                    />
-                  </div>
-
-                  {/* Event Type */}
-                  <div>
-                    <label className="form-label">Event Type</label>
-                    <select
-                      className="form-input"
-                      value={formData.eventType}
-                      onChange={e => setFormData({ ...formData, eventType: e.target.value })}
-                    >
-                      {EVENT_TYPES.map(t => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Photographers */}
-                  <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50">
-                    <div className="flex items-center justify-between mb-3">
-                      <label className="form-label mb-0 flex items-center gap-1.5">
-                        <Camera className="h-3.5 w-3.5 text-[#c5a880]" /> Photographers
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => updatePhotographerCount(formData.photographersCount - 1)}
-                          className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 flex items-center justify-center transition-colors">−</button>
-                        <span className="w-8 text-center font-extrabold text-sm text-slate-900">{formData.photographersCount}</span>
-                        <button type="button" onClick={() => updatePhotographerCount(formData.photographersCount + 1)}
-                          className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 flex items-center justify-center transition-colors">+</button>
+                  {workType === 'Other' ? (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="form-label">Task Name</label>
+                        <input type="text" className="form-input" placeholder="e.g. Editing, Album Design, Client Meeting" value={formData.eventName} onChange={e => setFormData({ ...formData, eventName: e.target.value })} required />
+                      </div>
+                      <div>
+                        <label className="form-label">
+                          <Clock className="inline h-3 w-3 mr-1 -mt-0.5" /> Time
+                        </label>
+                        <input type="time" className="form-input" value={formData.time} onChange={e => setFormData({ ...formData, time: e.target.value })} required />
+                      </div>
+                      <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50">
+                        <label className="form-label mb-3 text-slate-700">Assigned To</label>
+                        <div className="flex flex-col gap-2">
+                           {formData.photographersNames.map((name, idx) => (
+                              <div key={`o-${idx}`} className="flex items-center justify-between bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm text-slate-800 font-medium shadow-sm">
+                                 {name}
+                                 <button type="button" onClick={() => setFormData({...formData, photographersNames: formData.photographersNames.filter((_, i) => i !== idx)})} className="text-slate-400 hover:text-red-500 p-1"><X className="w-3.5 h-3.5"/></button>
+                              </div>
+                           ))}
+                           <select 
+                             className="form-input text-sm text-slate-600 bg-white" 
+                             value=""
+                             onChange={(e) => {
+                                if(e.target.value && !formData.photographersNames.includes(e.target.value)) {
+                                   setFormData({...formData, photographersNames: [...formData.photographersNames, e.target.value]});
+                                }
+                             }}
+                           >
+                             <option value="">+ Assign team member</option>
+                             <option value="Studio">Studio (Unassigned)</option>
+                             {context.team?.map((t: any) => (
+                               <option key={t._id} value={t.name}>{t.name} ({t.role})</option>
+                             ))}
+                           </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="form-label">Notes (Optional)</label>
+                        <textarea className="form-input" rows={2} placeholder="Any extra details..." value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
                       </div>
                     </div>
-                    {formData.photographersCount > 0 && (
-                      <div className="space-y-2">
-                        {formData.photographersNames.map((name, i) => (
-                          <input
-                            key={`p-${i}`}
-                            type="text"
-                            className="crew-name-input"
-                            placeholder={`Photographer ${i + 1} name`}
-                            value={name}
-                            onChange={e => updatePhotographerName(i, e.target.value)}
-                          />
-                        ))}
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Time */}
+                      <div>
+                        <label className="form-label">
+                          <Clock className="inline h-3 w-3 mr-1 -mt-0.5" /> Shoot Time
+                        </label>
+                        <input type="time" className="form-input" value={formData.time} onChange={e => setFormData({ ...formData, time: e.target.value })} required />
                       </div>
-                    )}
-                  </div>
 
-                  {/* Videographers */}
-                  <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50">
-                    <div className="flex items-center justify-between mb-3">
-                      <label className="form-label mb-0 flex items-center gap-1.5">
-                        <Video className="h-3.5 w-3.5 text-[#c5a880]" /> Videographers
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => updateVideographerCount(formData.videographersCount - 1)}
-                          className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 flex items-center justify-center transition-colors">−</button>
-                        <span className="w-8 text-center font-extrabold text-sm text-slate-900">{formData.videographersCount}</span>
-                        <button type="button" onClick={() => updateVideographerCount(formData.videographersCount + 1)}
-                          className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 flex items-center justify-center transition-colors">+</button>
+                      {/* Event Name */}
+                      <div>
+                        <label className="form-label">Event Name</label>
+                        <input type="text" className="form-input" placeholder="e.g. Sharma Wedding" value={formData.eventName} onChange={e => setFormData({ ...formData, eventName: e.target.value })} required />
+                      </div>
+
+                      {/* Event Type */}
+                      <div>
+                        <label className="form-label">Event Type</label>
+                        <select className="form-input" value={formData.eventType} onChange={e => setFormData({ ...formData, eventType: e.target.value })}>
+                          {EVENT_TYPES.map(t => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Photographers */}
+                      <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50">
+                        <label className="form-label mb-3 flex items-center gap-1.5">
+                          <Camera className="h-3.5 w-3.5 text-[#c5a880]" /> Photographers
+                        </label>
+                        <div className="flex flex-col gap-2">
+                           {formData.photographersNames.map((name, idx) => (
+                              <div key={`p-${idx}`} className="flex items-center justify-between bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm text-slate-800 font-medium shadow-sm">
+                                 {name}
+                                 <button type="button" onClick={() => setFormData({...formData, photographersNames: formData.photographersNames.filter((_, i) => i !== idx)})} className="text-slate-400 hover:text-red-500 p-1"><X className="w-3.5 h-3.5"/></button>
+                              </div>
+                           ))}
+                           <select 
+                             className="form-input text-sm text-slate-600 bg-white" 
+                             value=""
+                             onChange={(e) => {
+                                if(e.target.value && !formData.photographersNames.includes(e.target.value)) {
+                                   setFormData({...formData, photographersNames: [...formData.photographersNames, e.target.value]});
+                                }
+                             }}
+                           >
+                             <option value="">+ Add Photographer</option>
+                             <option value="Studio">Studio (Unassigned)</option>
+                             {context.team?.filter((t: any) => t.role.toLowerCase().includes('photo') || t.role.toLowerCase().includes('studio')).map((t: any) => (
+                               <option key={t._id} value={t.name}>{t.name} ({t.role})</option>
+                             ))}
+                           </select>
+                        </div>
+                      </div>
+
+                      {/* Videographers */}
+                      <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50">
+                        <label className="form-label mb-3 flex items-center gap-1.5">
+                          <Video className="h-3.5 w-3.5 text-[#c5a880]" /> Videographers
+                        </label>
+                        <div className="flex flex-col gap-2">
+                           {formData.videographersNames.map((name, idx) => (
+                              <div key={`v-${idx}`} className="flex items-center justify-between bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm text-slate-800 font-medium shadow-sm">
+                                 {name}
+                                 <button type="button" onClick={() => setFormData({...formData, videographersNames: formData.videographersNames.filter((_, i) => i !== idx)})} className="text-slate-400 hover:text-red-500 p-1"><X className="w-3.5 h-3.5"/></button>
+                              </div>
+                           ))}
+                           <select 
+                             className="form-input text-sm text-slate-600 bg-white" 
+                             value=""
+                             onChange={(e) => {
+                                if(e.target.value && !formData.videographersNames.includes(e.target.value)) {
+                                   setFormData({...formData, videographersNames: [...formData.videographersNames, e.target.value]});
+                                }
+                             }}
+                           >
+                             <option value="">+ Add Videographer</option>
+                             <option value="Studio">Studio (Unassigned)</option>
+                             {context.team?.filter((t: any) => t.role.toLowerCase().includes('video') || t.role.toLowerCase().includes('cine') || t.role.toLowerCase().includes('studio')).map((t: any) => (
+                               <option key={t._id} value={t.name}>{t.name} ({t.role})</option>
+                             ))}
+                           </select>
+                        </div>
+                      </div>
+
+                      {/* Notes */}
+                      <div>
+                        <label className="form-label">Notes (Optional)</label>
+                        <textarea className="form-input" rows={2} placeholder="Any extra details..." value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
                       </div>
                     </div>
-                    {formData.videographersCount > 0 && (
-                      <div className="space-y-2">
-                        {formData.videographersNames.map((name, i) => (
-                          <input
-                            key={`v-${i}`}
-                            type="text"
-                            className="crew-name-input"
-                            placeholder={`Videographer ${i + 1} name`}
-                            value={name}
-                            onChange={e => updateVideographerName(i, e.target.value)}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Notes */}
-                  <div>
-                    <label className="form-label">Notes (Optional)</label>
-                    <textarea
-                      className="form-input"
-                      rows={2}
-                      placeholder="Any extra details..."
-                      value={formData.notes}
-                      onChange={e => setFormData({ ...formData, notes: e.target.value })}
-                    />
-                  </div>
+                  )}
 
                   {/* Submit */}
                   <button
@@ -550,18 +602,20 @@ export default function CalendarPage() {
                                 <p className="text-[10px] text-slate-400 font-mono mt-1">
                                   {shootDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })} • {shoot.time || '09:00'}
                                 </p>
-                                <div className="flex items-center gap-3 mt-2">
-                                  <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">{shoot.eventType}</span>
-                                  {shoot.photographersCount > 0 && (
-                                    <span className="text-[9px] font-semibold text-slate-400 flex items-center gap-0.5">
-                                      <Camera className="h-2.5 w-2.5" /> {shoot.photographersCount}
+                                <div className="flex flex-wrap items-center gap-2 mt-2.5">
+                                  <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">{shoot.eventType}</span>
+                                  
+                                  {shoot.photographersNames?.map((name: string, i: number) => (
+                                    <span key={`p-${i}`} className={`text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 border ${shoot.eventType === 'Other Work' ? 'text-slate-600 bg-slate-50 border-slate-200' : 'text-[#c5a880] bg-[#c5a880]/10 border-[#c5a880]/20'}`}>
+                                      {shoot.eventType !== 'Other Work' && <Camera className="h-2.5 w-2.5" />} {name}
                                     </span>
-                                  )}
-                                  {shoot.videographersCount > 0 && (
-                                    <span className="text-[9px] font-semibold text-slate-400 flex items-center gap-0.5">
-                                      <Video className="h-2.5 w-2.5" /> {shoot.videographersCount}
+                                  ))}
+
+                                  {shoot.videographersNames?.map((name: string, i: number) => (
+                                    <span key={`v-${i}`} className="text-[9px] font-bold text-indigo-500 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                      <Video className="h-2.5 w-2.5" /> {name}
                                     </span>
-                                  )}
+                                  ))}
                                 </div>
                               </div>
                               <button
@@ -595,14 +649,35 @@ export default function CalendarPage() {
                     {getShootsForDate(parseInt(selectedDate.split('-')[2])).length === 0 ? (
                       <p className="text-xs text-slate-400 py-4 text-center">No shoots on this date</p>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="space-y-3 mt-4">
                         {getShootsForDate(parseInt(selectedDate.split('-')[2])).map((s: any) => (
-                          <div key={s._id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                            <div>
-                              <p className="font-bold text-xs text-slate-900">{s.eventName}</p>
-                              <p className="text-[10px] text-slate-400">{s.time} • {s.eventType}</p>
+                          <div key={s._id} className="flex items-start justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl group hover:border-[#c5a880]/30 transition-all">
+                            <div className="flex-1">
+                              <p className="font-bold text-sm text-slate-900">{s.eventName}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <p className="text-[10px] text-slate-400 font-mono">{s.time}</p>
+                                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                                <span className="text-[10px] font-bold text-slate-500">{s.eventType}</span>
+                              </div>
+                              
+                              {(s.photographersNames?.length > 0 || s.videographersNames?.length > 0) && (
+                                <div className="flex flex-wrap gap-2 mt-3">
+                                  {s.photographersNames?.map((name: string, i: number) => (
+                                    <span key={`p-${i}`} className={`text-[9px] font-bold px-2 py-1 rounded flex items-center gap-1 shadow-sm ${s.eventType === 'Other Work' ? 'text-slate-600 bg-white border border-slate-200' : 'text-[#c5a880] bg-white border border-[#c5a880]/20'}`}>
+                                      {s.eventType !== 'Other Work' && <Camera className="h-2.5 w-2.5" />} {name}
+                                    </span>
+                                  ))}
+                                  {s.videographersNames?.map((name: string, i: number) => (
+                                    <span key={`v-${i}`} className="text-[9px] font-bold text-indigo-500 bg-white border border-indigo-100 px-2 py-1 rounded flex items-center gap-1 shadow-sm">
+                                      <Video className="h-2.5 w-2.5" /> {name}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                            <button onClick={() => handleDeleteShoot(s._id)} className="text-red-400 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                            <button onClick={() => handleDeleteShoot(s._id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1.5 hover:bg-red-50 rounded-lg">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
                         ))}
                       </div>

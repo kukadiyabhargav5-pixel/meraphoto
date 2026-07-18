@@ -36,15 +36,27 @@ export default function ProfilePage() {
     }
   }, [sessionUser, studio]);
 
+  // Auto-hide success message after 3 seconds
+  useEffect(() => {
+    if (successMsg) {
+      const timer = setTimeout(() => {
+        setSuccessMsg('');
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMsg, setSuccessMsg]);
+
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setLogoUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setLogoUrl(event.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -63,24 +75,14 @@ export default function ProfilePage() {
       }));
 
       // Try calling studio API
-      try {
-        const res = await apiClient.put('/studio/me', {
-          name: studioName,
-          logoUrl: logoUrl,
-          customDomain: websiteLink
-        });
-        if (res.data && res.data.studio) {
-          setStudio(res.data.studio);
-        } else {
-          setStudio((prev: any) => ({
-            ...prev,
-            name: studioName,
-            logoUrl: logoUrl,
-            customDomain: websiteLink
-          }));
-        }
-      } catch (err) {
-        // Fallback context update if API fails/mocks
+      const res = await apiClient.put('/studio/me', {
+        name: studioName,
+        logoUrl: logoUrl,
+        customDomain: websiteLink
+      });
+      if (res.data && res.data.studio) {
+        setStudio(res.data.studio);
+      } else {
         setStudio((prev: any) => ({
           ...prev,
           name: studioName,
@@ -121,8 +123,8 @@ export default function ProfilePage() {
         </div>
 
         {successMsg && (
-          <div className="w-full bg-emerald-50 text-emerald-700 text-xs font-bold p-3 rounded-lg flex items-center gap-2 border border-emerald-200">
-            <CheckCircle className="w-4 h-4 shrink-0" />
+          <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] bg-emerald-50 text-emerald-700 text-sm font-bold px-6 py-4 rounded-xl flex items-center gap-3 border border-emerald-200 shadow-2xl animate-fade-in transition-all">
+            <CheckCircle className="w-5 h-5 shrink-0" />
             {successMsg}
           </div>
         )}

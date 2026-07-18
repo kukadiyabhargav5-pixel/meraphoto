@@ -2,7 +2,7 @@
 import React, { useState, useEffect, use, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 
 export default function EventUploadPage({ params }: { params: Promise<{ id: string }> }) {
@@ -12,21 +12,114 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
   const [event, setEvent] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showGalleryLink, setShowGalleryLink] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const router = useRouter();
 
   const folderInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const watermarkInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
+  const [mediaItems, setMediaItems] = useState<any[]>([]);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0 || !event) return;
     
-    // Reset the input value so the same file/folder can be selected again if needed
-    e.target.value = '';
+    setUploadingMedia(true);
+    setUploadProgress({ current: 0, total: files.length });
     
-    // Simulate UI update or API call
-    alert(`Selected ${files.length} items for ${type} upload.`);
+    try {
+      const sigRes = await apiClient.get(`/media/cloudinary-signature?folder=events/${event._id}/media`);
+      const { signature, timestamp, cloudName, apiKey, folder } = sigRes.data;
+      
+      const mediaList: any[] = [];
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('api_key', apiKey);
+        formData.append('timestamp', timestamp);
+        formData.append('signature', signature);
+        formData.append('folder', folder);
+        
+        try {
+          const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
+            method: 'POST',
+            body: formData
+          }).then(res => res.json());
+          
+          if (uploadRes.secure_url) {
+              mediaList.push({
+                 url: uploadRes.secure_url,
+                 publicId: uploadRes.public_id,
+                 type: file.type.startsWith('video') ? 'VIDEO' : 'PHOTO',
+                 size: file.size,
+                 folderPath: file.webkitRelativePath || '',
+                 width: uploadRes.width,
+                 height: uploadRes.height
+              });
+          }
+        } catch (upErr) {
+          console.error('Cloudinary upload error:', upErr);
+        }
+        setUploadProgress({ current: i + 1, total: files.length });
+      }
+      
+      if (mediaList.length > 0) {
+         await apiClient.post(`/media/event/${event._id}/bulk-create`, { mediaList });
+         const mediaRes = await apiClient.get(`/media/event/${event._id}`);
+         if (mediaRes.data && mediaRes.data.media) setMediaItems(mediaRes.data.media);
+         alert(`Successfully uploaded ${mediaList.length} files!`);
+      }
+    } catch (err) {
+       console.error('Upload process failed:', err);
+       alert('Upload failed. Please check console for details.');
+    } finally {
+       setUploadingMedia(false);
+       e.target.value = '';
+    }
+  };
+
+  const getPreviewPosition = (pos: string) => {
+    switch (pos) {
+      case 'TOP_LEFT': return { top: '4%', left: '4%' };
+      case 'TOP_RIGHT': return { top: '4%', right: '4%' };
+      case 'BOTTOM_LEFT': return { bottom: '4%', left: '4%' };
+      case 'CENTER': return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
+      case 'BOTTOM_RIGHT': default: return { bottom: '4%', right: '4%' };
+    }
+  };
+
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const handleWatermarkLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploadingLogo(true);
+      const formData = new FormData();
+      formData.append('image', file);
+      
+      const res = await apiClient.post('/dashboard/upload-asset', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      if (res.data && res.data.url) {
+        setFormData(prev => ({...prev, watermarkLogoUrl: res.data.url}));
+      }
+    } catch (err) {
+      console.error('Failed to upload logo:', err);
+      alert('Failed to upload logo');
+    } finally {
+      setUploadingLogo(false);
+      if (e.target) e.target.value = '';
+    }
   };
 
   const [formData, setFormData] = useState({
@@ -39,7 +132,14 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
     location: '',
     accessType: 'PUBLIC',
     customWatermark: false,
-    addToPortfolio: false
+    addToPortfolio: false,
+    coverImageUrl: '',
+    watermarkType: 'LOGO',
+    watermarkText: '',
+    watermarkLogoUrl: '',
+    watermarkPosition: 'BOTTOM_RIGHT',
+    watermarkWidth: 20,
+    watermarkOpacity: 50
   });
 
   const EVENT_TYPES = [
@@ -60,7 +160,14 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
         location: event.location || '',
         accessType: event.accessType || 'PUBLIC',
         customWatermark: !!event.watermark?.isActive,
-        addToPortfolio: !!event.addToPortfolio
+        addToPortfolio: !!event.addToPortfolio,
+        coverImageUrl: event.coverImageUrl || '',
+        watermarkType: event.watermark?.type || 'LOGO',
+        watermarkText: event.watermark?.text || '',
+        watermarkLogoUrl: event.watermark?.logoUrl || '',
+        watermarkPosition: event.watermark?.position || 'BOTTOM_RIGHT',
+        watermarkWidth: event.watermark?.width || 20,
+        watermarkOpacity: (event.watermark?.opacity !== undefined ? event.watermark.opacity * 100 : 50)
       });
     }
   }, [event]);
@@ -71,6 +178,12 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
         const res = await apiClient.get(`/event/code/${eventId}`);
         if (res.data && res.data.event) {
           setEvent(res.data.event);
+          try {
+             const mediaRes = await apiClient.get(`/media/event/${res.data.event._id}`);
+             if (mediaRes.data && mediaRes.data.media) setMediaItems(mediaRes.data.media);
+          } catch (me) {
+             console.error("Failed to fetch media", me);
+          }
         }
       } catch (error) {
         console.error('Failed to fetch event:', error);
@@ -93,8 +206,9 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
     return (
       <div className="flex-1 bg-white p-8">
         <h1 className="text-2xl font-bold text-slate-900">Event not found</h1>
-        <Link href="/dashboard/events" className="text-[#c5a880] hover:underline mt-4 inline-block">
-          &larr; Back to Events
+        <Link href="/dashboard/events" className="inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 hover:text-[#c5a880] text-[11px] font-black uppercase tracking-wider rounded-xl border border-slate-200 hover:border-[#c5a880] transition-all duration-300 shadow-sm hover:shadow group cursor-pointer mt-4">
+          <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
+          <span>Back to Events</span>
         </Link>
       </div>
     );
@@ -108,8 +222,9 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
         <div className="flex-1 flex flex-col">
           {/* Header */}
           <div className="flex items-center gap-4 mb-8">
-            <Link href="/dashboard/events" className="text-slate-500 hover:text-slate-900 font-medium text-sm flex items-center gap-1 transition-colors">
-              <ArrowLeft className="h-4 w-4" /> Back to Events
+            <Link href="/dashboard/events" className="inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 hover:text-[#c5a880] text-[11px] font-black uppercase tracking-wider rounded-xl border border-slate-200 hover:border-[#c5a880] transition-all duration-300 shadow-sm hover:shadow group cursor-pointer">
+              <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
+              <span>Back to Events</span>
             </Link>
             <h1 className="text-3xl font-bold text-slate-900 ml-4 border-l-2 border-slate-200 pl-4">{event.name}</h1>
           </div>
@@ -153,11 +268,56 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
           </div>
 
           {/* Media Files List */}
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 mb-4">Media Files (0)</h3>
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-12 flex items-center justify-center text-slate-500 text-sm">
-              No media files uploaded yet. Select files to start.
+          <div className="mt-8">
+            <div className="flex items-center justify-between mb-4">
+               <h3 className="text-lg font-bold text-slate-900">Media Files ({mediaItems.length})</h3>
+               <button 
+                 onClick={async () => {
+                   if (!event) return;
+                   const res = await apiClient.get(`/media/event/${event._id}`);
+                   if (res.data && res.data.media) setMediaItems(res.data.media);
+                 }}
+                 className="text-xs font-bold text-slate-500 hover:text-[#c5a880] transition-colors"
+               >
+                 Refresh
+               </button>
             </div>
+            
+            {uploadingMedia && (
+               <div className="mb-6 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                  <div className="flex justify-between text-xs font-bold text-slate-700 mb-2">
+                     <span>Uploading files to secure cloud storage...</span>
+                     <span>{uploadProgress.current} / {uploadProgress.total}</span>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-2">
+                     <div className="bg-[#c5a880] h-2 rounded-full transition-all duration-300" style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}></div>
+                  </div>
+               </div>
+            )}
+
+            {mediaItems.length === 0 ? (
+               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-12 flex items-center justify-center text-slate-500 text-sm">
+                 No media files uploaded yet. Select files to start.
+               </div>
+            ) : (
+               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-h-[600px] overflow-y-auto pr-2 pb-4">
+                 {mediaItems.map((item, idx) => (
+                   <div key={idx} className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 border border-slate-200 group">
+                      {item.type === 'VIDEO' ? (
+                         <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-800">
+                            <Video className="h-8 w-8 text-white/50 mb-2" />
+                            <span className="text-[9px] text-white/70 font-bold uppercase tracking-wider">Video</span>
+                         </div>
+                      ) : (
+                         <img src={item.compressedUrl || item.r2Url} className="w-full h-full object-cover" />
+                      )}
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                         <span className="text-[10px] font-bold text-white px-2 py-1 bg-black/50 rounded uppercase tracking-wider">{item.processedStatus}</span>
+                      </div>
+                   </div>
+                 ))}
+               </div>
+            )}
           </div>
         </div>
 
@@ -219,6 +379,23 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
               .toggle-switch[data-active="true"]::after {
                 transform: translateX(16px);
               }
+              
+              .custom-slider {
+                -webkit-appearance: none;
+                height: 6px;
+                border-radius: 3px;
+                background: linear-gradient(to right, #c5a880 var(--val, 50%), #475569 var(--val, 50%));
+                outline: none;
+              }
+              .custom-slider::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                appearance: none;
+                width: 14px;
+                height: 14px;
+                border-radius: 50%;
+                background: #c5a880;
+                cursor: pointer;
+              }
             `}} />
 
             <form className="space-y-5" onSubmit={async (e) => {
@@ -230,17 +407,23 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                   ...formData,
                   watermark: {
                     ...(event?.watermark || {}),
-                    isActive: formData.customWatermark
+                    isActive: formData.customWatermark,
+                    type: formData.watermarkType,
+                    text: formData.watermarkText,
+                    logoUrl: formData.watermarkLogoUrl,
+                    position: formData.watermarkPosition,
+                    width: formData.watermarkWidth,
+                    opacity: formData.watermarkOpacity / 100
                   }
                 };
 
                 await apiClient.put(`/event/${eventId}`, payload);
                 alert('Event updated successfully!');
                 
-                // Update local event state to reflect new watermark setting
+                // Update local event state to reflect new settings
                 setEvent({
                   ...event,
-                  watermark: payload.watermark
+                  ...payload
                 });
               } catch (err) {
                 alert('Error updating event');
@@ -326,17 +509,50 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
               <div>
                 <label className="edit-label">Cover Image</label>
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-lg border border-slate-300 bg-white flex items-center justify-center overflow-hidden shrink-0">
-                    {event.coverImageUrl ? (
-                      <img src={event.coverImageUrl} alt="Cover" className="w-full h-full object-cover" />
+                  <div className="w-40 aspect-video rounded-lg border border-slate-300 bg-slate-100 flex items-center justify-center overflow-hidden shrink-0 relative">
+                    {formData.coverImageUrl ? (
+                      <img src={formData.coverImageUrl} alt="Cover" className="w-full h-full object-cover" />
                     ) : (
-                      <Camera className="h-5 w-5 text-slate-400" />
+                      <Camera className="h-6 w-6 text-slate-400" />
+                    )}
+                    {uploadingCover && (
+                      <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
+                        <Loader2 className="h-5 w-5 text-[#c5a880] animate-spin" />
+                      </div>
                     )}
                   </div>
                   <div className="flex-1 relative">
-                    <input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        e.target.value = ''; // Allow selecting same file again
+                        setUploadingCover(true);
+                        try {
+                          const reader = new FileReader();
+                          reader.onload = (e) => setFormData(prev => ({...prev, coverImageUrl: e.target?.result as string}));
+                          reader.readAsDataURL(file);
+
+                          const uploadData = new FormData();
+                          uploadData.append('file', file);
+                          const res = await apiClient.post('/media/upload-asset', uploadData, {
+                            headers: { 'Content-Type': 'multipart/form-data' }
+                          });
+                          if (res.data && res.data.url) {
+                            setFormData(prev => ({ ...prev, coverImageUrl: res.data.url }));
+                          }
+                        } catch (err) {
+                          console.error("Cover upload failed", err);
+                        } finally {
+                          setUploadingCover(false);
+                        }
+                      }}
+                    />
                     <div className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-lg py-3 text-center hover:bg-slate-100 transition-colors cursor-pointer">
-                      Choose File
+                      {uploadingCover ? 'Uploading...' : (formData.coverImageUrl ? 'Change Cover Image' : 'Choose File')}
                     </div>
                   </div>
                 </div>
@@ -355,29 +571,212 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 </select>
               </div>
 
-              <div className="flex items-center justify-between border-t border-b border-slate-200 py-4 my-2">
-                <div className="flex items-center gap-2">
-                  <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-600 font-bold">W</span>
-                  <span className="text-xs font-bold text-slate-700 uppercase">Custom Event Watermark</span>
+              <div className="flex flex-col border-t border-b border-slate-200 py-4 my-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-600 font-bold">W</span>
+                    <span className="text-xs font-bold text-slate-700 uppercase">Custom Event Watermark</span>
+                  </div>
+                  <div 
+                    className="toggle-switch" 
+                    data-active={formData.customWatermark}
+                    onClick={() => setFormData({...formData, customWatermark: !formData.customWatermark})}
+                  />
                 </div>
-                <div 
-                  className="toggle-switch" 
-                  data-active={formData.customWatermark}
-                  onClick={() => setFormData({...formData, customWatermark: !formData.customWatermark})}
-                />
+
+                {formData.customWatermark && (
+                  <div className="mt-6 space-y-6">
+                    <div>
+                      <label className="edit-label">Watermark Type</label>
+                      <select 
+                        className="edit-input font-bold tracking-wide"
+                        value={formData.watermarkType}
+                        onChange={e => setFormData({...formData, watermarkType: e.target.value as any})}
+                      >
+                        <option value="LOGO">LOGO WATERMARK</option>
+                        <option value="TEXT">TEXT WATERMARK</option>
+                      </select>
+                    </div>
+
+                    {formData.watermarkType === 'TEXT' ? (
+                      <div>
+                        <label className="edit-label">Watermark Text</label>
+                        <input 
+                          type="text" 
+                          className="edit-input" 
+                          placeholder="e.g. Mara Photo"
+                          value={formData.watermarkText}
+                          onChange={e => setFormData({...formData, watermarkText: e.target.value})}
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="edit-label">Watermark Logo Image</label>
+                        <div className="flex gap-4 items-center mt-1">
+                          <div className="w-[60px] h-[60px] rounded border border-dashed border-slate-300 flex items-center justify-center shrink-0 bg-slate-50">
+                             {uploadingLogo ? <Loader2 className="h-5 w-5 animate-spin text-[#c5a880]" /> : (formData.watermarkLogoUrl ? <img src={formData.watermarkLogoUrl} className="max-w-[40px] max-h-[40px] object-contain" /> : <Camera className="h-5 w-5 text-slate-600" />)}
+                          </div>
+                          <div className="flex-1 flex flex-col">
+                            <label className="w-full text-center border border-slate-200 text-[#b69970] font-bold text-[13px] py-2 rounded-lg bg-white cursor-pointer hover:bg-slate-50 transition-colors shadow-sm">
+                               Choose File
+                               <input type="file" accept="image/*" className="hidden" onChange={handleWatermarkLogoUpload} />
+                            </label>
+                            <p className="text-[10px] text-slate-700 font-bold mt-2">PNG with transparent background recommended.</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-3 gap-6">
+                      <div className="col-span-1">
+                        <label className="edit-label">Watermark Position</label>
+                        <select 
+                          className="edit-input font-bold tracking-wide mt-1"
+                          value={formData.watermarkPosition}
+                          onChange={e => setFormData({...formData, watermarkPosition: e.target.value as any})}
+                        >
+                          <option value="BOTTOM_RIGHT">BOTTOM RIGHT</option>
+                          <option value="BOTTOM_LEFT">BOTTOM LEFT</option>
+                          <option value="TOP_RIGHT">TOP RIGHT</option>
+                          <option value="TOP_LEFT">TOP LEFT</option>
+                          <option value="CENTER">CENTER</option>
+                        </select>
+                      </div>
+                      <div className="col-span-1 flex flex-col justify-center">
+                        <label className="edit-label">Size ({formData.watermarkWidth}%)</label>
+                        <input 
+                          type="range" 
+                          min="5" max="100" 
+                          className="w-full custom-slider mt-2"
+                          value={formData.watermarkWidth}
+                          onChange={e => setFormData({...formData, watermarkWidth: Number(e.target.value)})}
+                          style={{'--val': `${formData.watermarkWidth}%`} as any}
+                        />
+                      </div>
+                      <div className="col-span-1 flex flex-col justify-center">
+                        <label className="edit-label">Opacity ({formData.watermarkOpacity}%)</label>
+                        <input 
+                          type="range" 
+                          min="10" max="100" 
+                          className="w-full custom-slider mt-2"
+                          value={formData.watermarkOpacity}
+                          onChange={e => setFormData({...formData, watermarkOpacity: Number(e.target.value)})}
+                          style={{'--val': `${formData.watermarkOpacity}%`} as any}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-8 border border-slate-200 rounded-xl overflow-hidden bg-white">
+                       <div className="bg-[#e8ebf0] text-[#64748b] text-[11px] font-bold px-4 py-2.5">
+                          LIVE PREVIEW
+                       </div>
+                       <div className="relative w-full aspect-[3/2] bg-slate-200 flex items-center justify-center">
+                          <img src="/wedding.jpg" className="absolute inset-0 w-full h-full object-cover" alt="Preview Background" />
+                          {formData.watermarkType === 'LOGO' && formData.watermarkLogoUrl && (
+                             <img 
+                               src={formData.watermarkLogoUrl} 
+                               className="absolute pointer-events-none object-contain"
+                               style={{
+                                 opacity: formData.watermarkOpacity / 100,
+                                 width: `${formData.watermarkWidth}%`,
+                                 ...getPreviewPosition(formData.watermarkPosition)
+                               }}
+                             />
+                          )}
+                          {formData.watermarkType === 'TEXT' && formData.watermarkText && (
+                             <div 
+                               className="absolute pointer-events-none text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] font-bold whitespace-nowrap"
+                               style={{
+                                 opacity: formData.watermarkOpacity / 100,
+                                 fontSize: `${formData.watermarkWidth * 0.3}px`, 
+                                 ...getPreviewPosition(formData.watermarkPosition)
+                               }}
+                             >
+                               {formData.watermarkText}
+                             </div>
+                          )}
+                       </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-between py-4">
                 <div className="flex items-center gap-2">
                   <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-600 font-bold">P</span>
                   <span className="text-xs font-bold text-slate-700 uppercase">Add to Portfolio</span>
+                  {saving && <Loader2 className="h-3 w-3 animate-spin text-slate-400 ml-2" />}
                 </div>
                 <div 
-                  className="toggle-switch" 
+                  className={`toggle-switch ${saving ? 'opacity-50 cursor-not-allowed' : ''}`} 
                   data-active={formData.addToPortfolio}
-                  onClick={() => setFormData({...formData, addToPortfolio: !formData.addToPortfolio})}
+                  onClick={async () => {
+                    if (saving) return;
+                    const newValue = !formData.addToPortfolio;
+                    
+                    // Optimistic update
+                    setFormData({...formData, addToPortfolio: newValue});
+                    setSaving(true);
+                    
+                    try {
+                      await apiClient.patch(`/event/${eventId}/portfolio-status`, { 
+                        addToPortfolio: newValue 
+                      });
+                      
+                      // Also update the main event object in state so it matches DB
+                      if (event) {
+                        setEvent({...event, addToPortfolio: newValue});
+                      }
+                    } catch (err) {
+                      console.error("Failed to update portfolio status", err);
+                      alert("Failed to save portfolio status.");
+                      // Revert on failure
+                      setFormData({...formData, addToPortfolio: !newValue});
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
                 />
               </div>
+
+              {event && mediaItems.length > 0 && (
+                <div className="pt-2 mb-4">
+                  <div className="bg-[#f8f5f0] border border-[#e6d5c0] rounded-xl p-4 flex flex-col items-center justify-center text-center shadow-sm">
+                     <h4 className="text-sm font-bold text-slate-800 mb-1">Gallery is Ready</h4>
+                     <p className="text-xs text-slate-500 mb-4">Share this link with your clients to view {mediaItems.length} media files.</p>
+                     {!showGalleryLink ? (
+                       <button
+                         type="button"
+                         onClick={() => setShowGalleryLink(true)}
+                         className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                       >
+                         <span className="text-base leading-none">🔗</span> Generate Public Gallery Link
+                       </button>
+                     ) : (
+                       <div className="w-full flex items-center bg-white border border-[#e6d5c0] rounded-xl overflow-hidden mt-2">
+                          <input 
+                            type="text" 
+                            readOnly 
+                            value={`${window.location.origin}/e/${event.code}`} 
+                            className="flex-1 bg-transparent text-[11px] sm:text-xs text-slate-700 px-3 py-3 outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(`${window.location.origin}/e/${event.code}`);
+                              setLinkCopied(true);
+                              setTimeout(() => setLinkCopied(false), 2000);
+                            }}
+                            className="bg-[#c5a880] hover:bg-[#b59a72] text-[#09090b] px-4 py-3 text-xs font-bold transition-colors flex items-center gap-1 border-l border-[#e6d5c0]"
+                          >
+                            {linkCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                            {linkCopied ? 'Copied' : 'Copy'}
+                          </button>
+                       </div>
+                     )}
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center gap-3 pt-2">
                 <button type="submit" disabled={saving} className="flex-1 flex justify-center items-center bg-[#c5a880] hover:bg-[#b59a72] text-[#09090b] font-bold py-3 rounded-xl text-sm transition-colors disabled:opacity-50">

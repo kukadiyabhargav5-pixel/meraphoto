@@ -29,9 +29,18 @@ export default function StudioBrandingPage() {
   } = context;
 
   const handleAssetUpload = (e: any, setter: any, type: string) => { 
+    const file = e.target.files?.[0];
+    if (!file) return;
+
     setUploadingAsset(type); 
-    // Simulate upload delay for dummy url
-    setTimeout(() => { setter('https://via.placeholder.com/150'); setUploadingAsset(''); }, 1000); 
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setter(event.target.result as string);
+      }
+      setUploadingAsset('');
+    };
+    reader.readAsDataURL(file);
   };
   const [uploadingAsset, setUploadingAsset] = useState('');
   
@@ -45,6 +54,7 @@ export default function StudioBrandingPage() {
   const [wmLogo, setWmLogo] = useState(studio?.watermark?.logoUrl || '');
   const [wmPos, setWmPos] = useState(studio?.watermark?.position || 'BOTTOM_RIGHT');
   const [wmOpacity, setWmOpacity] = useState(studio?.watermark?.opacity ?? 0.5);
+  const [wmSize, setWmSize] = useState(studio?.watermark?.size ?? 50);
   
   // Update state if studio object changes after initial load
   useEffect(() => {
@@ -59,6 +69,7 @@ export default function StudioBrandingPage() {
         setWmLogo(studio.watermark.logoUrl || '');
         setWmPos(studio.watermark.position || 'BOTTOM_RIGHT');
         setWmOpacity(studio.watermark.opacity ?? 0.5);
+        setWmSize(studio.watermark.size ?? 50);
       }
     }
   }, [studio]);
@@ -78,7 +89,8 @@ export default function StudioBrandingPage() {
           text: wmText,
           logoUrl: wmLogo,
           position: wmPos,
-          opacity: wmOpacity
+          opacity: wmOpacity,
+          size: wmSize
         }
       };
       
@@ -129,7 +141,7 @@ export default function StudioBrandingPage() {
                       </div>
                     )}
                     <div className="flex-1">
-                      <label className="inline-flex items-center justify-center px-4 py-2 bg-slate-50 border border-slate-200 hover:bg-slate-50 text-slate-200 rounded-lg text-xs font-bold cursor-pointer transition-colors w-full text-center">
+                      <label className="inline-flex items-center justify-center px-4 py-2.5 bg-white border border-[#c5a880]/30 hover:bg-[#c5a880]/10 text-[#b59a72] rounded-lg text-xs font-extrabold cursor-pointer transition-all shadow-sm w-full text-center">
                         {uploadingAsset === 'studioLogo' ? (
                           <span className="flex items-center gap-1.5 justify-center">
                             <Loader className="h-3.5 w-3.5 animate-spin" /> Uploading...
@@ -200,7 +212,7 @@ export default function StudioBrandingPage() {
                         </div>
                       )}
                       <div className="flex-1">
-                        <label className="inline-flex items-center justify-center px-4 py-2 bg-slate-50 border border-slate-200 hover:bg-slate-50 text-slate-200 rounded-lg text-xs font-bold cursor-pointer transition-colors w-full text-center">
+                        <label className="inline-flex items-center justify-center px-4 py-2.5 bg-white border border-[#c5a880]/30 hover:bg-[#c5a880]/10 text-[#b59a72] rounded-lg text-xs font-extrabold cursor-pointer transition-all shadow-sm w-full text-center">
                           {uploadingAsset === 'wmLogo' ? (
                             <span className="flex items-center gap-1.5 justify-center">
                               <Loader className="h-3.5 w-3.5 animate-spin" /> Uploading...
@@ -223,7 +235,7 @@ export default function StudioBrandingPage() {
 
                 {wmType !== 'NONE' && (
                   <>
-                    <div className="grid grid-cols-2 gap-4 mt-2">
+                    <div className="grid grid-cols-3 gap-4 mt-2">
                       <div className="flex flex-col gap-1">
                         <label className="text-[12px] text-slate-700 font-bold uppercase tracking-wider">Watermark Position</label>
                         <select value={wmPos} onChange={(e) => setWmPos(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]">
@@ -233,6 +245,10 @@ export default function StudioBrandingPage() {
                           <option className="bg-white text-slate-900" value="BOTTOM_RIGHT">BOTTOM RIGHT</option>
                           <option className="bg-white text-slate-900" value="CENTER">CENTER OVERLAY</option>
                         </select>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[12px] text-slate-700 font-bold uppercase tracking-wider">Size ({wmSize}%)</label>
+                        <input type="range" min="1" max="100" step="1" value={wmSize} onChange={(e) => setWmSize(parseInt(e.target.value))} className="w-full h-8 cursor-pointer accent-[#c5a880]" />
                       </div>
                       <div className="flex flex-col gap-1">
                         <label className="text-[12px] text-slate-700 font-bold uppercase tracking-wider">Opacity ({Math.round(wmOpacity * 100)}%)</label>
@@ -258,9 +274,9 @@ export default function StudioBrandingPage() {
                         `}>
                           <div style={{ opacity: wmOpacity }} className="transition-opacity duration-200 pointer-events-auto">
                             {wmType === 'TEXT' ? (
-                              <span className="text-white font-bold text-xl drop-shadow-md select-none">{wmText}</span>
+                              <span style={{ fontSize: `${wmSize * 0.03}rem` }} className="text-white font-bold drop-shadow-md select-none whitespace-nowrap">{wmText}</span>
                             ) : wmType === 'LOGO' && wmLogo ? (
-                              <img src={wmLogo} alt="Logo Watermark" className="max-w-[100px] max-h-[100px] object-contain drop-shadow-md select-none" />
+                              <img src={wmLogo} alt="Logo Watermark" style={{ width: `${wmSize * 3}px` }} className="object-contain drop-shadow-md select-none" />
                             ) : null}
                           </div>
                         </div>

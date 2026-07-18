@@ -15,6 +15,8 @@ export default function CreateEventPage() {
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [customWatermark, setCustomWatermark] = useState(false);
+  const [addToPortfolio, setAddToPortfolio] = useState(false);
   const router = useRouter();
   
   const EVENT_TYPES = [
@@ -49,6 +51,33 @@ export default function CreateEventPage() {
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
+        .toggle-switch {
+          position: relative;
+          display: inline-block;
+          width: 36px;
+          height: 20px;
+          background-color: #cbd5e1;
+          border-radius: 20px;
+          cursor: pointer;
+          transition: background-color 0.2s;
+        }
+        .toggle-switch[data-active="true"] {
+          background-color: #c5a880;
+        }
+        .toggle-switch::after {
+          content: '';
+          position: absolute;
+          top: 2px;
+          left: 2px;
+          width: 16px;
+          height: 16px;
+          background-color: white;
+          border-radius: 50%;
+          transition: transform 0.2s;
+        }
+        .toggle-switch[data-active="true"]::after {
+          transform: translateX(16px);
+        }
       `}} />
       
       <div className="max-w-3xl bg-slate-50 border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm">
@@ -73,7 +102,9 @@ export default function CreateEventPage() {
               clientEmail,
               date: eventDate || new Date().toISOString(),
               type: eventType,
-              coverImageUrl: coverImage
+              coverImageUrl: coverImage,
+              addToPortfolio,
+              watermark: { isActive: customWatermark, type: 'LOGO', position: 'BOTTOM_RIGHT', width: 20, height: 20, opacity: 0.5 }
             });
             router.push('/dashboard/events');
           } catch (error) {
@@ -158,7 +189,7 @@ export default function CreateEventPage() {
           <div>
             <label className="form-label">Cover Image</label>
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-xl border border-dashed border-slate-300 bg-white flex items-center justify-center shrink-0 overflow-hidden relative">
+              <div className="w-40 aspect-video rounded-xl border border-dashed border-slate-300 bg-slate-100 flex items-center justify-center shrink-0 overflow-hidden relative">
                 {coverImage ? (
                   <img src={coverImage} alt="Cover" className="w-full h-full object-cover" />
                 ) : (
@@ -170,7 +201,7 @@ export default function CreateEventPage() {
                   </div>
                 )}
               </div>
-              <div className="w-full relative">
+              <div className="flex-1 relative">
                 <input 
                   type="file" 
                   accept="image/*"
@@ -178,6 +209,7 @@ export default function CreateEventPage() {
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
+                    e.target.value = ''; // Allow selecting same file again
 
                     setImageName(file.name);
                     setUploadingImage(true);
@@ -218,6 +250,30 @@ export default function CreateEventPage() {
                 </div>
               </div>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between border-t border-slate-200 pt-6 mt-2 mb-2">
+            <div className="flex items-center gap-2">
+              <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-600 font-bold">W</span>
+              <span className="text-xs font-bold text-slate-700 uppercase">Custom Event Watermark</span>
+            </div>
+            <div 
+              className="toggle-switch" 
+              data-active={customWatermark}
+              onClick={() => setCustomWatermark(!customWatermark)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between border-b border-slate-200 pb-6 mb-6">
+            <div className="flex items-center gap-2">
+              <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-600 font-bold">P</span>
+              <span className="text-xs font-bold text-slate-700 uppercase">Add to Portfolio</span>
+            </div>
+            <div 
+              className="toggle-switch" 
+              data-active={addToPortfolio}
+              onClick={() => setAddToPortfolio(!addToPortfolio)}
+            />
           </div>
 
           <button type="submit" disabled={loading} className="flex justify-center items-center gap-2 w-full bg-[#c5a880] hover:bg-white text-[#09090b] shadow-md border border-transparent hover:border-[#c5a880] font-bold py-4 rounded-xl text-sm transition-colors mt-8 disabled:opacity-50">

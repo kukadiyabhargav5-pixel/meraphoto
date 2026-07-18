@@ -82,13 +82,15 @@ export default function BillPage() {
                 </div>
               </>
             ) : (
-              <div className="max-w-xl flex flex-col gap-6">
-                <div className="flex items-center gap-4">
-                  <button onClick={() => { setBillSubView('list'); setSelectedEventCodeForBill(''); }} className="text-slate-700 hover:text-slate-900 text-xs font-bold underline cursor-pointer">
-                    ← Back to Bills
-                  </button>
-                  <h1 className="text-2xl font-extrabold text-slate-900">Create GST Invoice</h1>
-                </div>
+              <div className="w-full relative">
+                <button onClick={() => { setBillSubView('list'); setSelectedEventCodeForBill(''); }} className="absolute top-0 left-0 inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 hover:text-[#c5a880] text-[11px] font-black uppercase tracking-wider rounded-xl border border-slate-200 hover:border-[#c5a880] transition-all duration-300 shadow-sm hover:shadow group cursor-pointer z-10">
+                  <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
+                  <span>Back to Bills</span>
+                </button>
+                <div className="max-w-2xl mx-auto w-full flex flex-col gap-6 pt-14">
+                  <div className="flex items-center justify-center">
+                    <h1 className="text-3xl font-extrabold text-slate-900 text-center">Create GST Invoice</h1>
+                  </div>
                 <form onSubmit={async (e) => {
                   e.preventDefault();
                   if (newBillClient) {
@@ -178,6 +180,7 @@ export default function BillPage() {
                     Generate Invoice
                   </button>
                 </form>
+              </div>
               </div>
             )}
           </div>
