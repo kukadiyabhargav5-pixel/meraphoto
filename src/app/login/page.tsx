@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, User, Eye, EyeOff, Loader, Camera, AlertCircle, CheckCircle2, ShieldCheck, ArrowRight, X } from 'lucide-react';
 import { apiClient } from '../../lib/api';
-import PublicWrapper from '../../components/PublicWrapper';
 import Script from 'next/script';
 
 // --- Professional Outlined Input Component ---
@@ -301,8 +300,8 @@ function AuthContentGlassy() {
   const itemVars = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'tween', ease: 'easeOut', duration: 0.5 } } } as const;
 
   return (
-    <PublicWrapper>
-      <div className="flex-1 flex items-center justify-center p-6 relative min-h-[calc(100vh-80px)] font-sans overflow-hidden bg-slate-50">
+    <>
+      <div className="flex-grow flex items-center justify-center p-6 relative min-h-screen font-sans overflow-hidden bg-[#faf9f6]">
 
         {/* Glassmorphism Card */}
         <div className="relative z-10 w-full max-w-[460px]">
@@ -748,7 +747,7 @@ function AuthContentGlassy() {
         </div>
       )}
       <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
-    </PublicWrapper>
+    </>
   );
 }
 
