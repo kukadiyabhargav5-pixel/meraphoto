@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import PublicWrapper from '../components/PublicWrapper';
 import {
   Camera, QrCode, ScanFace, Download, Star, Check,
@@ -141,19 +141,261 @@ const testimonials = [
   },
 ];
 
+const featureTabs = [
+  {
+    tabLabel: 'Manage Event',
+    icon: Settings,
+    title: 'Instant Client Gallery Setup & Event Management Software',
+    desc: 'Easily set up your event photo gallery on Mara Photo in seconds. Streamline your event photography workflow with our rapid creation tools. Try Mara Photo free!',
+    bullets: [
+      'Create your event in seconds',
+      'Organize event categories & sub events',
+      'Invite other Co hosts as admin collaborators'
+    ],
+    mockup: (
+      <div className="w-full bg-white rounded-xl shadow-lg border border-slate-100 p-4 text-slate-800 text-left font-poppins relative flex flex-col justify-between h-[230px] select-none">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <span className="text-[11px] font-black text-[#09090b]">mara photo</span>
+          <span className="text-[8px] bg-green-50 text-green-600 font-bold px-2 py-0.5 rounded-full">• 4 active</span>
+        </div>
+        <div className="flex gap-3 flex-1 mt-2.5">
+          {/* Sidebar */}
+          <div className="w-[65px] border-r border-slate-50 pr-1 space-y-1 shrink-0 text-[7px] text-slate-400 font-bold">
+            <div className="bg-[#09090b] text-white rounded p-1 flex items-center gap-1"><LayoutDashboard className="w-2 h-2" /> Dashboard</div>
+            <div className="p-1 flex items-center gap-1"><Camera className="w-2 h-2" /> Events</div>
+            <div className="p-1 flex items-center gap-1"><Settings className="w-2 h-2" /> Settings</div>
+          </div>
+          {/* Content */}
+          <div className="flex-1 space-y-2">
+            <p className="text-[9px] font-black text-[#c5a880]">Your Events, Organized ✨</p>
+            <div className="border border-slate-100 rounded-lg p-1.5 space-y-1 bg-slate-50 relative">
+              <div className="h-12 rounded overflow-hidden">
+                <img src="/party.jpg" alt="party" className="w-full h-full object-cover" />
+              </div>
+              <div className="flex justify-between items-center mt-1">
+                <div>
+                  <p className="text-[8px] font-black text-slate-800">Birthday Party</p>
+                  <p className="text-[6px] text-gray-400 font-semibold">26 May, 2026</p>
+                </div>
+                <span className="text-[5.5px] bg-[#c5a880]/15 text-[#c5a880] px-1 rounded font-bold">Public</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  },
+  {
+    tabLabel: 'Invoice Generator',
+    icon: CreditCard,
+    title: 'Professional Invoicing & Payment Automation',
+    desc: 'Create and send branded invoices to clients in one click. Receive payments directly to your bank account with automatic status tracking on Mara Photo.',
+    bullets: [
+      'Generate GST-compliant invoices instantly',
+      'Automated client payment reminders',
+      'Secure digital payments & UPI integration'
+    ],
+    mockup: (
+      <div className="w-full bg-white rounded-xl shadow-lg border border-slate-100 p-4 text-slate-800 text-left font-poppins relative flex flex-col justify-between h-[230px] select-none">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <span className="text-[9px] font-bold text-slate-400 uppercase">Studio Invoice</span>
+          <span className="text-[8px] bg-emerald-50 text-emerald-600 font-bold px-2 py-0.5 rounded-full border border-emerald-100 uppercase tracking-wider">Paid</span>
+        </div>
+        <div className="space-y-2 flex-1 mt-3">
+          <div className="flex justify-between text-[8px] text-slate-400 font-semibold">
+            <span>Bill To: Mehta Family</span>
+            <span>Date: 24 May 2026</span>
+          </div>
+          <div className="border border-slate-100 rounded-lg p-2 bg-slate-50 space-y-1.5">
+            <div className="flex justify-between text-[9px] font-bold text-slate-700">
+              <span>Wedding Photography Cover</span>
+              <span>₹85,000</span>
+            </div>
+            <div className="flex justify-between text-[7px] text-slate-400 font-medium">
+              <span>Pre-Wedding + 2 Day Event Shoot</span>
+              <span>Qty: 1</span>
+            </div>
+          </div>
+          <div className="flex justify-between items-center pt-1.5 border-t border-slate-100">
+            <span className="text-[8px] text-slate-400 font-bold">Total Received</span>
+            <span className="text-xs font-black text-slate-800">₹85,000</span>
+          </div>
+        </div>
+      </div>
+    )
+  },
+  {
+    tabLabel: 'Photographer Portfolio Website',
+    icon: Globe,
+    title: 'Stunning White-Label Portfolios',
+    desc: 'Showcase your high-resolution event galleries on a custom domain under your own branding, giving clients an elite, premium experience.',
+    bullets: [
+      'Add custom domains (e.g., yourstudio.com)',
+      'High-resolution, ultra-fast image load speed',
+      'Integrated contact & client booking forms'
+    ],
+    mockup: (
+      <div className="w-full bg-white rounded-xl shadow-lg border border-slate-100 p-3 text-slate-800 text-left font-poppins relative flex flex-col justify-between h-[230px] select-none">
+        <div className="h-16 w-full overflow-hidden relative rounded-lg shrink-0">
+          <img src="/portrait.jpg" alt="Portfolio Preview" className="w-full h-full object-cover brightness-95" />
+          <div className="absolute inset-0 bg-black/15 flex items-center justify-center">
+            <span className="text-[8px] bg-slate-900/90 text-[#c5a880] font-black px-2.5 py-0.5 rounded-full shadow-md">yourstudio.com</span>
+          </div>
+        </div>
+        <div className="p-1 flex flex-col justify-between flex-1 mt-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[7.5px] font-black text-slate-700 uppercase tracking-wider">Featured Work</span>
+            <span className="text-[6px] bg-[#c5a880]/15 text-[#c5a880] px-1 rounded font-bold">View All</span>
+          </div>
+          <div className="grid grid-cols-3 gap-1 mt-1.5">
+            <div className="h-[48px] rounded-lg overflow-hidden border border-slate-100"><img src="/wedding.jpg" alt="Wedding" className="w-full h-full object-cover" /></div>
+            <div className="h-[48px] rounded-lg overflow-hidden border border-slate-100"><img src="/party.jpg" alt="Party" className="w-full h-full object-cover" /></div>
+            <div className="h-[48px] rounded-lg overflow-hidden border border-slate-100"><img src="/gala.jpg" alt="Gala" className="w-full h-full object-cover" /></div>
+          </div>
+        </div>
+      </div>
+    )
+  },
+  {
+    tabLabel: 'Event QR Code Gallery',
+    icon: QrCode,
+    title: 'Instant Guest Access via QR Codes',
+    desc: 'Generate branded, high-res QR code designs for print on table cards or display on venue backdrops. Guests scan to immediately view their photos.',
+    bullets: [
+      'Generate print-ready QR card templates',
+      'Customize with your studio name and branding',
+      'Guests scan to instantly start facial search'
+    ],
+    mockup: (
+      <div className="w-full bg-[#09090b] text-white rounded-xl shadow-lg border border-white/10 p-4 text-center font-poppins relative flex flex-col justify-between h-[230px] overflow-hidden select-none">
+        <div className="absolute top-0 right-0 w-24 h-24 bg-[#c5a880]/10 rounded-full blur-xl" />
+        <div className="space-y-0.5 z-10">
+          <p className="text-[9px] font-black tracking-widest text-[#c5a880] uppercase">Scan to Find Your Photos</p>
+          <p className="text-[6.5px] text-gray-400">Powered by Mara Photo AI</p>
+        </div>
+        <div className="bg-white p-2 rounded-xl inline-block mx-auto z-10 shadow-lg my-1">
+          <QrCode className="w-14 h-14 text-[#09090b]" />
+        </div>
+        <div className="bg-[#c5a880] text-[#09090b] font-black text-[7.5px] rounded-lg py-1.5 uppercase tracking-widest z-10 max-w-[140px] mx-auto w-full">
+          Scan QR Code
+        </div>
+      </div>
+    )
+  },
+  {
+    tabLabel: 'Event Booking',
+    icon: Calendar,
+    title: 'Simplified Booking & Client Management',
+    desc: 'Allow prospective clients to book dates directly on your studio calendar, sign digital contracts, and deposit token booking advances.',
+    bullets: [
+      'Real-time automated calendar availability',
+      'Secure deposit collection during booking',
+      'Smart contract templates & digital signatures'
+    ],
+    mockup: (
+      <div className="w-full bg-white rounded-xl shadow-lg border border-slate-100 p-4 text-slate-800 text-left font-poppins relative flex flex-col justify-between h-[230px] select-none">
+        <div className="border-b border-slate-100 pb-2">
+          <p className="text-[9.5px] font-black text-slate-800">Select Date & Time</p>
+          <p className="text-[6.5px] text-gray-400 font-semibold mt-0.5">Choose your event date below</p>
+        </div>
+        <div className="grid grid-cols-7 gap-1.5 my-2.5 text-center text-[7px] font-bold">
+          {['S','M','T','W','T','F','S'].map((d, i) => <div key={i} className="text-slate-400">{d}</div>)}
+          {Array.from({ length: 28 }).map((_, i) => (
+            <div 
+              key={i} 
+              className={`p-1 rounded cursor-pointer ${
+                i === 17 
+                  ? 'bg-[#c5a880] text-[#09090b] font-black shadow-sm' 
+                  : i === 12 || i === 19 
+                    ? 'bg-slate-100 text-slate-300 pointer-events-none line-through' 
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700'
+              }`}
+            >
+              {i + 1}
+            </div>
+          ))}
+        </div>
+        <div className="bg-[#faf9f6] border border-[#e3d8c8]/25 rounded-lg p-2 text-center text-[7.5px] font-bold text-[#c5a880] uppercase tracking-wider">
+          May 18, 2026 • 09:00 AM Requested
+        </div>
+      </div>
+    )
+  },
+  {
+    tabLabel: 'Event Face Recognition',
+    icon: ScanFace,
+    title: 'Ultra-Fast AI Face Matching',
+    desc: 'Guests take a quick selfie, and Mara Photo AI instantly scans thousands of event photos, serving personal results in milliseconds.',
+    bullets: [
+      'Lightning-fast face index match in 0.5s',
+      'Ultra high-precision recognition accuracy',
+      'Strict guest privacy & security encryption'
+    ],
+    mockup: (
+      <div className="w-full bg-white rounded-xl shadow-lg border border-slate-100 p-3 text-slate-800 text-left font-poppins relative flex flex-col justify-between h-[230px] overflow-hidden select-none">
+        <div className="flex justify-between items-center text-[8px] font-bold text-slate-400 border-b border-slate-100 pb-1.5">
+          <span>AI Scanning System</span>
+          <span className="text-emerald-500 font-bold">• Active</span>
+        </div>
+        <div className="relative h-[110px] w-full rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center p-0.5 mt-1">
+          <img src="/guest_selfie.jpg" alt="Guest Selfie" className="w-full h-full object-cover rounded-xl" />
+          <div className="absolute inset-1.5 border-2 border-emerald-400 border-dashed rounded-full animate-pulse" />
+          <div className="absolute bottom-1.5 bg-[#09090b]/80 text-white text-[6px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+            Match Found (99.8%)
+          </div>
+        </div>
+        <div className="text-[7.5px] text-slate-500 font-bold text-center mt-1">
+          Serving 14 matched photos instantly
+        </div>
+      </div>
+    )
+  },
+  {
+    tabLabel: 'Wedding Website Template',
+    icon: Smile,
+    title: 'Elegant Wedding Event Subpages',
+    desc: 'Create custom mini-sites for couples featuring their story, event location maps, countdown timers, and interactive RSVP guest registries.',
+    bullets: [
+      'Gorgeous pre-designed wedding layouts',
+      'Interactive RSVP and event schedule registry',
+      'Integrated live photo wall for wedding guests'
+    ],
+    mockup: (
+      <div className="w-full bg-white rounded-xl shadow-lg border border-slate-100 p-3.5 text-center font-poppins relative flex flex-col justify-between h-[230px] overflow-hidden select-none">
+        <div className="space-y-0.5">
+          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Wedding Celebration</p>
+          <p className="text-[13px] font-serif-luxury font-light text-[#09090b]">Raj & Priya</p>
+        </div>
+        <div className="h-20 rounded-lg overflow-hidden my-2 border border-slate-100">
+          <img src="/wedding.jpg" alt="Wedding" className="w-full h-full object-cover brightness-95" />
+        </div>
+        <div className="grid grid-cols-3 gap-1.5 text-slate-700 text-center font-bold text-[7.5px]">
+          <div className="bg-slate-50 rounded p-1"><p className="text-[9px] font-black text-[#c5a880]">12</p><p className="text-[5.5px] text-slate-400">Days</p></div>
+          <div className="bg-slate-50 rounded p-1"><p className="text-[9px] font-black text-[#c5a880]">08</p><p className="text-[5.5px] text-slate-400">Hours</p></div>
+          <div className="bg-slate-50 rounded p-1"><p className="text-[9px] font-black text-[#c5a880]">45</p><p className="text-[5.5px] text-slate-400">Mins</p></div>
+        </div>
+      </div>
+    )
+  }
+];
+
 /* ─────────────── COMPONENTS ─────────────── */
 
 function FAQItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="faq-item">
-      <button className="faq-question" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <span>{q}</span>
-        <ChevronDown className={`faq-chevron ${open ? 'faq-chevron-open' : ''}`} />
+    <div className="border border-[#e3d8c8]/40 rounded-2xl overflow-hidden bg-white/60 backdrop-blur-sm transition-all duration-300">
+      <button
+        className="w-full flex items-center justify-between px-6 py-6 text-left hover:bg-[#faf9f6]/90 transition-colors"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
+        <span className="font-bold text-[#09090b] text-base md:text-lg tracking-wide font-poppins pr-4">{q}</span>
+        <ChevronDown className={`w-5 h-5 text-[#c5a880] shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="faq-answer">
-          <p>{a}</p>
+        <div className="px-6 pb-6 text-[#1c1c1f] leading-relaxed text-sm md:text-base border-t border-[#e3d8c8]/25">
+          <p className="pt-4 font-medium text-gray-600">{a}</p>
         </div>
       )}
     </div>
@@ -164,24 +406,20 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 
 export default function HomePage() {
   const [simState, setSimState] = useState<'idle' | 'scanning' | 'success'>('idle');
+  const [activeFeatureTab, setActiveFeatureTab] = useState(0);
   const [sliderVal, setSliderVal] = useState<number>(50);
   const [heroTab, setHeroTab] = useState<'scanner' | 'enhancer'>('scanner');
 
-  // Autoplay loop simulation
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    const runLoop = () => {
-      if (simState === 'idle') {
-        timer = setTimeout(() => setSimState('scanning'), 3000);
-      } else if (simState === 'scanning') {
-        timer = setTimeout(() => setSimState('success'), 2500);
-      } else if (simState === 'success') {
-        timer = setTimeout(() => setSimState('idle'), 4000);
-      }
-    };
-    runLoop();
-    return () => clearTimeout(timer);
-  }, [simState]);
+  const startSimulation = () => {
+    setSimState('scanning');
+    setTimeout(() => {
+      setSimState('success');
+    }, 2500);
+  };
+
+  const resetSimulation = () => {
+    setSimState('idle');
+  };
 
   const handleHomeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,1337 +429,785 @@ export default function HomePage() {
 
   return (
     <PublicWrapper>
-      {/* ═══════════ INTERNAL CSS ═══════════ */}
-      <style dangerouslySetInnerHTML={{__html: `
-        /* ── HERO ── */
-        .hero-section {
-          position: relative;
-          overflow: hidden;
-          padding: 16px 0 80px;
-          background: linear-gradient(180deg, #faf9f6 0%, #f5f2eb 100%);
-        }
-        .hero-glow-1 {
-          position: absolute;
-          top: -100px;
-          right: -200px;
-          width: 800px;
-          height: 800px;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(197,168,128,0.15) 0%, transparent 70%);
-          pointer-events: none;
-        }
-        .hero-glow-2 {
-          position: absolute;
-          bottom: -200px;
-          left: -100px;
-          width: 500px;
-          height: 500px;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(197,168,128,0.1) 0%, transparent 70%);
-          pointer-events: none;
-        }
-        .hero-grid {
-          max-width: 1280px;
-          margin: 0 auto;
-          padding: 0 24px;
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 48px;
-          align-items: center;
-          position: relative;
-          z-index: 10;
-        }
-        @media (min-width: 1024px) {
-          .hero-grid {
-            grid-template-columns: 7fr 5fr;
-            gap: 80px;
-          }
-          .hero-section {
-            padding: 32px 0 96px;
-          }
-        }
-        .hero-headline {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: clamp(2.5rem, 5vw, 4.5rem);
-          font-weight: 300;
-          line-height: 1.12;
-          color: #09090b;
-          margin-bottom: 28px;
-        }
-        .hero-headline em {
-          font-style: italic;
-          color: #c5a880;
-        }
-        .hero-sub {
-          font-size: 16px;
-          line-height: 1.7;
-          color: #6b7280;
-          max-width: 560px;
-          margin-bottom: 36px;
-          font-weight: 500;
-        }
-        .hero-cta-row {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 16px;
-        }
-        .hero-btn-primary {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 16px 36px;
-          font-size: 14px;
-          font-weight: 700;
-          color: #fff;
-          background: #09090b;
-          border-radius: 9999px;
-          text-decoration: none;
-          transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
-          border: none;
-          cursor: pointer;
-        }
-        .hero-btn-primary:hover {
-          background: #c5a880;
-          color: #09090b;
-          transform: translateY(-2px);
-          box-shadow: 0 12px 32px rgba(197,168,128,0.3);
-        }
-        .hero-btn-secondary {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 16px 36px;
-          font-size: 14px;
-          font-weight: 700;
-          color: #09090b;
-          background: #fff;
-          border: 1.5px solid #e3d8c8;
-          border-radius: 9999px;
-          text-decoration: none;
-          transition: all 0.35s ease;
-          cursor: pointer;
-        }
-        .hero-btn-secondary:hover {
-          background: #f5f2eb;
-          border-color: #c5a880;
-          transform: translateY(-1px);
-        }
-        .hero-trust {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          margin-top: 48px;
-          padding-top: 32px;
-          border-top: 1px solid rgba(227,216,200,0.3);
-        }
-        .hero-avatars {
-          display: flex;
-        }
-        .hero-avatars div {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          background: #f3f0e8;
-          border: 2px solid #faf9f6;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 13px;
-          font-weight: 700;
-          color: #64748b;
-          margin-left: -8px;
-        }
-        .hero-avatars div:first-child {
-          margin-left: 0;
-        }
-
-        /* ── PHONE MOCKUP ── */
-        .phone-wrap {
-          position: relative;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-        }
-        .phone-glow {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          width: 320px;
-          height: 320px;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(197,168,128,0.2) 0%, transparent 70%);
-          animation: pulseGlow 3s ease-in-out infinite;
-        }
-        @keyframes pulseGlow {
-          0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(1); }
-          50% { opacity: 0.7; transform: translate(-50%, -50%) scale(1.1); }
-        }
-        .phone-frame {
-          position: relative;
-          z-index: 10;
-          width: 100%;
-          max-width: 300px;
-          background: #09090b;
-          border-radius: 48px;
-          padding: 12px;
-          box-shadow: 0 40px 80px rgba(0,0,0,0.15), 0 0 0 4px rgba(227,216,200,0.3);
-        }
-        .phone-notch {
-          position: absolute;
-          top: 22px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 100px;
-          height: 20px;
-          background: #09090b;
-          border-radius: 9999px;
-          z-index: 30;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          border: 1px solid rgba(255,255,255,0.05);
-        }
-        .phone-notch-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background: #1a1a1a;
-          border: 1px solid rgba(255,255,255,0.1);
-        }
-        .phone-screen {
-          width: 100%;
-          height: 540px;
-          background: #faf9f6;
-          border-radius: 36px;
-          overflow: hidden;
-          display: flex;
-          flex-direction: column;
-          padding: 40px 16px 16px;
-        }
-        .phone-tabs {
-          display: flex;
-          background: rgba(255,255,255,0.6);
-          border: 1px solid rgba(227,216,200,0.4);
-          border-radius: 9999px;
-          padding: 2px;
-          margin-bottom: 12px;
-          flex-shrink: 0;
-        }
-        .phone-tab {
-          flex: 1;
-          padding: 6px;
-          border-radius: 9999px;
-          font-size: 8px;
-          font-weight: 900;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          background: transparent;
-          color: #94a3b8;
-          border: none;
-          cursor: pointer;
-          transition: all 0.3s;
-          text-align: center;
-        }
-        .phone-tab-active {
-          background: #c5a880;
-          color: #09090b;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        .phone-content {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          padding: 8px 0;
-        }
-        .phone-title-block {
-          text-align: center;
-        }
-        .phone-title-block img {
-          height: 24px;
-          width: auto;
-          margin: 0 auto 12px;
-          display: block;
-        }
-        .phone-title-block h3 {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: 18px;
-          font-weight: 300;
-          color: #09090b;
-          margin-bottom: 4px;
-        }
-        .phone-title-block p {
-          font-size: 9px;
-          font-weight: 700;
-          color: #c5a880;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-        }
-        .phone-viewfinder {
-          position: relative;
-          aspect-ratio: 1;
-          width: 100%;
-          border-radius: 16px;
-          overflow: hidden;
-          border: 2px dashed rgba(197,168,128,0.4);
-          background: #f3f0e8;
-          margin: 8px 0;
-        }
-        .phone-viewfinder img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          border-radius: 12px;
-        }
-        .phone-scan-btn {
-          width: 100%;
-          padding: 14px;
-          background: #09090b;
-          color: #fff;
-          font-size: 10px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          border: none;
-          border-radius: 14px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          transition: all 0.3s;
-        }
-        .phone-scan-btn:hover {
-          background: #c5a880;
-          color: #09090b;
-        }
-        .scan-laser {
-          position: absolute;
-          left: 0;
-          right: 0;
-          height: 3px;
-          background: #c5a880;
-          box-shadow: 0 0 15px #c5a880;
-          animation: scanLaser 2s ease-in-out infinite;
-          z-index: 20;
-        }
-        @keyframes scanLaser {
-          0% { top: 0; }
-          50% { top: 100%; }
-          100% { top: 0; }
-        }
-        .scan-overlay {
-          position: absolute;
-          inset: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: rgba(9,9,11,0.15);
-          backdrop-filter: blur(1px);
-        }
-        .scan-spinner {
-          width: 56px;
-          height: 56px;
-          border-radius: 50%;
-          border: 2px dashed #c5a880;
-          animation: spinScan 2s linear infinite;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        @keyframes spinScan {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .match-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 8px;
-          margin: 8px 0;
-        }
-        .match-grid-item {
-          aspect-ratio: 1;
-          border-radius: 12px;
-          overflow: hidden;
-          position: relative;
-          border: 1px solid rgba(227,216,200,0.25);
-          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-        .match-grid-item img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          transition: transform 0.5s;
-        }
-        .match-grid-item:hover img {
-          transform: scale(1.1);
-        }
-        .match-badge {
-          position: absolute;
-          top: 6px;
-          right: 6px;
-          background: #c5a880;
-          color: #fff;
-          width: 16px;
-          height: 16px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .match-info-bar {
-          background: #f5f2eb;
-          border: 1px solid rgba(227,216,200,0.4);
-          border-radius: 12px;
-          padding: 8px 12px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-        .match-info-bar-label {
-          font-size: 8px;
-          font-weight: 800;
-          color: #09090b;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-        }
-        .match-info-bar-count {
-          font-size: 10px;
-          color: #6b7280;
-          font-weight: 700;
-        }
-        .match-info-bar-badge {
-          font-size: 8px;
-          font-weight: 800;
-          background: rgba(22,163,74,0.1);
-          color: #16a34a;
-          padding: 2px 8px;
-          border-radius: 9999px;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-        }
-
-        /* ── AI ENHANCER ── */
-        .enhancer-wrap {
-          position: relative;
-          aspect-ratio: 1;
-          width: 100%;
-          border-radius: 16px;
-          overflow: hidden;
-          background: #f3f0e8;
-          border: 1px solid rgba(227,216,200,0.4);
-          margin: 8px 0;
-          user-select: none;
-        }
-        .enhancer-wrap img {
-          position: absolute;
-          inset: 0;
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-        .enhancer-before {
-          filter: brightness(0.75) contrast(0.8) saturate(0.5);
-        }
-        .enhancer-after-clip {
-          position: absolute;
-          inset: 0;
-          overflow: hidden;
-        }
-        .enhancer-after-inner {
-          position: absolute;
-          inset: 0;
-        }
-        .enhancer-after-inner img {
-          filter: brightness(1.08) contrast(1.05) saturate(1.12);
-        }
-        .enhancer-watermark {
-          position: absolute;
-          bottom: 10px;
-          right: 10px;
-          background: rgba(0,0,0,0.45);
-          padding: 4px 8px;
-          border-radius: 4px;
-          backdrop-filter: blur(4px);
-          border: 1px solid rgba(255,255,255,0.1);
-          font-size: 7px;
-          font-weight: 800;
-          color: #fff;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          transform: scale(0.85);
-          transform-origin: bottom right;
-        }
-        .enhancer-line {
-          position: absolute;
-          inset: 0;
-          width: 2px;
-          background: #c5a880;
-          box-shadow: 0 0 10px #c5a880;
-          pointer-events: none;
-        }
-        .enhancer-handle {
-          position: absolute;
-          top: 50%;
-          transform: translate(-50%, -50%);
-          width: 24px;
-          height: 24px;
-          border-radius: 50%;
-          background: #09090b;
-          border: 1.5px solid #c5a880;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          pointer-events: none;
-          font-size: 9px;
-          color: #c5a880;
-          font-weight: 900;
-        }
-        .enhancer-drag {
-          position: absolute;
-          inset: 0;
-          cursor: ew-resize;
-        }
-
-        /* ── STATS ── */
-        .stats-section {
-          background: #09090b;
-          border-top: 1px solid rgba(227,216,200,0.15);
-          padding: 72px 0;
-          position: relative;
-          overflow: hidden;
-        }
-        .stats-grid {
-          max-width: 1280px;
-          margin: 0 auto;
-          padding: 0 24px;
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 32px;
-        }
-        @media (min-width: 1024px) {
-          .stats-grid { grid-template-columns: repeat(4, 1fr); gap: 48px; }
-        }
-        .stat-item {
-          text-align: center;
-          border-right: 1px solid rgba(227,216,200,0.1);
-        }
-        .stat-item:last-child { border-right: none; }
-        .stat-value {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: clamp(2rem, 4vw, 3rem);
-          font-weight: 300;
-          color: #c5a880;
-          margin-bottom: 8px;
-        }
-        .stat-label {
-          font-size: 11px;
-          color: #9ca3af;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
-        }
-
-        /* ── WORKFLOW ── */
-        .workflow-section {
-          padding: 96px 0;
-          background: #fff;
-          position: relative;
-        }
-        .section-container {
-          max-width: 1280px;
-          margin: 0 auto;
-          padding: 0 24px;
-        }
-        .section-badge {
-          display: inline-block;
-          padding: 6px 16px;
-          background: #f5f2eb;
-          color: #c5a880;
-          font-size: 11px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
-          border-radius: 9999px;
-          margin-bottom: 16px;
-        }
-        .section-title {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: clamp(2rem, 4vw, 3rem);
-          font-weight: 300;
-          color: #09090b;
-          margin-bottom: 16px;
-        }
-        .section-desc {
-          color: #6b7280;
-          max-width: 540px;
-          margin: 0 auto;
-          font-size: 15px;
-          line-height: 1.7;
-          font-weight: 500;
-        }
-        .workflow-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 24px;
-          margin-top: 60px;
-        }
-        @media (min-width: 768px) {
-          .workflow-grid { grid-template-columns: repeat(3, 1fr); gap: 32px; }
-        }
-        .workflow-card {
-          background: #09090b;
-          border-radius: 24px;
-          padding: 32px;
-          border: 1px solid rgba(255,255,255,0.05);
-          transition: all 0.4s cubic-bezier(0.4,0,0.2,1);
-          position: relative;
-          overflow: hidden;
-        }
-        .workflow-card:hover {
-          transform: translateY(-6px);
-          box-shadow: 0 20px 50px rgba(0,0,0,0.2);
-          border-color: rgba(197,168,128,0.3);
-        }
-        .workflow-step {
-          display: inline-block;
-          background: #c5a880;
-          color: #09090b;
-          font-size: 10px;
-          font-weight: 900;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          padding: 4px 12px;
-          border-radius: 9999px;
-          margin-bottom: 20px;
-        }
-        .workflow-icon {
-          width: 48px;
-          height: 48px;
-          border-radius: 14px;
-          background: rgba(197,168,128,0.1);
-          border: 1px solid rgba(197,168,128,0.2);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 20px;
-          color: #c5a880;
-        }
-        .workflow-card h3 {
-          font-size: 18px;
-          font-weight: 800;
-          color: #fff;
-          margin-bottom: 12px;
-        }
-        .workflow-card p {
-          font-size: 13px;
-          color: #9ca3af;
-          line-height: 1.7;
-          font-weight: 500;
-        }
-
-        /* ── FEATURES ── */
-        .features-section {
-          padding: 96px 0;
-          background: #faf9f6;
-          border-top: 1px solid rgba(227,216,200,0.25);
-        }
-        .features-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 20px;
-          margin-top: 60px;
-        }
-        @media (min-width: 768px) {
-          .features-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media (min-width: 1024px) {
-          .features-grid { grid-template-columns: repeat(3, 1fr); }
-        }
-        .feature-card {
-          background: #fff;
-          border: 1px solid rgba(227,216,200,0.25);
-          border-radius: 20px;
-          padding: 28px;
-          transition: all 0.4s ease;
-        }
-        .feature-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 12px 32px rgba(0,0,0,0.06);
-          border-color: rgba(197,168,128,0.5);
-        }
-        .feature-icon {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          background: rgba(197,168,128,0.1);
-          border: 1px solid rgba(197,168,128,0.15);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 20px;
-          color: #c5a880;
-          transition: all 0.3s;
-        }
-        .feature-card:hover .feature-icon {
-          background: #c5a880;
-          color: #09090b;
-        }
-        .feature-card h3 {
-          font-size: 16px;
-          font-weight: 800;
-          color: #09090b;
-          margin-bottom: 10px;
-        }
-        .feature-card p {
-          font-size: 13px;
-          color: #6b7280;
-          line-height: 1.7;
-          font-weight: 500;
-        }
-
-        /* ── TESTIMONIALS ── */
-        .testimonials-section {
-          padding: 96px 0;
-          background: #09090b;
-          border-top: 1px solid rgba(227,216,200,0.15);
-        }
-        .testimonials-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 24px;
-          margin-top: 60px;
-        }
-        @media (min-width: 768px) {
-          .testimonials-grid { grid-template-columns: repeat(3, 1fr); }
-        }
-        .testimonial-card {
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.06);
-          border-radius: 20px;
-          padding: 32px;
-          transition: all 0.4s;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-        }
-        .testimonial-card:hover {
-          border-color: rgba(197,168,128,0.3);
-          transform: translateY(-4px);
-          box-shadow: 0 12px 32px rgba(0,0,0,0.3);
-        }
-        .testimonial-stars {
-          display: flex;
-          gap: 2px;
-          margin-bottom: 20px;
-        }
-        .testimonial-text {
-          font-size: 14px;
-          color: #d1d5db;
-          line-height: 1.7;
-          font-weight: 600;
-          margin-bottom: 24px;
-        }
-        .testimonial-author {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          border-top: 1px solid rgba(255,255,255,0.06);
-          padding-top: 20px;
-        }
-        .testimonial-avatar {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          background: linear-gradient(135deg, rgba(197,168,128,0.2), rgba(197,168,128,0.05));
-          border: 1px solid rgba(197,168,128,0.3);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #c5a880;
-          font-size: 13px;
-          font-weight: 900;
-          flex-shrink: 0;
-        }
-        .testimonial-name {
-          font-size: 13px;
-          font-weight: 800;
-          color: #fff;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-        }
-        .testimonial-role {
-          font-size: 10px;
-          color: #6b7280;
-          font-weight: 700;
-          margin-top: 2px;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-        }
-
-        /* ── PRICING ── */
-        .pricing-section {
-          padding: 96px 0;
-          background: #faf9f6;
-          border-top: 1px solid rgba(227,216,200,0.3);
-        }
-        .pricing-grid {
-          display: grid;
-          grid-template-columns: repeat(1, 1fr);
-          gap: 20px;
-          margin-top: 60px;
-        }
-        @media (min-width: 640px) {
-          .pricing-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media (min-width: 1024px) {
-          .pricing-grid { grid-template-columns: repeat(4, 1fr); }
-        }
-        .pricing-card {
-          background: #fff;
-          border: 1px solid rgba(227,216,200,0.25);
-          border-radius: 24px;
-          padding: 28px;
-          display: flex;
-          flex-direction: column;
-          transition: all 0.4s ease;
-          position: relative;
-        }
-        .pricing-card:hover {
-          transform: translateY(-6px);
-        }
-        .pricing-card-highlight {
-          background: #09090b;
-          border-color: #09090b;
-          color: #fff;
-          box-shadow: 0 20px 50px rgba(0,0,0,0.1);
-        }
-        .pricing-popular {
-          position: absolute;
-          top: -14px;
-          left: 50%;
-          transform: translateX(-50%);
-          padding: 6px 16px;
-          background: #c5a880;
-          color: #09090b;
-          font-size: 9px;
-          font-weight: 900;
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
-          border-radius: 9999px;
-        }
-        .pricing-name {
-          font-size: 14px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          margin-bottom: 4px;
-        }
-        .pricing-price {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: clamp(1.8rem, 3vw, 2.2rem);
-          font-weight: 300;
-        }
-        .pricing-period {
-          font-size: 11px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          margin-left: 4px;
-        }
-        .pricing-features {
-          list-style: none;
-          padding: 0;
-          margin: 24px 0;
-          flex: 1;
-        }
-        .pricing-features li {
-          display: flex;
-          align-items: flex-start;
-          gap: 10px;
-          font-size: 13px;
-          font-weight: 600;
-          margin-bottom: 12px;
-        }
-        .pricing-cta {
-          display: block;
-          width: 100%;
-          text-align: center;
-          padding: 14px;
-          border-radius: 12px;
-          font-size: 12px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          text-decoration: none;
-          transition: all 0.3s ease;
-        }
-        .pricing-cta-default {
-          border: 1px solid rgba(9,9,11,0.2);
-          color: #09090b;
-        }
-        .pricing-cta-default:hover {
-          background: #09090b;
-          color: #fff;
-          border-color: #09090b;
-        }
-        .pricing-cta-highlight {
-          background: #c5a880;
-          color: #09090b;
-          border: none;
-        }
-        .pricing-cta-highlight:hover {
-          background: #fff;
-        }
-
-        /* ── CONTACT ── */
-        .contact-section {
-          padding: 96px 0;
-          background: #faf9f6;
-          border-top: 1px solid rgba(227,216,200,0.3);
-        }
-        .contact-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 48px;
-        }
-        @media (min-width: 1024px) {
-          .contact-grid { grid-template-columns: 5fr 7fr; gap: 64px; }
-        }
-        .contact-info-card {
-          background: #fff;
-          border: 1px solid rgba(227,216,200,0.25);
-          border-radius: 16px;
-          padding: 20px;
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          transition: all 0.3s;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.03);
-        }
-        .contact-info-card:hover {
-          border-color: rgba(197,168,128,0.5);
-        }
-        .contact-icon-wrap {
-          width: 48px;
-          height: 48px;
-          border-radius: 12px;
-          background: rgba(197,168,128,0.1);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #c5a880;
-          flex-shrink: 0;
-        }
-        .contact-form-card {
-          background: #fff;
-          border-radius: 24px;
-          padding: 36px;
-          border: 1px solid rgba(227,216,200,0.3);
-          box-shadow: 0 12px 40px rgba(0,0,0,0.04);
-        }
-        .contact-input {
-          width: 100%;
-          padding: 14px 16px;
-          font-size: 14px;
-          font-weight: 600;
-          color: #09090b;
-          background: #faf9f6;
-          border: 1px solid rgba(227,216,200,0.3);
-          border-radius: 12px;
-          outline: none;
-          transition: all 0.3s;
-        }
-        .contact-input:focus {
-          border-color: #c5a880;
-          box-shadow: 0 0 0 3px rgba(197,168,128,0.1);
-        }
-        .contact-label {
-          font-size: 10px;
-          font-weight: 800;
-          color: #6b7280;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          margin-bottom: 8px;
-          display: block;
-        }
-        .contact-submit {
-          width: 100%;
-          padding: 16px;
-          background: #09090b;
-          color: #fff;
-          font-size: 12px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          border: none;
-          border-radius: 12px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          transition: all 0.3s;
-        }
-        .contact-submit:hover {
-          background: #c5a880;
-          color: #09090b;
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(197,168,128,0.3);
-        }
-
-        /* ── FAQ ── */
-        .faq-section {
-          padding: 96px 0;
-          background: #fff;
-          border-top: 1px solid rgba(227,216,200,0.25);
-        }
-        .faq-item {
-          border: 1px solid rgba(227,216,200,0.4);
-          border-radius: 16px;
-          overflow: hidden;
-          background: rgba(255,255,255,0.6);
-          backdrop-filter: blur(4px);
-          transition: all 0.3s;
-          margin-bottom: 12px;
-        }
-        .faq-item:hover {
-          border-color: rgba(197,168,128,0.5);
-        }
-        .faq-question {
-          width: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 20px 24px;
-          background: none;
-          border: none;
-          cursor: pointer;
-          text-align: left;
-          font-size: 15px;
-          font-weight: 700;
-          color: #09090b;
-          transition: background 0.2s;
-        }
-        .faq-question:hover {
-          background: rgba(250,249,246,0.9);
-        }
-        .faq-chevron {
-          width: 18px;
-          height: 18px;
-          color: #c5a880;
-          flex-shrink: 0;
-          transition: transform 0.3s;
-        }
-        .faq-chevron-open {
-          transform: rotate(180deg);
-        }
-        .faq-answer {
-          padding: 0 24px 20px;
-          border-top: 1px solid rgba(227,216,200,0.25);
-        }
-        .faq-answer p {
-          padding-top: 16px;
-          font-size: 14px;
-          color: #6b7280;
-          line-height: 1.7;
-          font-weight: 500;
-        }
-
-        /* ── CTA BANNER ── */
-        .cta-banner {
-          background: #09090b;
-          padding: 96px 0;
-          border-top: 1px solid rgba(227,216,200,0.15);
-          position: relative;
-          overflow: hidden;
-          text-align: center;
-        }
-        .cta-glow {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          width: 800px;
-          height: 300px;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(197,168,128,0.1) 0%, transparent 70%);
-          opacity: 0.4;
-          pointer-events: none;
-        }
-        .cta-title {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: clamp(2rem, 5vw, 3.5rem);
-          font-weight: 300;
-          color: #fff;
-          margin-bottom: 20px;
-          position: relative;
-          z-index: 10;
-        }
-        .cta-title em {
-          font-style: italic;
-          color: #c5a880;
-        }
-        .cta-desc {
-          color: #9ca3af;
-          font-size: 16px;
-          max-width: 520px;
-          margin: 0 auto 32px;
-          font-weight: 500;
-          position: relative;
-          z-index: 10;
-        }
-        .cta-buttons {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 16px;
-          justify-content: center;
-          position: relative;
-          z-index: 10;
-        }
-        .cta-btn-primary {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 16px 36px;
-          font-size: 12px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          color: #09090b;
-          background: #c5a880;
-          border-radius: 9999px;
-          text-decoration: none;
-          transition: all 0.35s;
-          border: none;
-        }
-        .cta-btn-primary:hover {
-          background: #fff;
-          transform: translateY(-2px);
-          box-shadow: 0 12px 32px rgba(197,168,128,0.3);
-        }
-        .cta-btn-secondary {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 16px 36px;
-          font-size: 12px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          color: #fff;
-          border: 1px solid rgba(255,255,255,0.2);
-          border-radius: 9999px;
-          text-decoration: none;
-          transition: all 0.35s;
-          background: transparent;
-        }
-        .cta-btn-secondary:hover {
-          background: rgba(255,255,255,0.1);
-        }
-
-        /* ── ANIMATIONS ── */
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-in {
-          animation: fadeInUp 0.6s ease-out;
-        }
-      `}} />
-
-      <main className="font-poppins">
+      <main className="bg-[#faf9f6] text-[#09090b]">
 
       {/* ── HERO SECTION ── */}
-      <section className="hero-section">
-        <div className="hero-glow-1" />
-        <div className="hero-glow-2" />
-        <div className="hero-grid">
-          <div className="animate-in" style={{ textAlign: 'left' }}>
-            <h1 className="hero-headline">
-              Transform Event Photos & <em>Deliver with AI</em> in Seconds.
-            </h1>
-            <p className="hero-sub">
-              The ultimate AI platform for event photographers. Guests scan a custom QR code, upload a selfie, and instantly receive their matched photos. Save hours of sorting and deliver a luxury client experience.
-            </p>
-            <div className="hero-cta-row">
-              <Link href="/signup" className="hero-btn-primary">
-                Start Free <ArrowRight className="w-4 h-4" />
-              </Link>
-              <button
-                onClick={() => { const s = document.getElementById('how-it-works'); if (s) s.scrollIntoView({ behavior: 'smooth' }); }}
-                className="hero-btn-secondary"
-              >
-                Try AI Simulator
-              </button>
-            </div>
-            <div className="hero-trust">
-              <div className="hero-avatars">
-                {[1,2,3,4].map(i => (
-                  <div key={i}>{String.fromCharCode(64 + i)}</div>
-                ))}
+      <section className="relative overflow-hidden pt-6 pb-14 lg:pt-10 lg:pb-20">
+        {/* Editorial Background Art */}
+        <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
+          <div className="absolute top-0 right-0 w-[900px] h-[900px] rounded-full bg-[#e3d8c8]/25 opacity-40 blur-3xl" />
+          <div className="absolute bottom-0 left-0 w-[600px] h-[600px] rounded-full bg-[#c5a880]/10 opacity-30 blur-3xl" />
+        </div>
+
+        <div className="max-w-7xl mx-auto px-6 lg:px-8 relative z-10">
+          <div className="grid lg:grid-cols-12 gap-14 lg:gap-20 items-center">
+            
+            {/* Left Column: Premium Headline & CTA */}
+            <div className="lg:col-span-7 text-center lg:text-left animate-fade-in-up">
+              {/* Branded pill */}
+              <div className="inline-flex items-center gap-2.5 px-4.5 py-2 bg-white border border-[#e3d8c8]/50 rounded-full shadow-sm mb-8">
+                <Camera className="w-4 h-4 text-[#c5a880]" aria-hidden="true" />
+                <span className="font-poppins text-xs font-bold text-[#09090b] tracking-widest uppercase">The Future of Guest Galleries</span>
               </div>
-              <div>
-                <div style={{ display: 'flex', gap: '2px' }}>
-                  {[1,2,3,4,5].map(i => <Star key={i} className="w-4 h-4" style={{ fill: '#c5a880', color: '#c5a880' }} />)}
+
+              {/* Luxury Editorial Headline */}
+              <h1 className="font-serif-luxury text-5xl sm:text-6xl lg:text-7xl font-light text-[#09090b] leading-[1.12] mb-8">
+                Transform Event Photos & <span className="italic text-[#c5a880]">Deliver with AI</span> in Seconds.
+              </h1>
+
+              <p className="font-poppins text-base sm:text-lg text-gray-500 mb-10 leading-relaxed max-w-xl mx-auto lg:mx-0 font-medium">
+                The ultimate AI platform for event photographers. Guests scan a custom QR code, upload a selfie, and instantly receive their matched photos. Save hours of sorting and deliver a luxury client experience.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                <Link
+                  href="/signup"
+                  className="font-poppins inline-flex items-center justify-center gap-2 text-base font-bold text-white bg-[#09090b] hover:bg-[#c5a880] px-9 py-4.5 rounded-full transition-all duration-300 shadow-md hover:-translate-y-0.5"
+                >
+                  Start Editing Free
+                  <ArrowRight className="w-5 h-5" />
+                </Link>
+                <button
+                  onClick={() => {
+                    const section = document.getElementById('how-it-works');
+                    if (section) section.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="font-poppins inline-flex items-center justify-center gap-2 text-base font-bold text-[#09090b] bg-white border border-[#e3d8c8]/60 px-9 py-4.5 rounded-full hover:bg-slate-50 transition-all duration-300 cursor-pointer"
+                >
+                  Try AI Simulator
+                </button>
+              </div>
+
+              {/* Social trust badge */}
+              <div className="mt-14 flex items-center gap-5 justify-center lg:justify-start border-t border-[#e3d8c8]/30 pt-10">
+                <div className="flex -space-x-2">
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="w-10 h-10 rounded-full bg-[#f3f0e8] border-2 border-[#faf9f6] flex items-center justify-center text-slate-800 text-sm font-bold font-poppins">
+                      {String.fromCharCode(64 + i)}
+                    </div>
+                  ))}
                 </div>
-                <p style={{ fontSize: '11px', color: '#6b7280', fontWeight: 800, marginTop: '4px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                  Loved by 600+ premium photography studios
-                </p>
+                <div>
+                  <div className="flex gap-0.5">
+                    {[1, 2, 3, 4, 5].map(i => <Star key={i} className="w-4 h-4 fill-[#c5a880] text-[#c5a880]" />)}
+                  </div>
+                  <p className="text-xs text-gray-500 font-bold mt-1 font-poppins uppercase tracking-widest">Loved by 600+ premium photography studios</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Phone Mockup */}
-          <div className="phone-wrap">
-            <div className="phone-glow" />
-            <div className="phone-frame">
-              <div className="phone-notch">
-                <div className="phone-notch-dot" />
+            {/* Right Column: Interactive Smartphone AI Scanner Simulator */}
+            <div className="lg:col-span-5 relative flex items-center justify-center mt-8 lg:mt-0">
+              {/* Decorative background glow */}
+              <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-[#c5a880]/15 blur-3xl opacity-40 animate-pulse-soft" />
               </div>
-              <div className="phone-screen">
-                <div className="phone-tabs">
-                  <button className={`phone-tab ${heroTab === 'scanner' ? 'phone-tab-active' : ''}`} onClick={() => setHeroTab('scanner')}>Face Match</button>
-                  <button className={`phone-tab ${heroTab === 'enhancer' ? 'phone-tab-active' : ''}`} onClick={() => setHeroTab('enhancer')}>AI Enhancer</button>
+
+              {/* Smartphone Frame Wrapper */}
+              <div className="relative w-full max-w-[320px] h-[610px] bg-[#09090b] rounded-[52px] p-3 shadow-2xl border-4 border-[#e3d8c8]/30 relative z-10">
+                {/* Speaker grill & camera (Dynamic Island) */}
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 w-28 h-5.5 bg-[#09090b] rounded-full border border-white/5 z-30 flex items-center justify-center">
+                  <div className="w-2.5 h-2.5 rounded-full bg-slate-900 border border-white/10" />
+                  <div className="w-11 h-0.5 bg-slate-950 rounded-full ml-3" />
                 </div>
 
-                {heroTab === 'scanner' ? (
-                  <div className="phone-content">
-                    {simState === 'idle' && (
-                      <>
-                        <div className="phone-title-block">
-                          <img src="/logo.png" alt="Mara Photo" />
-                          <h3>Guest Photo Search</h3>
-                          <p style={{ animation: 'pulseGlow 2s ease-in-out infinite' }}>Autoplay Simulation Running</p>
-                        </div>
-                        <div className="phone-viewfinder">
-                          <img src="/portrait.jpg" alt="Guest Selfie" />
-                          <div style={{ position: 'absolute', top: '8px', left: '8px', color: '#c5a880', opacity: 0.6 }}><Camera className="w-4 h-4" /></div>
-                          <div style={{ position: 'absolute', bottom: '8px', right: '8px', fontSize: '8px', fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,0.4)', padding: '2px 8px', borderRadius: '9999px', backdropFilter: 'blur(4px)' }}>Viewfinder</div>
-                        </div>
-                        <button className="phone-scan-btn" onClick={() => setSimState('scanning')}>
-                          <Zap className="w-3 h-3" style={{ color: '#c5a880' }} /> Try AI Face Scanner
-                        </button>
-                      </>
-                    )}
+                {/* Inner screen content */}
+                <div className="w-full h-full bg-[#faf9f6] rounded-[40px] overflow-hidden relative flex flex-col pt-10 px-4 pb-4">
+                  
+                  {/* Tab controls */}
+                  <div className="flex bg-white/60 backdrop-blur-sm border border-[#e3d8c8]/40 rounded-full p-0.5 mb-3 shrink-0 z-20">
+                    <button 
+                      onClick={() => setHeroTab('scanner')}
+                      className={`flex-1 py-1 rounded-full text-[8.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${heroTab === 'scanner' ? 'bg-[#c5a880] text-[#09090b] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                      Face Match
+                    </button>
+                    <button 
+                      onClick={() => setHeroTab('enhancer')}
+                      className={`flex-1 py-1 rounded-full text-[8.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${heroTab === 'enhancer' ? 'bg-[#c5a880] text-[#09090b] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                      AI Enhancer
+                    </button>
+                  </div>
 
-                    {simState === 'scanning' && (
-                      <>
-                        <div className="phone-title-block">
-                          <img src="/logo.png" alt="Mara Photo" />
-                          <h3>Scanning Face...</h3>
-                          <p style={{ animation: 'pulseGlow 1.5s ease-in-out infinite' }}>Analyzing structures</p>
-                        </div>
-                        <div className="phone-viewfinder" style={{ border: '2px solid #c5a880' }}>
-                          <img src="/portrait.jpg" alt="Guest Selfie" style={{ filter: 'brightness(0.9)' }} />
-                          <div className="scan-laser" />
-                          <div className="scan-overlay">
-                            <div className="scan-spinner">
-                              <ScanFace className="w-5 h-5" style={{ color: '#fff' }} />
-                            </div>
+                  {heroTab === 'scanner' ? (
+                    <>
+                      {simState === 'idle' && (
+                        <div className="flex-1 flex flex-col justify-between py-4 animate-fade-in">
+                          <div className="text-center">
+                            <img src="/logo.png" alt="Mara Photo Logo" className="h-7 w-auto mx-auto object-contain mb-4" />
+                            <h3 className="font-serif-luxury text-xl font-light text-[#09090b] mb-1">Guest Photo Search</h3>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-poppins">Click scanner button to test</p>
                           </div>
-                        </div>
-                        <div style={{ textAlign: 'center', padding: '12px 0' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '10px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#c5a880', animation: 'pulseGlow 1s ease-in-out infinite' }} />
-                            Matching 1,247 photos...
-                          </div>
-                        </div>
-                      </>
-                    )}
 
-                    {simState === 'success' && (
-                      <>
-                        <div className="phone-title-block">
-                          <img src="/logo.png" alt="Mara Photo" />
-                          <h3>Matches Found!</h3>
-                          <p style={{ color: '#16a34a' }}>Analysis complete</p>
-                        </div>
-                        <div className="match-grid">
-                          {["/wedding.jpg","/gala.jpg","/party.jpg","/rings.jpg"].map((url, i) => (
-                            <div key={i} className="match-grid-item">
-                              <img src={url} alt="Matched" />
-                              <div className="match-badge"><Check className="w-2 h-2" /></div>
-                            </div>
-                          ))}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <div className="match-info-bar">
-                            <div>
-                              <p className="match-info-bar-label">Matched Gallery</p>
-                              <p className="match-info-bar-count">23 high-res images</p>
-                            </div>
-                            <span className="match-info-bar-badge">100% Match</span>
+                          {/* Viewfinder frame */}
+                          <div className="relative aspect-square w-full rounded-2xl border-2 border-dashed border-[#c5a880]/40 overflow-hidden bg-[#f3f0e8] flex items-center justify-center p-1">
+                            <img src="/portrait.jpg" alt="Guest Selfie" className="w-full h-full object-cover rounded-xl" />
+                            <div className="absolute inset-0 border-2 border-white/40 rounded-xl pointer-events-none" />
+                            
+                            <div className="absolute top-2 left-2 text-[#c5a880]"><Camera className="w-4 h-4 opacity-60" /></div>
+                            <div className="absolute bottom-2 right-2 text-[9px] font-bold text-white bg-black/40 px-2 py-0.5 rounded-full backdrop-blur-sm">Viewfinder</div>
                           </div>
-                          <button className="phone-scan-btn" onClick={() => setSimState('idle')}>
-                            <Download className="w-3 h-3" /> Download All (ZIP)
+
+                          <button
+                            onClick={startSimulation}
+                            className="w-full bg-[#09090b] hover:bg-[#c5a880] text-white hover:text-[#09090b] font-bold text-xs uppercase tracking-wider py-4 rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer font-poppins"
+                          >
+                            <Zap className="w-4 h-4 text-[#c5a880] animate-pulse" />
+                            Try AI Face Scanner
                           </button>
                         </div>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className="phone-content" style={{ textAlign: 'center' }}>
-                    <div>
-                      <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '16px', fontWeight: 300, color: '#09090b', marginBottom: '4px' }}>AI Enhancer</h3>
-                      <p style={{ fontSize: '8px', color: '#6b7280', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>Slide to color correct & watermark</p>
-                    </div>
-                    <div className="enhancer-wrap">
-                      <img src="/wedding.jpg" alt="Original" className="enhancer-before" />
-                      <div className="enhancer-after-clip" style={{ width: `${sliderVal}%` }}>
-                        <div className="enhancer-after-inner" style={{ width: '270px', height: '270px' }}>
-                          <img src="/wedding.jpg" alt="Enhanced" />
-                          <div className="enhancer-watermark">MARA PHOTO</div>
+                      )}
+
+                      {simState === 'scanning' && (
+                        <div className="flex-1 flex flex-col justify-between py-4">
+                          <div className="text-center">
+                            <img src="/logo.png" alt="Mara Photo Logo" className="h-7 w-auto mx-auto object-contain mb-4" />
+                            <h3 className="font-serif-luxury text-xl font-light text-[#09090b] mb-1">Scanning Face...</h3>
+                            <p className="text-[10px] text-[#c5a880] font-bold uppercase tracking-wider animate-pulse">Analyzing structures</p>
+                          </div>
+
+                          {/* Frame view with scanning laser line */}
+                          <div className="relative aspect-square w-full rounded-2xl border-2 border-[#c5a880] overflow-hidden bg-[#f3f0e8] p-1">
+                            <img src="/portrait.jpg" alt="Guest Selfie" className="w-full h-full object-cover rounded-xl brightness-90" />
+                            
+                            {/* Scanning Laser Line */}
+                            <div className="absolute left-0 right-0 h-1 bg-[#c5a880] shadow-[0_0_15px_#c5a880] animate-scan-laser z-20" />
+                            
+                            {/* Analyzing overlay */}
+                            <div className="absolute inset-0 flex items-center justify-center bg-[#09090b]/15 backdrop-blur-[1px]">
+                              <div className="w-16 h-16 rounded-full border-2 border-dashed border-[#c5a880] animate-spin flex items-center justify-center">
+                                <ScanFace className="w-6 h-6 text-white" />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-center px-2 py-4">
+                            <div className="flex items-center justify-center gap-2 text-xs font-bold text-gray-500 font-poppins uppercase tracking-wider">
+                              <span className="w-2 h-2 rounded-full bg-[#c5a880] animate-ping" />
+                              Matching 1,247 photos...
+                            </div>
+                          </div>
                         </div>
+                      )}
+
+                      {simState === 'success' && (
+                        <div className="flex-1 flex flex-col justify-between py-4 animate-fade-in">
+                          <div className="text-center">
+                            <img src="/logo.png" alt="Mara Photo Logo" className="h-7 w-auto mx-auto object-contain mb-4" />
+                            <h3 className="font-serif-luxury text-xl font-light text-[#09090b] mb-1">Matches Found!</h3>
+                            <p className="text-[10px] text-green-600 font-bold uppercase tracking-wider">Analysis complete</p>
+                          </div>
+
+                          {/* Matched grid */}
+                          <div className="grid grid-cols-2 gap-2 my-2">
+                            {[
+                              "/wedding.jpg",
+                              "/gala.jpg",
+                              "/party.jpg",
+                              "/rings.jpg"
+                            ].map((url, i) => (
+                              <div key={i} className="aspect-square rounded-xl bg-[#faf9f6] relative overflow-hidden group shadow-sm border border-[#e3d8c8]/25">
+                                <img
+                                  src={url}
+                                  alt="Matched Photo"
+                                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                />
+                                <div className="absolute top-1.5 right-1.5 bg-[#c5a880] text-white p-1 rounded-full shadow-sm">
+                                  <Check className="w-2.5 h-2.5" />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Action buttons */}
+                          <div className="space-y-2">
+                            <div className="bg-[#f5f2eb] border border-[#e3d8c8]/40 rounded-xl px-3 py-2 flex items-center justify-between">
+                              <div>
+                                <p className="text-[9px] font-bold text-[#09090b] uppercase tracking-wider">Matched Gallery</p>
+                                <p className="text-xs text-gray-500 font-bold">23 high-res images</p>
+                              </div>
+                              <span className="text-[9px] font-bold bg-green-50 text-green-600 px-2 py-0.5 rounded-full uppercase tracking-wider">100% Match</span>
+                            </div>
+                            <button
+                              onClick={resetSimulation}
+                              className="w-full bg-[#09090b] hover:bg-[#c5a880] text-white hover:text-[#09090b] font-bold text-xs uppercase tracking-wider py-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer font-poppins"
+                            >
+                              <Download className="w-4 h-4" />
+                              Download All (ZIP)
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex-1 flex flex-col justify-between py-2 animate-fade-in text-center">
+                      <div>
+                        <h3 className="font-serif-luxury text-lg font-light text-[#09090b] mb-1">AI Enhancer</h3>
+                        <p className="text-[9px] text-gray-405 font-bold uppercase tracking-wider font-poppins mb-3">Slide to color correct & watermark</p>
                       </div>
-                      <div className="enhancer-line" style={{ left: `${sliderVal}%` }} />
-                      <div className="enhancer-handle" style={{ left: `${sliderVal}%` }}>↔</div>
-                      <div
-                        className="enhancer-drag"
-                        onMouseMove={(e) => {
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          setSliderVal(Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100)));
-                        }}
-                        onTouchMove={(e) => {
-                          if (e.touches[0]) {
+
+                      <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-[#f3f0e8] select-none group border border-[#e3d8c8]/40 shadow-inner">
+                        {/* Before */}
+                        <img src="/wedding.jpg" alt="Original Photo" className="absolute inset-0 w-full h-full object-cover filter brightness-[0.75] contrast-[0.8] saturate-[0.5]" />
+                        
+                        {/* After */}
+                        <div 
+                          className="absolute inset-y-0 left-0 overflow-hidden"
+                          style={{ width: `${sliderVal}%` }}
+                        >
+                          <div className="absolute inset-0 w-[270px] h-[270px]">
+                            <img src="/wedding.jpg" alt="AI Color Corrected" className="w-full h-full object-cover filter brightness-[1.08] contrast-[1.05] saturate-[1.12]" />
+                            {/* Dynamic Watermark overlay */}
+                            <div className="absolute bottom-2.5 right-2.5 bg-black/45 px-2 py-1 rounded backdrop-blur-sm flex items-center gap-1 border border-white/10 scale-75 origin-bottom-right shadow-sm">
+                              <span className="text-[7.5px] font-bold text-white tracking-widest uppercase font-poppins">MARA PHOTO</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Slider line */}
+                        <div 
+                          className="absolute inset-y-0 w-0.5 bg-[#c5a880] shadow-[0_0_10px_#c5a880] pointer-events-none"
+                          style={{ left: `${sliderVal}%` }}
+                        />
+                        
+                        {/* Handle thumb */}
+                        <div 
+                          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-[#09090b] border border-[#c5a880] shadow-md flex items-center justify-center pointer-events-none"
+                          style={{ left: `${sliderVal}%` }}
+                        >
+                          <span className="text-[9px] text-[#c5a880] font-black">↔</span>
+                        </div>
+
+                        {/* Drag mouse interaction overlay */}
+                        <div 
+                          className="absolute inset-0 cursor-ew-resize"
+                          onMouseMove={(e) => {
                             const rect = e.currentTarget.getBoundingClientRect();
-                            setSliderVal(Math.max(0, Math.min(100, ((e.touches[0].clientX - rect.left) / rect.width) * 100)));
-                          }
-                        }}
-                      />
+                            const x = e.clientX - rect.left;
+                            const pct = Math.max(0, Math.min(100, (x / rect.width) * 100));
+                            setSliderVal(pct);
+                          }}
+                          onTouchMove={(e) => {
+                            if (e.touches && e.touches[0]) {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const x = e.touches[0].clientX - rect.left;
+                              const pct = Math.max(0, Math.min(100, (x / rect.width) * 100));
+                              setSliderVal(pct);
+                            }
+                          }}
+                        />
+                      </div>
+
+                      <div className="mt-4">
+                        <Link
+                          href="/signup"
+                          className="w-full bg-[#09090b] hover:bg-[#c5a880] text-white hover:text-[#09090b] font-bold text-xs uppercase tracking-wider py-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer font-poppins"
+                        >
+                          Start Editing Free
+                        </Link>
+                      </div>
                     </div>
-                    <div style={{ marginTop: '12px' }}>
-                      <Link href="/signup" className="phone-scan-btn" style={{ textDecoration: 'none' }}>
-                        Start Editing Free
-                      </Link>
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
+
           </div>
         </div>
       </section>
 
+      {/* ── STATS SECTION ── */}
+      <section className="bg-[#09090b] border-t border-[#e3d8c8]/20 py-20 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8 relative z-10">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
+            {stats.map((s) => (
+              <div key={s.label} className="text-center group border-r border-[#e3d8c8]/10 last:border-0">
+                <p className="font-serif-luxury text-4xl lg:text-5xl font-light text-[#c5a880] mb-2">{s.value}</p>
+                <p className="text-xs md:text-sm text-gray-400 font-bold uppercase tracking-widest font-poppins">{s.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
+      {/* ── WORKFLOW SECTION ── */}
+      <section id="how-it-works" className="py-28 lg:py-36 bg-white relative">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+          <div className="text-center mb-20">
+            <span className="inline-block px-4 py-1.5 bg-[#f5f2eb] text-[#c5a880] text-[11px] font-bold uppercase tracking-widest rounded-full mb-4 font-poppins">
+              Sleek Workflow
+            </span>
+            <h2 className="font-serif-luxury text-4xl lg:text-5xl font-light text-[#09090b] mb-4">
+              How Mara Photo Works
+            </h2>
+            <p className="text-gray-500 max-w-xl mx-auto text-base leading-relaxed font-medium">
+              Three simple steps to deliver a premium, fully automated photo retrieval experience to guests.
+            </p>
+          </div>
 
-      {/* ── FEATURES ── */}
-      <section className="features-section">
-        <div className="section-container" style={{ textAlign: 'center' }}>
-          <span className="section-badge">Platform Capabilities</span>
-          <h2 className="section-title">Everything You Need</h2>
-          <p className="section-desc">A complete suite of tools for the modern event photographer.</p>
-          <div className="features-grid">
-            {features.map(f => {
-              const Icon = f.icon;
+          {/* Cohesive, luxury symmetrical 3-column workflow layout matching user screenshot exactly */}
+          <div className="grid lg:grid-cols-3 gap-8 items-stretch relative">
+            
+            {/* Column 01: STEP 01 & STEP 02 */}
+            <div className="flex flex-col gap-8">
+              <div className="bg-[#09090b] text-white border border-white/10 rounded-3xl p-6 shadow-lg transition-all duration-300 group flex flex-col justify-between h-[295px] relative">
+                <div>
+                  <div className="absolute -top-3.5 left-6 bg-[#c5a880] text-[#09090b] text-[11px] font-black tracking-widest uppercase px-3 py-1 rounded-full shadow-sm z-20 font-poppins">
+                    Step 01
+                  </div>
+                  
+                  {/* Visual mockup block - White panel stretches close to border showing 3 events */}
+                  <div className="w-full h-36 rounded-2xl bg-white/[0.03] border border-white/10 mb-4 overflow-hidden relative flex items-center justify-center p-1.5">
+                    <div className="w-[96%] h-[94%] bg-white rounded-xl shadow-lg border border-slate-100 p-2.5 text-slate-800 text-left font-poppins flex flex-col justify-between transition-transform duration-500 group-hover:scale-[1.02]">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+                        <span className="text-[9px] font-black text-slate-800 tracking-wider">Events</span>
+                        <span className="text-[7px] bg-green-50 text-green-600 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">• 4 active</span>
+                      </div>
+                      <p className="text-[8px] font-black text-[#c5a880] mb-0.5">Your Events, Beautifully Organized ✨</p>
+                      
+                      {/* Grid with 3 events side-by-side */}
+                      <div className="grid grid-cols-3 gap-2 flex-1 items-stretch mt-0.5">
+                        <div className="border border-slate-100 rounded p-1 space-y-0.5 bg-slate-50 flex flex-col justify-between">
+                          <div className="h-9 rounded overflow-hidden">
+                            <img src="/party.jpg" alt="party" className="w-full h-full object-cover" />
+                          </div>
+                          <div>
+                            <p className="text-[6.5px] font-black text-slate-800 truncate">Birthday Party</p>
+                            <p className="text-[4.5px] text-gray-400 font-semibold">26 May, 2026</p>
+                          </div>
+                        </div>
+                        <div className="border border-slate-100 rounded p-1 space-y-0.5 bg-slate-50 flex flex-col justify-between">
+                          <div className="h-9 rounded overflow-hidden">
+                            <img src="/wedding.jpg" alt="wedding" className="w-full h-full object-cover" />
+                          </div>
+                          <div>
+                            <p className="text-[6.5px] font-black text-slate-800 truncate">Engagement</p>
+                            <p className="text-[4.5px] text-gray-400 font-semibold">26 May, 2026</p>
+                          </div>
+                        </div>
+                        <div className="border border-slate-100 rounded p-1 space-y-0.5 bg-slate-50 flex flex-col justify-between">
+                          <div className="h-9 rounded overflow-hidden">
+                            <img src="/gala.jpg" alt="gala" className="w-full h-full object-cover" />
+                          </div>
+                          <div>
+                            <p className="text-[6.5px] font-black text-slate-800 truncate">Pre-Wedding</p>
+                            <p className="text-[4.5px] text-gray-400 font-semibold">26 May, 2026</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <h3 className="font-poppins font-bold text-xl text-white mb-1.5 tracking-wide">Create Events</h3>
+                  <p className="text-gray-455 text-sm leading-relaxed font-medium">
+                    Create the event gallery before you even reach the venue. Upload photos on the go as you shoot.
+                  </p>
+                </div>
+              </div>
+
+              {/* STEP 02: Generate QR Codes */}
+              <div className="bg-[#09090b] text-white border border-white/10 rounded-3xl p-6 shadow-lg transition-all duration-300 group flex flex-col justify-between h-[295px] relative">
+                <div>
+                  <div className="absolute -top-3.5 left-6 bg-[#c5a880] text-[#09090b] text-[11px] font-black tracking-widest uppercase px-3 py-1 rounded-full shadow-sm z-20 font-poppins">
+                    Step 02
+                  </div>
+                  
+                  {/* Visual mockup block matching screenshot 3 - White panel stretches close to border */}
+                  <div className="w-full h-36 rounded-2xl bg-white/[0.03] border border-white/10 mb-4 overflow-hidden relative flex items-center justify-center p-1.5">
+                    <div className="w-[96%] h-[94%] bg-white rounded-xl shadow-lg border border-slate-100 p-2.5 text-slate-800 text-left font-poppins relative flex flex-col justify-between transition-transform duration-500 group-hover:scale-[1.02]">
+                      <div>
+                        <div className="flex justify-between items-center border-b border-slate-100 pb-1 mb-1">
+                          <span className="text-[9px] font-bold text-slate-800">Birthday Party</span>
+                          <span className="text-[7.5px] text-[#c5a880] font-bold">Access Permissions</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[6.5px] font-bold text-slate-400 uppercase">Email Address</span>
+                          <div className="w-full h-5 bg-slate-50 border border-slate-100 rounded px-1.5 flex items-center text-[7px] text-gray-550">collaborator@example.com</div>
+                        </div>
+                      </div>
+                      
+                      {/* Floating QR Card */}
+                      <div className="absolute bottom-2.5 right-2.5 w-[75px] bg-[#09090b] text-white rounded p-1.5 shadow-xl border border-white/10 space-y-1 text-center">
+                        <div className="bg-white p-0.5 rounded inline-block">
+                          <QrCode className="w-7 h-7 text-[#09090b]" />
+                        </div>
+                        <div className="bg-[#c5a880] text-[#09090b] font-bold text-[5.5px] rounded py-0.5 uppercase tracking-wide">Download QR</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <h3 className="font-poppins font-bold text-xl text-white mb-1.5 tracking-wide">Generate QR Codes</h3>
+                  <p className="text-gray-455 text-sm leading-relaxed font-medium">
+                    Generate a custom QR code with your logo inside it. Print on table cards or the venue backdrop and guests can scan directly.
+                  </p>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Column 02 & Column 03 Container: ALL-IN-ONE (top) + STEP 03 & PORTFOLIO (bottom) */}
+            <div className="lg:col-span-2 flex flex-col gap-8">
+              
+              {/* ALL-IN-ONE WORKFLOW Card (full-width across columns 2 & 3) - Dark themed */}
+              <div className="bg-[#09090b] text-white rounded-3xl p-7 border border-white/10 relative overflow-hidden flex flex-col md:flex-row items-center justify-center gap-12 lg:gap-16 shadow-xl h-[240px]">
+                {/* Subtle glow */}
+                <div className="absolute inset-0 pointer-events-none select-none">
+                  <div className="absolute -top-12 -right-12 w-64 h-64 rounded-full bg-[#c5a880]/10 blur-3xl" />
+                </div>
+
+                <div className="space-y-3.5 max-w-[420px] relative z-10 text-left">
+                  <span className="inline-block px-3.5 py-1.5 bg-white/5 border border-white/10 text-[#c5a880] text-[10px] sm:text-[11px] font-black uppercase tracking-widest rounded-full font-poppins">
+                    All-in-one Workflow
+                  </span>
+                  <h3 className="font-serif-luxury text-2xl sm:text-[28px] font-normal tracking-wide text-white leading-tight">
+                    Everything You Need, <span className="italic text-[#c5a880]">In One Single Place</span>
+                  </h3>
+                  <p className="text-gray-400 text-sm sm:text-[15px] font-medium leading-relaxed font-poppins">
+                    Bookings, invoices, client messages, photo galleries - all of it sits in one photographer dashboard. No switching between apps.
+                  </p>
+                </div>
+
+                {/* Photographer Dashboard Widget - High-Contrast White Theme (Bolder fonts & original spacing) */}
+                <div className="relative z-10 shrink-0 select-none">
+                  <div className="w-[210px] bg-[#faf9f6] border border-slate-150 rounded-2xl shadow-xl p-3.5 font-poppins space-y-3.5 text-slate-800 text-left transition-transform duration-500 hover:scale-[1.02]">
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                      <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-[#c5a880]">Studio Analytics</span>
+                      <span className="text-[8px] sm:text-[9px] bg-emerald-50 text-emerald-600 font-bold px-2 py-0.5 rounded-full border border-emerald-100 uppercase tracking-wider flex items-center gap-1">
+                        <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" /> Live
+                      </span>
+                    </div>
+                    
+                    {/* Compact stats grid */}
+                    <div className="grid grid-cols-2 gap-2 text-left">
+                      <div className="bg-white border border-slate-100 rounded-lg p-1.5">
+                        <p className="text-[8px] sm:text-[9px] text-gray-400 font-bold uppercase tracking-wider">Bookings</p>
+                        <p className="text-xs sm:text-[13px] font-black text-slate-800 mt-0.5">14 Active</p>
+                      </div>
+                      <div className="bg-white border border-slate-100 rounded-lg p-1.5">
+                        <p className="text-[8px] sm:text-[9px] text-gray-400 font-bold uppercase tracking-wider">Invoices</p>
+                        <p className="text-xs sm:text-[13px] font-black text-[#c5a880] mt-0.5">9 Paid</p>
+                      </div>
+                    </div>
+
+                    {/* Active task details */}
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex justify-between items-center text-[8px] sm:text-[9px]">
+                        <span className="font-bold text-slate-400 uppercase tracking-wider">Next Event</span>
+                        <span className="text-[#c5a880] font-black uppercase tracking-wider">Scheduled</span>
+                      </div>
+                      <div className="bg-white border border-slate-100 rounded-xl p-2 space-y-1">
+                        <p className="text-[10px] sm:text-[11px] font-black text-slate-800 leading-tight">Mehta & Shah Wedding</p>
+                        <p className="text-[8px] sm:text-[9px] text-slate-400 font-bold truncate">The Oberoi Palace, Udaipur</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sub-grid containing STEP 03 and PORTFOLIO sitting side-by-side */}
+              <div className="grid sm:grid-cols-2 gap-8 items-stretch">
+                
+                {/* STEP 03: Scan & Find Photos - COHESIVE DARK BACKGROUND */}
+                <div className="bg-[#09090b] text-white border border-white/10 rounded-3xl p-6 shadow-lg transition-all duration-300 group flex flex-col justify-between relative h-[350px]">
+                  {/* Step Badge overlapping top border */}
+                  <div className="absolute -top-3.5 left-6 bg-[#c5a880] text-[#09090b] text-[11px] font-black tracking-widest uppercase px-3 py-1 rounded-full shadow-sm z-20 font-poppins">
+                    Step 03
+                  </div>
+
+                  <div className="space-y-2 text-left mb-2">
+                    <h3 className="font-poppins font-bold text-xl text-white tracking-wide">Scan & Find Photos</h3>
+                    <p className="text-gray-400 text-sm leading-relaxed font-medium">
+                      Guest scans the QR code, takes a selfie from their phone, and finds all their photos from the event immediately.
+                    </p>
+                  </div>
+                  
+                  {/* Smartphone mockup - responsive wide in width but even shorter in height to fit cleanly */}
+                  <div className="w-full flex justify-center mt-auto pt-2 pb-6 relative select-none">
+                    <div className="w-[220px] sm:w-[330px] h-[155px] sm:h-[180px] bg-[#1c1c1f] rounded-3xl shadow-2xl p-2 sm:p-2.5 border-2 border-white/10 relative overflow-hidden transition-transform duration-500 group-hover:scale-[1.02]">
+                      <div className="w-full h-full bg-white rounded-2xl overflow-hidden relative flex flex-col justify-between p-1.5 sm:p-2 text-center font-poppins text-slate-800 shadow-inner">
+                        {/* Close Button X */}
+                        <div className="absolute top-1.5 right-2 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-slate-100 flex items-center justify-center text-[6px] sm:text-[7.5px] text-slate-500 font-bold cursor-pointer">
+                          ✕
+                        </div>
+
+                        {/* Header Section */}
+                        <div className="space-y-0.5 mt-0.5">
+                          <p className="text-[9px] sm:text-[11px] font-black text-slate-800 tracking-tight leading-none">Live Verification</p>
+                          <p className="text-[6px] sm:text-[7.5px] text-slate-400 font-semibold leading-none mt-0.5">Step 1 of 3 — Slowly blink once</p>
+                        </div>
+
+                        {/* Steps Indicator Pills */}
+                        <div className="flex justify-center items-center gap-1 my-0.5 sm:my-0.5">
+                          <div className="w-5 sm:w-6 h-[2.5px] sm:h-[3px] bg-[#6366f1] rounded-full" />
+                          <div className="w-1 h-1 bg-slate-200 rounded-full" />
+                          <div className="w-1 h-1 bg-slate-200 rounded-full" />
+                        </div>
+
+                        {/* Viewfinder Section - Shorter height to fit device bounds, changed to guest_selfie.jpg */}
+                        <div className="relative h-[68px] sm:h-[80px] w-full rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center p-0.5 mb-1 border border-slate-100 shrink-0">
+                          <img src="/guest_selfie.jpg" alt="Guest Selfie" className="w-full h-full object-cover rounded-xl" />
+                          
+                          {/* Oval Face Guide Overlay */}
+                          <div className="absolute inset-x-5 sm:inset-x-8 inset-y-1 border border-white/70 rounded-[45%] pointer-events-none" />
+                          
+                          {/* Floating Capsule Badge at bottom of viewfinder */}
+                          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-[#09090b]/80 border border-white/10 text-white rounded-full px-1.5 py-0.5 flex items-center gap-1 shadow-md shrink-0">
+                            <Eye className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-white" />
+                            <span className="text-[5px] sm:text-[6px] font-bold tracking-wide">Blink your eyes</span>
+                          </div>
+                        </div>
+
+                        {/* Bottom Lavender Status Bar */}
+                        <div className="w-full bg-[#f0f2fe] border border-[#e0e7ff] rounded-lg p-1.5 sm:p-2 flex items-center gap-2 text-left shrink-0">
+                          {/* Spinner Icon */}
+                          <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin shrink-0" />
+                          
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[7.5px] sm:text-[8.5px] font-black text-[#4f46e5] leading-tight">Blink your eyes to verify</p>
+                            <p className="text-[5px] sm:text-[6px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">STEP 1 OF 3 — SLOWLY BLINK ONCE</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* WHITE-LABEL PORTFOLIO - Dark themed */}
+                <div className="bg-[#09090b] text-white border border-white/10 rounded-3xl p-6 shadow-lg transition-all duration-300 group flex flex-col justify-between relative h-[350px]">
+                  {/* Tag Badge overlapping top-left border with gold background */}
+                  <div className="absolute -top-3.5 left-6 bg-[#c5a880] text-[#09090b] text-[11px] font-black tracking-widest uppercase px-3 py-1 rounded-full shadow-sm z-20 font-poppins">
+                    Portfolio
+                  </div>
+
+                  <div className="space-y-2 text-left mb-2">
+                    <h3 className="font-poppins font-bold text-xl text-white tracking-wide">White-Label Portfolios</h3>
+                    <p className="text-gray-400 text-sm leading-relaxed font-medium">
+                      Portfolio website with your name and branding. Custom domain works on it. Clients get a professional first impression before the event itself.
+                    </p>
+                  </div>
+                  
+                  {/* Laptop mockup - responsive wide in width and floated up (extra wide for desktop) */}
+                  <div className="w-full flex justify-center mt-auto pt-2 pb-6 relative select-none">
+                    <div className="w-[265px] sm:w-[335px] h-[170px] sm:h-[185px] bg-[#1c1c1f] rounded-3xl shadow-2xl p-2 border-2 border-white/10 relative overflow-hidden text-left transition-transform duration-500 group-hover:scale-[1.02]">
+                      <div className="w-full h-full bg-[#faf9f6] rounded-2xl overflow-hidden relative flex flex-col justify-between">
+                        <div className="h-14 sm:h-16 w-full overflow-hidden relative shrink-0">
+                          <img src="/portrait.jpg" alt="Portfolio Preview" className="w-full h-full object-cover brightness-90 scale-105" />
+                          <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
+                            <span className="text-[8px] bg-[#09090b]/80 text-[#c5a880] font-black px-2.5 py-0.5 rounded-full shadow-sm font-poppins">yourstudio.com</span>
+                          </div>
+                        </div>
+                        {/* Dynamic photography gallery showing actual works with curved corners */}
+                        <div className="p-2 flex flex-col justify-between flex-1 text-slate-800 font-poppins text-left">
+                          <div className="flex items-center justify-between pb-0.5">
+                            <span className="text-[6px] sm:text-[7px] font-black text-slate-700 tracking-wider uppercase">Featured Work</span>
+                            <span className="text-[4.5px] sm:text-[5px] bg-[#c5a880]/15 text-[#c5a880] px-1 rounded font-bold">View All</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1">
+                            <div className="h-[38px] sm:h-[48px] rounded-lg overflow-hidden border border-slate-100">
+                              <img src="/wedding.jpg" alt="Wedding" className="w-full h-full object-cover" />
+                            </div>
+                            <div className="h-[38px] sm:h-[48px] rounded-lg overflow-hidden border border-slate-100">
+                              <img src="/party.jpg" alt="Party" className="w-full h-full object-cover" />
+                            </div>
+                            <div className="h-[38px] sm:h-[48px] rounded-lg overflow-hidden border border-slate-100">
+                              <img src="/gala.jpg" alt="Gala" className="w-full h-full object-cover" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          <div className="w-full flex justify-center text-center mt-16 relative z-30">
+            <Link href="/signup" className="font-poppins inline-flex items-center justify-center gap-2 text-base font-bold text-white bg-[#09090b] hover:bg-[#c5a880] px-9 py-4 rounded-full transition-all duration-300 shadow-md">
+              Start Delivering Free
+              <ArrowRight className="w-5 h-5" />
+            </Link>
+          </div>
+
+        </div>
+      </section>
+
+      {/* ── INTERACTIVE FEATURES TABBED SECTION ── */}
+      <section className="bg-[#faf9f6] border-y border-[#e3d8c8]/30 py-28 lg:py-36">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <span className="inline-block px-4 py-1.5 bg-[#f5f2eb] text-[#c5a880] border border-[#c5a880]/15 text-[11px] font-black uppercase tracking-widest rounded-full mb-4 font-poppins shadow-sm">
+              Full Feature Set
+            </span>
+            <h2 className="font-serif-luxury text-4xl lg:text-5xl font-light text-[#09090b] mb-4">
+              Built for <span className="text-[#c5a880] font-normal">Modern Event Photography</span>
+            </h2>
+            <p className="text-gray-500 max-w-xl mx-auto text-sm md:text-base font-medium">
+              Explore the powerful feature suite designed to automate client delivery, simplify payments, and grow your brand.
+            </p>
+          </div>
+
+          {/* Symmetrical Layout - Sidebar tabs on left, content panel on right */}
+          <div className="grid lg:grid-cols-12 gap-8 items-stretch font-poppins">
+            
+            {/* Left sidebar tab selector */}
+            <div className="lg:col-span-4 flex flex-col gap-2.5 overflow-x-auto lg:overflow-x-visible flex-row lg:flex-col pb-4 lg:pb-0 scrollbar-none">
+              {featureTabs.map((tab, idx) => {
+                const TabIcon = tab.icon;
+                const isActive = activeFeatureTab === idx;
+                return (
+                  <button
+                    key={tab.tabLabel}
+                    onClick={() => setActiveFeatureTab(idx)}
+                    className={`w-full text-left p-4.5 rounded-2xl border transition-all duration-300 flex items-center justify-between gap-4 cursor-pointer shrink-0 min-w-[200px] lg:min-w-0 ${
+                      isActive 
+                        ? 'bg-[#09090b] border-[#09090b] text-white shadow-md' 
+                        : 'bg-white border-[#e3d8c8]/25 text-slate-600 hover:border-[#c5a880] hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${isActive ? 'bg-[#c5a880]/15 border-[#c5a880]/20 text-[#c5a880]' : 'bg-[#faf9f6] border-[#e3d8c8]/10 text-[#c5a880]'}`}>
+                        <TabIcon className="w-4 h-4" />
+                      </div>
+                      <span className="text-xs sm:text-sm font-bold tracking-wide">{tab.tabLabel}</span>
+                    </div>
+                    <ChevronRight className={`w-4 h-4 transition-transform ${isActive ? 'text-[#c5a880] translate-x-1' : 'text-slate-300'}`} />
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Right content display panel */}
+            <div className="lg:col-span-8 bg-white rounded-3xl p-6 sm:p-8 border border-[#e3d8c8]/25 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+              <div>
+                <h3 className="text-xl sm:text-2xl font-black text-[#09090b] leading-snug tracking-tight mb-8 text-left">
+                  {featureTabs[activeFeatureTab].title}
+                </h3>
+
+                <div className="grid md:grid-cols-2 gap-8 items-center">
+                  {/* Mockup wrapper */}
+                  <div className="w-full max-w-[320px] bg-[#faf9f6] border border-slate-100 rounded-2xl p-2.5 mx-auto relative flex items-center justify-center shrink-0 min-h-[250px]">
+                    {featureTabs[activeFeatureTab].mockup}
+                  </div>
+
+                  {/* Bullet points with gold themed lightning bolt */}
+                  <ul className="space-y-4 text-left">
+                    {featureTabs[activeFeatureTab].bullets.map((bullet, bIdx) => (
+                      <li key={bIdx} className="flex items-start gap-3">
+                        <div className="w-5.5 h-5.5 rounded-full bg-[#f5f2eb] text-[#c5a880] border border-[#c5a880]/20 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                          ⚡
+                        </div>
+                        <span className="text-sm sm:text-[15px] font-bold text-slate-700 leading-snug">{bullet}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {/* Bottom description and call to action buttons */}
+              <div className="mt-10 pt-6 border-t border-slate-100 text-left space-y-5">
+                <p className="text-gray-500 text-xs sm:text-sm font-medium leading-relaxed">
+                  {featureTabs[activeFeatureTab].desc}
+                </p>
+                <div className="flex flex-wrap items-center gap-4">
+                  <Link
+                    href="/signup"
+                    className="font-poppins inline-flex items-center justify-center gap-1.5 text-xs font-bold uppercase tracking-wider text-white bg-[#09090b] hover:bg-[#c5a880] hover:text-[#09090b] px-6 py-3.5 rounded-xl transition-all duration-300 shadow-sm"
+                  >
+                    Try for free
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                  <Link
+                    href="/contact"
+                    className="font-poppins inline-flex items-center justify-center gap-1 text-xs font-bold uppercase tracking-wider text-[#c5a880] hover:text-slate-700 px-4 py-3.5 transition-colors"
+                  >
+                    Learn More
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="w-full flex justify-center text-center mt-16 relative z-30">
+            <Link href="/pricing" className="font-poppins inline-flex items-center justify-center gap-2 text-base font-bold text-white bg-[#09090b] hover:bg-[#c5a880] px-9 py-4 rounded-full transition-all duration-300 shadow-md">
+              Try Premium Features
+              <ArrowRight className="w-5 h-5" />
+            </Link>
+          </div>
+
+        </div>
+      </section>
+
+      {/* ── TESTIMONIALS SECTION ── */}
+      <section className="bg-[#09090b] text-white py-20 lg:py-24 border-t border-white/10 relative overflow-hidden">
+        {/* Subtle glowing gradients */}
+        <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
+          <div className="absolute -top-40 right-0 w-[500px] h-[500px] rounded-full bg-[#c5a880]/5 blur-3xl opacity-60" />
+          <div className="absolute -bottom-40 left-0 w-[500px] h-[500px] rounded-full bg-[#c5a880]/5 blur-3xl opacity-60" />
+        </div>
+
+        <div className="max-w-7xl mx-auto px-6 lg:px-8 relative z-10">
+          <div className="text-center mb-20">
+            <span className="inline-block px-4 py-1.5 bg-[#c5a880]/15 text-[#c5a880] border border-[#c5a880]/20 text-[11px] font-black uppercase tracking-widest rounded-full mb-4 font-poppins">
+              Endorsements
+            </span>
+            <h2 className="font-serif-luxury text-4xl lg:text-5xl font-light text-white mb-4">
+              Loved by <span className="italic text-[#c5a880]">premium studios</span>
+            </h2>
+          </div>
+          
+          <div className="grid lg:grid-cols-3 gap-8">
+            {testimonials.map((t, idx) => {
+              const shootTags = [
+                "Heritage Wedding • 600 Guests",
+                "Live Portrait Shoot • Editorial",
+                "3-Day Garba Wedding • 12,000+ Photos"
+              ];
               return (
-                <div key={f.title} className="feature-card" style={{ textAlign: 'left' }}>
-                  <div className="feature-icon"><Icon className="w-5 h-5" /></div>
-                  <h3>{f.title}</h3>
-                  <p>{f.desc}</p>
+                <div 
+                  key={t.name} 
+                  className="relative bg-white/[0.02] backdrop-blur-md rounded-3xl p-8 border border-white/10 flex flex-col justify-between hover:border-[#c5a880]/60 hover:bg-white/[0.04] transition-all duration-500 hover:shadow-2xl hover:shadow-[#c5a880]/5 hover:-translate-y-1.5 group overflow-hidden"
+                >
+                  {/* Giant quotation mark in background */}
+                  <div className="absolute -right-3 -top-6 text-[120px] font-serif font-black text-white/[0.02] group-hover:text-[#c5a880]/5 select-none pointer-events-none transition-colors duration-500">
+                    “
+                  </div>
+
+                  <div>
+                    {/* Top tag & Star Rating */}
+                    <div className="flex items-center justify-between mb-6">
+                      <span className="text-[9px] bg-[#c5a880]/15 text-[#c5a880] border border-[#c5a880]/20 px-3 py-1 rounded-full font-poppins font-black uppercase tracking-wider">
+                        {shootTags[idx]}
+                      </span>
+                      <div className="flex gap-0.5">
+                        {Array.from({ length: t.rating }).map((_, i) => (
+                          <Star key={i} className="w-3 h-3 fill-[#c5a880] text-[#c5a880]" />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Testimonial Quote */}
+                    <p className="font-poppins font-semibold text-[15px] sm:text-base text-gray-300 leading-relaxed mb-8 tracking-wide text-left relative z-10">
+                      &ldquo;{t.text}&rdquo;
+                    </p>
+                  </div>
+
+                  {/* Profile details */}
+                  <div className="flex items-center gap-4 border-t border-white/10 pt-6 mt-4 relative z-10">
+                    {/* Custom Initials Avatar Badge */}
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#c5a880]/20 to-[#c5a880]/5 border border-[#c5a880]/30 flex items-center justify-center text-[#c5a880] text-sm font-black font-poppins shrink-0 group-hover:border-[#c5a880] transition-colors duration-500 shadow-md">
+                      {t.name.split(' ').map(n => n[0]).join('')}
+                    </div>
+                    <div className="text-left font-poppins">
+                      <p className="font-bold text-xs sm:text-sm text-white group-hover:text-[#c5a880] transition-colors duration-300 uppercase tracking-wider">{t.name}</p>
+                      <p className="text-[10px] text-gray-400 font-bold tracking-wider mt-0.5 uppercase">{t.role}</p>
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -1529,63 +1215,69 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── TESTIMONIALS ── */}
-      <section className="testimonials-section">
-        <div className="section-container" style={{ textAlign: 'center' }}>
-          <span className="section-badge">Wall of Love</span>
-          <h2 className="section-title" style={{ color: '#fff' }}>What Photographers Say</h2>
-          <p className="section-desc" style={{ color: '#9ca3af' }}>Real results from real studios across India.</p>
-          <div className="testimonials-grid">
-            {testimonials.map(t => (
-              <div key={t.name} className="testimonial-card">
-                <div>
-                  <div className="testimonial-stars">
-                    {Array.from({ length: t.rating }).map((_, i) => (
-                      <Star key={i} className="w-3 h-3" style={{ fill: '#c5a880', color: '#c5a880' }} />
-                    ))}
-                  </div>
-                  <p className="testimonial-text">&ldquo;{t.text}&rdquo;</p>
-                </div>
-                <div className="testimonial-author">
-                  <div className="testimonial-avatar">{t.name.split(' ').map(n => n[0]).join('')}</div>
-                  <div style={{ textAlign: 'left' }}>
-                    <p className="testimonial-name">{t.name}</p>
-                    <p className="testimonial-role">{t.role}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+      {/* ── PRICING SECTION ── */}
+      <section id="pricing" className="bg-[#faf9f6] border-t border-[#e3d8c8]/30 py-28 lg:py-36">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+          <div className="text-center mb-20">
+            <span className="inline-block px-4 py-1.5 bg-[#f5f2eb] text-[#c5a880] text-[11px] font-bold uppercase tracking-widest rounded-full mb-4 font-poppins">
+              Membership
+            </span>
+            <h2 className="font-serif-luxury text-4xl lg:text-5xl font-light text-[#09090b] mb-4">
+              Simple, transparent pricing
+            </h2>
+            <p className="text-gray-500 max-w-sm mx-auto text-sm md:text-base font-medium">
+              Start delivering free. Upgrade as your studio demands grows.
+            </p>
           </div>
-        </div>
-      </section>
 
-      {/* ── PRICING ── */}
-      <section id="pricing" className="pricing-section">
-        <div className="section-container" style={{ textAlign: 'center' }}>
-          <span className="section-badge">Membership</span>
-          <h2 className="section-title">Simple, Transparent Pricing</h2>
-          <p className="section-desc">Start delivering free. Upgrade as your studio grows.</p>
-          <div className="pricing-grid">
-            {plans.map(plan => (
-              <div key={plan.name} className={`pricing-card ${plan.highlight ? 'pricing-card-highlight' : ''}`}>
-                {plan.highlight && <div className="pricing-popular">Most Popular</div>}
-                <div style={{ marginBottom: '24px' }}>
-                  <h3 className="pricing-name" style={{ color: plan.highlight ? '#c5a880' : '#09090b' }}>{plan.name}</h3>
-                  <p style={{ fontSize: '12px', fontWeight: 500, color: plan.highlight ? '#9ca3af' : '#6b7280', marginBottom: '16px' }}>{plan.desc}</p>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', borderBottom: '1px solid rgba(227,216,200,0.15)', paddingBottom: '16px' }}>
-                    <span className="pricing-price" style={{ color: plan.highlight ? '#fff' : '#09090b' }}>{plan.price}</span>
-                    <span className="pricing-period" style={{ color: plan.highlight ? '#c5a880' : '#6b7280', marginBottom: '4px' }}>{plan.period}</span>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {plans.map((plan) => (
+              <div
+                key={plan.name}
+                className={`relative rounded-3xl p-6.5 flex flex-col border transition-all duration-300 hover:-translate-y-1.5 ${
+                  plan.highlight
+                    ? 'bg-[#09090b] border-[#09090b] text-white shadow-xl shadow-slate-900/10'
+                    : 'bg-white border-[#e3d8c8]/25 shadow-sm'
+                }`}
+              >
+                {plan.highlight && (
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                    <span className="px-3.5 py-1.5 bg-[#c5a880] text-[#09090b] text-[9px] font-black uppercase tracking-widest font-poppins rounded-full">
+                      Most Popular
+                    </span>
+                  </div>
+                )}
+                
+                <div className="mb-6">
+                  <h3 className={`font-poppins font-bold text-sm md:text-base tracking-wider uppercase mb-1 ${plan.highlight ? 'text-[#c5a880]' : 'text-[#09090b]'}`}>
+                    {plan.name}
+                  </h3>
+                  <p className={`text-xs md:text-sm font-medium mb-5 ${plan.highlight ? 'text-gray-400' : 'text-gray-405'}`}>{plan.desc}</p>
+                  <div className="flex items-end gap-1 border-b border-[#e3d8c8]/15 pb-5">
+                    <span className={`font-serif-luxury text-3xl md:text-4xl ${plan.highlight ? 'text-white' : 'text-[#09090b]'}`}>
+                      {plan.price}
+                    </span>
+                    <span className={`text-[11px] font-bold uppercase tracking-wider mb-1 ${plan.highlight ? 'text-[#c5a880]' : 'text-gray-400'}`}>{plan.period}</span>
                   </div>
                 </div>
-                <ul className="pricing-features">
-                  {plan.features.map(f => (
-                    <li key={f}>
-                      <Check className="w-3.5 h-3.5" style={{ color: '#c5a880', flexShrink: 0, marginTop: '2px' }} />
-                      <span style={{ color: plan.highlight ? '#d1d5db' : '#6b7280' }}>{f}</span>
+
+                <ul className="space-y-3 mb-8 flex-1">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="flex items-start gap-2.5 text-xs md:text-sm font-semibold">
+                      <Check className="w-3.5 h-3.5 shrink-0 text-[#c5a880] mt-0.5" />
+                      <span className={plan.highlight ? 'text-gray-300' : 'text-gray-600'}>{feature}</span>
                     </li>
                   ))}
                 </ul>
-                <Link href={plan.href} className={`pricing-cta ${plan.highlight ? 'pricing-cta-highlight' : 'pricing-cta-default'}`}>
+
+                <Link
+                  href={plan.href}
+                  className={`w-full text-center py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider font-poppins transition-all duration-300 ${
+                    plan.highlight
+                      ? 'bg-[#c5a880] text-[#09090b] hover:bg-white shadow-sm'
+                      : 'border border-[#09090b]/20 text-[#09090b] hover:bg-[#09090b] hover:text-white'
+                  }`}
+                >
                   {plan.cta}
                 </Link>
               </div>
@@ -1594,84 +1286,191 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── CONTACT ── */}
-      <section id="contact" className="contact-section">
-        <div className="section-container">
-          <div className="contact-grid">
-            <div style={{ textAlign: 'left' }}>
-              <span className="section-badge">Get In Touch</span>
-              <h2 className="section-title" style={{ marginBottom: '32px' }}>
-                Let&apos;s Make <em style={{ fontStyle: 'italic', color: '#c5a880' }}>Event Sharing</em> Effortless
-              </h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div className="contact-info-card">
-                  <div className="contact-icon-wrap"><Mail className="w-5 h-5" /></div>
+      {/* ── CONTACT SECTION ── */}
+      <section id="contact" className="bg-[#faf9f6] border-t border-[#e3d8c8]/30 py-28 lg:py-36">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+          <div className="grid lg:grid-cols-12 gap-12 lg:gap-16 items-start">
+            
+            {/* Left Column: Contact details */}
+            <div className="lg:col-span-5 space-y-8 lg:pr-6 text-left font-poppins">
+              <div className="space-y-4">
+                <span className="text-[10px] font-bold text-[#c5a880] uppercase tracking-widest bg-[#f5f2eb] px-3.5 py-1.5 rounded-full">
+                  Get In Touch
+                </span>
+                <h2 className="font-serif-luxury text-4xl sm:text-5xl font-light text-[#09090b] leading-tight">
+                  Let&apos;s Make <span className="italic text-[#c5a880]">Event Sharing</span> Effortless
+                </h2>
+              </div>
+              
+              <div className="space-y-4">
+                {/* Email */}
+                <div className="bg-white border border-[#e3d8c8]/25 rounded-2xl p-5 flex items-center gap-5 shadow-sm hover:border-[#c5a880]/40 transition-colors">
+                  <div className="w-12 h-12 rounded-xl bg-[#c5a880]/10 flex items-center justify-center shrink-0 border border-[#e3d8c8]/10">
+                    <Mail className="w-5.5 h-5.5 text-[#c5a880]" />
+                  </div>
                   <div>
-                    <p style={{ fontSize: '14px', fontWeight: 700, color: '#09090b' }}>maraphoto303@gmail.com</p>
-                    <p style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600, marginTop: '2px' }}>We&apos;ll reply within 24 hours</p>
+                    <p className="text-sm font-bold text-[#09090b]">maraphoto303@gmail.com</p>
+                    <p className="text-xs text-gray-400 font-semibold mt-0.5">We&apos;ll reply within 24 hours</p>
                   </div>
                 </div>
-                <div className="contact-info-card">
-                  <div className="contact-icon-wrap"><Phone className="w-5 h-5" /></div>
+
+                {/* Phone */}
+                <div className="bg-white border border-[#e3d8c8]/25 rounded-2xl p-5 flex items-center gap-5 shadow-sm hover:border-[#c5a880]/40 transition-colors">
+                  <div className="w-12 h-12 rounded-xl bg-[#c5a880]/10 flex items-center justify-center shrink-0 border border-[#e3d8c8]/10">
+                    <Phone className="w-5.5 h-5.5 text-[#c5a880]" />
+                  </div>
                   <div>
-                    <p style={{ fontSize: '14px', fontWeight: 700, color: '#09090b' }}>+91 87994 95028</p>
-                    <p style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600, marginTop: '2px' }}>Available 9 AM – 6 PM IST</p>
+                    <p className="text-sm font-bold text-[#09090b]">+91 87994 95028</p>
+                    <p className="text-xs text-gray-400 font-semibold mt-0.5">Available 9 AM - 6 PM IST</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="contact-form-card">
-              <div style={{ marginBottom: '28px', borderBottom: '1px solid rgba(227,216,200,0.2)', paddingBottom: '16px', textAlign: 'left' }}>
-                <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#09090b' }}>Send a Message</h3>
-                <p style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600, marginTop: '4px' }}>We usually respond in less than 24 hours.</p>
+            {/* Right Column: Form */}
+            <div className="lg:col-span-7 bg-white rounded-3xl p-8 md:p-10 border border-[#e3d8c8]/30 shadow-xl font-poppins relative">
+              <div className="mb-8 border-b border-[#e3d8c8]/20 pb-5 text-left">
+                <h3 className="text-2xl font-bold text-[#09090b] tracking-wide">Send a Message</h3>
+                <p className="text-xs text-gray-400 font-semibold mt-1">We usually respond in less than 24 hours.</p>
               </div>
-              <form onSubmit={handleHomeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <div style={{ textAlign: 'left' }}>
-                    <label className="contact-label">Full Name <span style={{ color: '#dc2626' }}>*</span></label>
-                    <input type="text" required name="name" className="contact-input" />
+              <form onSubmit={handleHomeSubmit} className="space-y-6">
+                <div className="grid sm:grid-cols-2 gap-6">
+                  <div className="space-y-2 text-left">
+                    <label className="text-[10px] font-bold text-gray-405 uppercase tracking-wider flex items-center gap-1">
+                      Full Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      name="name"
+                      className="w-full bg-[#faf9f6] border border-[#e3d8c8]/30 rounded-xl px-4 py-3.5 text-sm text-[#09090b] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] font-semibold"
+                    />
                   </div>
-                  <div style={{ textAlign: 'left' }}>
-                    <label className="contact-label">Email Address <span style={{ color: '#dc2626' }}>*</span></label>
-                    <input type="email" required name="email" className="contact-input" />
+                  
+                  <div className="space-y-2 text-left">
+                    <label className="text-[10px] font-bold text-gray-405 uppercase tracking-wider flex items-center gap-1">
+                      Email Address <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      name="email"
+                      className="w-full bg-[#faf9f6] border border-[#e3d8c8]/30 rounded-xl px-4 py-3.5 text-sm text-[#09090b] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] font-semibold"
+                    />
                   </div>
                 </div>
-                <div style={{ textAlign: 'left' }}>
-                  <label className="contact-label">Phone Number <span style={{ color: '#dc2626' }}>*</span></label>
-                  <input type="tel" required name="phone" className="contact-input" />
+                
+                <div className="space-y-2 text-left">
+                  <label className="text-[10px] font-bold text-gray-455 uppercase tracking-wider flex items-center gap-1">
+                    Phone Number <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="relative shrink-0">
+                      <select 
+                        className="bg-[#faf9f6] border border-[#e3d8c8]/30 rounded-xl px-3 py-3.5 text-sm text-[#09090b] focus:outline-none font-bold appearance-none pr-7"
+                        defaultValue="+91"
+                      >
+                        <option value="+91">+91</option>
+                        <option value="+1">+1</option>
+                        <option value="+44">+44</option>
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400">
+                        ▼
+                      </div>
+                    </div>
+                    <input
+                      type="tel"
+                      required
+                      name="phone"
+                      className="w-full bg-[#faf9f6] border border-[#e3d8c8]/30 rounded-xl px-4 py-3.5 text-sm text-[#09090b] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] font-semibold"
+                    />
+                  </div>
                 </div>
-                <div style={{ textAlign: 'left' }}>
-                  <label className="contact-label">Message <span style={{ color: '#dc2626' }}>*</span></label>
-                  <textarea required rows={4} name="message" className="contact-input" style={{ resize: 'none' }} />
+                
+                <div className="space-y-2 text-left">
+                  <label className="text-[10px] font-bold text-gray-405 uppercase tracking-wider flex items-center gap-1">
+                    Message <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    required
+                    rows={4}
+                    name="message"
+                    className="w-full bg-[#faf9f6] border border-[#e3d8c8]/30 rounded-xl px-4 py-3.5 text-sm text-[#09090b] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] font-semibold resize-none"
+                  />
                 </div>
-                <button type="submit" className="contact-submit">
-                  Send Message <Send className="w-3.5 h-3.5" />
-                </button>
+                
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    className="w-full bg-[#09090b] hover:bg-[#c5a880] text-white hover:text-[#09090b] font-bold text-xs uppercase tracking-wider py-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer font-poppins"
+                  >
+                    Send Message
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </form>
             </div>
           </div>
         </div>
       </section>
 
+      {/* ── FAQ SECTION ── */}
+      <section id="faq" className="bg-white py-28 lg:py-36 border-t border-[#e3d8c8]/25">
+        <div className="max-w-3xl mx-auto px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <span className="inline-block px-4 py-1.5 bg-[#f5f2eb] text-[#c5a880] text-[11px] font-bold uppercase tracking-widest rounded-full mb-4 font-poppins">
+              Information
+            </span>
+            <h2 className="font-serif-luxury text-4xl lg:text-5xl font-light text-[#09090b] mb-4">
+              Frequently Asked Questions
+            </h2>
+          </div>
+          
+          <div className="space-y-4">
+            {faqs.map((faq) => <FAQItem key={faq.q} q={faq.q} a={faq.a} />)}
+          </div>
 
-      {/* ── CTA BANNER ── */}
-      <section className="cta-banner">
-        <div className="cta-glow" />
-        <div style={{ maxWidth: '720px', margin: '0 auto', padding: '0 24px' }}>
-          <h2 className="cta-title">Ready to deliver photos <em>flawlessly?</em></h2>
-          <p className="cta-desc">Join premium studios delivering experiences, not links. Start free today, no credit card required.</p>
-          <div className="cta-buttons">
-            <Link href="/signup" className="cta-btn-primary">
-              Start Free Account <ArrowRight className="w-4 h-4" />
-            </Link>
-            <Link href="/#contact" className="cta-btn-secondary">
-              Consult Sales
+          <div className="w-full flex justify-center text-center mt-12">
+            <Link href="/signup" className="font-poppins inline-flex items-center justify-center gap-2 text-base font-bold text-white bg-[#09090b] hover:bg-[#c5a880] px-9 py-4 rounded-full transition-all duration-300 shadow-md">
+              Start Delivering Free
+              <ArrowRight className="w-5 h-5" />
             </Link>
           </div>
         </div>
       </section>
 
+      {/* ── LUXURY CALL TO ACTION BANNER ── */}
+      <section className="bg-[#09090b] py-28 border-t border-[#e3d8c8]/20 relative overflow-hidden">
+        {/* Subtle glow */}
+        <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[300px] rounded-full bg-[#c5a880]/10 opacity-30 blur-3xl" />
+        </div>
+        
+        <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
+          <h2 className="font-serif-luxury text-4xl sm:text-5xl lg:text-6xl font-light text-white mb-6">
+            Ready to deliver photos <span className="italic text-[#c5a880]">flawlessly?</span>
+          </h2>
+          <p className="text-gray-400 font-poppins text-base md:text-lg mb-8 max-w-xl mx-auto font-medium">
+            Join premium studios delivering experiences, not links. Start free today, no credit card required.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link
+              href="/signup"
+              className="font-poppins inline-flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider text-[#09090b] bg-[#c5a880] hover:bg-white px-9 py-4.5 rounded-full transition-all duration-300 shadow-md hover:-translate-y-0.5 animate-pulse-soft"
+            >
+              Start Free Account
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link
+              href="/contact"
+              className="font-poppins inline-flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider text-white border border-white/20 px-9 py-4.5 rounded-full hover:bg-white/10 transition-all duration-300"
+            >
+              Consult Sales
+            </Link>
+          </div>
+        </div>
+      </section>
+      
       </main>
     </PublicWrapper>
   );

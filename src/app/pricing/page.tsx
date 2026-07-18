@@ -74,7 +74,7 @@ export default function PricingPage() {
         </div>
 
         {/* Section 1: Dynamic Photographer Plans Grid (Matching original gold/black theme) */}
-        <section className="max-w-7xl mx-auto px-6 pt-16 pb-16 relative z-10 text-center">
+        <section className="max-w-7xl mx-auto px-6 pt-28 pb-20 relative z-10 text-center">
           <span className="inline-block px-4 py-1.5 bg-[#f5f2eb] text-[#c5a880] border border-[#c5a880]/15 text-[11px] font-black uppercase tracking-widest rounded-full mb-5 shadow-sm">
             Membership
           </span>
