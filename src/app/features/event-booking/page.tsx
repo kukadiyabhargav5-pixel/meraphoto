@@ -11,7 +11,7 @@ export default function Page() {
       <main className="bg-[#faf9f6] text-[#09090b]">
         
         {/* Hero Section */}
-        <section className="relative overflow-hidden pt-12 pb-12 lg:pt-16 lg:pb-16 border-b border-[#e3d8c8]/30">
+        <section className="relative overflow-hidden pt-20 pb-16 lg:pt-28 lg:pb-24 border-b border-[#e3d8c8]/30">
           <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
             <div className="absolute top-0 right-0 w-[800px] h-[800px] rounded-full bg-[#e3d8c8]/25 opacity-40 blur-3xl" />
             <div className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full bg-[#c5a880]/10 opacity-30 blur-3xl" />

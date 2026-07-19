@@ -83,7 +83,7 @@ export default function ClientGallery() {
 
   const resolveMediaUrl = (m: any) => {
     if (!m) return '';
-    const url = m.url || m.r2Url || m.compressedUrl || '';
+    const url = m.compressedUrl || m.url || m.r2Url || '';
     if (url.startsWith('localdb://')) {
       const id = url.replace('localdb://', '');
       if (localUrls[id]) return localUrls[id];
