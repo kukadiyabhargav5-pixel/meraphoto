@@ -97,3 +97,50 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5) !important;
 }
+
+
+/* ============================================================
+   NAVIGATION PROGRESS BAR (top of screen on route change)
+   ============================================================ */
+
+.nav-progress-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 99998;
+  height: 3px;
+  pointer-events: none;
+}
+
+.nav-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #9c7c56, #c5a880, #e8d9c0);
+  border-radius: 0 2px 2px 0;
+  transition: width 0.15s ease-out, opacity 0.3s ease;
+  box-shadow: 0 0 8px rgba(197,168,128,0.6), 0 0 2px rgba(197,168,128,0.4);
+}
+
+.nav-progress-glow {
+  position: absolute;
+  top: -2px;
+  width: 80px;
+  height: 7px;
+  background: radial-gradient(ellipse, rgba(197,168,128,0.7) 0%, transparent 70%);
+  border-radius: 50%;
+  transition: left 0.15s ease-out, opacity 0.3s ease;
+  pointer-events: none;
+}
+
+/* ============================================================
+   PAGE TRANSITION (smooth fade between routes)
+   ============================================================ */
+
+main, .page-content {
+  animation: pageEnter 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

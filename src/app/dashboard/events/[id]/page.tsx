@@ -13,6 +13,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showGalleryLink, setShowGalleryLink] = useState(false);
+  const [hasSavedDetails, setHasSavedDetails] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const router = useRouter();
 
@@ -84,6 +85,26 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
        setUploadingMedia(false);
        e.target.value = '';
     }
+  };
+
+  // Auto-refresh if any media is PENDING
+  useEffect(() => {
+    const hasPending = mediaItems.some(item => item.processedStatus === 'PENDING' || item.processedStatus === 'PROCESSING');
+    if (!hasPending || !event?._id) return;
+
+    const interval = setInterval(() => {
+      apiClient.get(`/media/event/${event._id}`).then(res => {
+        if (res.data && res.data.media) {
+          setMediaItems(res.data.media);
+        }
+      }).catch(err => console.error('Polling error', err));
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [mediaItems, event?._id]);
+
+  const toggleSelectMedia = (id: string) => {
+    setSelectedMediaIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
   const getPreviewPosition = (pos: string) => {
@@ -425,6 +446,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                   ...event,
                   ...payload
                 });
+                setHasSavedDetails(true);
               } catch (err) {
                 alert('Error updating event');
               } finally {
@@ -739,7 +761,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 />
               </div>
 
-              {event && mediaItems.length > 0 && (
+              {event && mediaItems.length > 0 && hasSavedDetails && (
                 <div className="pt-2 mb-4">
                   <div className="bg-[#f8f5f0] border border-[#e6d5c0] rounded-xl p-4 flex flex-col items-center justify-center text-center shadow-sm">
                      <h4 className="text-sm font-bold text-slate-800 mb-1">Gallery is Ready</h4>

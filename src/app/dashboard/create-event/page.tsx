@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { Plus, Camera, Loader2 } from 'lucide-react';
+import { Plus, Camera, Loader2, Image as ImageIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 
@@ -15,7 +15,19 @@ export default function CreateEventPage() {
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  
+  // Watermark States
   const [customWatermark, setCustomWatermark] = useState(false);
+  const [watermarkType, setWatermarkType] = useState('LOGO');
+  const [watermarkText, setWatermarkText] = useState('');
+  const [watermarkLogoUrl, setWatermarkLogoUrl] = useState<string | null>(null);
+  const [watermarkLogoName, setWatermarkLogoName] = useState<string | null>(null);
+  const [uploadingWatermark, setUploadingWatermark] = useState(false);
+  const [watermarkPosition, setWatermarkPosition] = useState('BOTTOM_RIGHT');
+  const [watermarkWidth, setWatermarkWidth] = useState(20);
+  const [watermarkHeight, setWatermarkHeight] = useState(20);
+  const [watermarkOpacity, setWatermarkOpacity] = useState(0.5);
+
   const [addToPortfolio, setAddToPortfolio] = useState(false);
   const router = useRouter();
   
@@ -104,7 +116,16 @@ export default function CreateEventPage() {
               type: eventType,
               coverImageUrl: coverImage,
               addToPortfolio,
-              watermark: { isActive: customWatermark, type: 'LOGO', position: 'BOTTOM_RIGHT', width: 20, height: 20, opacity: 0.5 }
+              watermark: {
+                isActive: customWatermark,
+                type: watermarkType,
+                text: watermarkText,
+                logoUrl: watermarkLogoUrl,
+                position: watermarkPosition,
+                width: watermarkWidth,
+                height: watermarkHeight,
+                opacity: watermarkOpacity,
+              }
             });
             router.push('/dashboard/events');
           } catch (error) {
@@ -209,7 +230,7 @@ export default function CreateEventPage() {
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    e.target.value = ''; // Allow selecting same file again
+                    e.target.value = ''; 
 
                     setImageName(file.name);
                     setUploadingImage(true);
@@ -252,19 +273,207 @@ export default function CreateEventPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between border-t border-slate-200 pt-6 mt-2 mb-2">
-            <div className="flex items-center gap-2">
-              <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-600 font-bold">W</span>
-              <span className="text-xs font-bold text-slate-700 uppercase">Custom Event Watermark</span>
+          <div className="border-t border-slate-200 pt-6 mt-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-600 font-bold">W</span>
+                <span className="text-xs font-bold text-slate-700 uppercase">Custom Event Watermark</span>
+              </div>
+              <div 
+                className="toggle-switch" 
+                data-active={customWatermark}
+                onClick={() => setCustomWatermark(!customWatermark)}
+              />
             </div>
-            <div 
-              className="toggle-switch" 
-              data-active={customWatermark}
-              onClick={() => setCustomWatermark(!customWatermark)}
-            />
+            
+            {customWatermark && (
+              <div className="bg-white border border-slate-200 rounded-xl p-4 md:p-6 space-y-6">
+                <div>
+                  <label className="form-label">Watermark Type</label>
+                  <select 
+                    className="form-input font-bold tracking-wide"
+                    value={watermarkType}
+                    onChange={(e) => setWatermarkType(e.target.value)}
+                  >
+                    <option value="LOGO">LOGO WATERMARK</option>
+                    <option value="TEXT">TEXT WATERMARK</option>
+                  </select>
+                </div>
+
+                {watermarkType === 'TEXT' ? (
+                  <div>
+                    <label className="form-label">Watermark Text</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      placeholder="e.g. Mara Photo"
+                      value={watermarkText}
+                      onChange={(e) => setWatermarkText(e.target.value)}
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="form-label">Watermark Logo Image</label>
+                    <div className="flex gap-4 items-center mt-1">
+                      <div className="w-[60px] h-[60px] rounded border border-dashed border-slate-300 flex items-center justify-center shrink-0 bg-slate-50">
+                          {uploadingWatermark ? <Loader2 className="h-5 w-5 animate-spin text-[#c5a880]" /> : (watermarkLogoUrl ? <img src={watermarkLogoUrl} className="max-w-[40px] max-h-[40px] object-contain" /> : <Camera className="h-5 w-5 text-slate-600" />)}
+                      </div>
+                      <div className="flex-1 flex flex-col">
+                        <label className="w-full text-center border border-slate-200 text-[#b69970] font-bold text-[13px] py-2 rounded-lg bg-white cursor-pointer hover:bg-slate-50 transition-colors shadow-sm">
+                            Choose File
+                            <input 
+                              type="file" 
+                              accept="image/png,image/jpeg" 
+                              className="hidden" 
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                e.target.value = ''; 
+    
+                                setWatermarkLogoName(file.name);
+                                setUploadingWatermark(true);
+    
+                                try {
+                                  const reader = new FileReader();
+                                  reader.onload = (e) => setWatermarkLogoUrl(e.target?.result as string);
+                                  reader.readAsDataURL(file);
+    
+                                  const formData = new FormData();
+                                  formData.append('file', file);
+                                  
+                                  const res = await apiClient.post('/media/upload-asset', formData, {
+                                    headers: {
+                                      'Content-Type': 'multipart/form-data',
+                                    }
+                                  });
+                                  
+                                  if (res.data && res.data.url) {
+                                    setWatermarkLogoUrl(res.data.url);
+                                  }
+                                } catch (err) {
+                                  console.error('Failed to upload logo', err);
+                                } finally {
+                                  setUploadingWatermark(false);
+                                }
+                              }} 
+                            />
+                        </label>
+                        <p className="text-[10px] text-slate-700 font-bold mt-2">PNG with transparent background recommended.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <style dangerouslySetInnerHTML={{__html: `
+                  .custom-slider {
+                    -webkit-appearance: none;
+                    height: 6px;
+                    border-radius: 3px;
+                    background: linear-gradient(to right, #c5a880 var(--val, 50%), #475569 var(--val, 50%));
+                    outline: none;
+                  }
+                  .custom-slider::-webkit-slider-thumb {
+                    -webkit-appearance: none;
+                    appearance: none;
+                    width: 14px;
+                    height: 14px;
+                    border-radius: 50%;
+                    background: #c5a880;
+                    cursor: pointer;
+                  }
+                `}} />
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="col-span-1">
+                    <label className="form-label">Watermark Position</label>
+                    <select 
+                      className="form-input font-bold tracking-wide mt-1"
+                      value={watermarkPosition}
+                      onChange={e => setWatermarkPosition(e.target.value)}
+                    >
+                      <option value="BOTTOM_RIGHT">BOTTOM RIGHT</option>
+                      <option value="BOTTOM_LEFT">BOTTOM LEFT</option>
+                      <option value="TOP_RIGHT">TOP RIGHT</option>
+                      <option value="TOP_LEFT">TOP LEFT</option>
+                      <option value="CENTER">CENTER</option>
+                    </select>
+                  </div>
+                  <div className="col-span-1 flex flex-col justify-center">
+                    <label className="form-label">Size ({watermarkWidth}%)</label>
+                    <input 
+                      type="range" 
+                      min="5" max="100" 
+                      className="w-full custom-slider mt-2"
+                      value={watermarkWidth}
+                      onChange={e => setWatermarkWidth(Number(e.target.value))}
+                      style={{'--val': `${watermarkWidth}%`} as any}
+                    />
+                  </div>
+                  <div className="col-span-1 flex flex-col justify-center">
+                    <label className="form-label">Opacity ({watermarkOpacity}%)</label>
+                    <input 
+                      type="range" 
+                      min="10" max="100" 
+                      className="w-full custom-slider mt-2"
+                      value={watermarkOpacity}
+                      onChange={e => setWatermarkOpacity(Number(e.target.value))}
+                      style={{'--val': `${watermarkOpacity}%`} as any}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-8 border border-slate-200 rounded-xl overflow-hidden bg-white">
+                    <div className="bg-[#e8ebf0] text-[#64748b] text-[11px] font-bold px-4 py-2.5">
+                      LIVE PREVIEW
+                    </div>
+                    <div className="relative w-full aspect-[3/2] bg-slate-200 flex items-center justify-center">
+                      <img src="/wedding.jpg" className="absolute inset-0 w-full h-full object-cover" alt="Preview Background" />
+                      {watermarkType === 'LOGO' && watermarkLogoUrl && (
+                          <img 
+                            src={watermarkLogoUrl} 
+                            className="absolute pointer-events-none object-contain"
+                            style={{
+                              opacity: watermarkOpacity / 100,
+                              width: `${watermarkWidth}%`,
+                              ...(() => {
+                                switch (watermarkPosition) {
+                                  case 'TOP_LEFT': return { top: '4%', left: '4%' };
+                                  case 'TOP_RIGHT': return { top: '4%', right: '4%' };
+                                  case 'BOTTOM_LEFT': return { bottom: '4%', left: '4%' };
+                                  case 'CENTER': return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
+                                  case 'BOTTOM_RIGHT': default: return { bottom: '4%', right: '4%' };
+                                }
+                              })()
+                            }}
+                          />
+                      )}
+                      {watermarkType === 'TEXT' && watermarkText && (
+                          <div 
+                            className="absolute pointer-events-none text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] font-bold whitespace-nowrap"
+                            style={{
+                              opacity: watermarkOpacity / 100,
+                              fontSize: `${watermarkWidth * 0.3}px`, 
+                              ...(() => {
+                                switch (watermarkPosition) {
+                                  case 'TOP_LEFT': return { top: '4%', left: '4%' };
+                                  case 'TOP_RIGHT': return { top: '4%', right: '4%' };
+                                  case 'BOTTOM_LEFT': return { bottom: '4%', left: '4%' };
+                                  case 'CENTER': return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
+                                  case 'BOTTOM_RIGHT': default: return { bottom: '4%', right: '4%' };
+                                }
+                              })()
+                            }}
+                          >
+                            {watermarkText}
+                          </div>
+                      )}
+                    </div>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center justify-between border-b border-slate-200 pb-6 mb-6">
+          <div className="flex items-center justify-between border-t border-slate-200 pt-6 pb-6 mb-6">
             <div className="flex items-center gap-2">
               <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-600 font-bold">P</span>
               <span className="text-xs font-bold text-slate-700 uppercase">Add to Portfolio</span>
