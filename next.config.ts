@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Optimize package imports for faster bundle
+  experimental: {
+    optimizePackageImports: ['lucide-react'],
+  },
   async rewrites() {
     return [
       {
@@ -18,3 +22,4 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
