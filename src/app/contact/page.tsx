@@ -134,7 +134,7 @@ export default function ContactPage() {
                       required
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="John Doe"
+                      
                       className="w-full bg-[#faf9f6] border border-[#e3d8c8]/30 rounded-xl px-4 py-3.5 text-sm text-[#09090b] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] font-semibold"
                     />
                   </div>
@@ -149,7 +149,7 @@ export default function ContactPage() {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="john@example.com"
+                      
                       className="w-full bg-[#faf9f6] border border-[#e3d8c8]/30 rounded-xl px-4 py-3.5 text-sm text-[#09090b] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] font-semibold"
                     />
                   </div>
@@ -181,7 +181,7 @@ export default function ContactPage() {
                       required
                       value={phone}
                       onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                      placeholder="98765 43210"
+                      
                       className="w-full bg-[#faf9f6] border border-[#e3d8c8]/30 rounded-xl px-4 py-3.5 text-sm text-[#09090b] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] font-semibold"
                     />
                   </div>
@@ -197,7 +197,7 @@ export default function ContactPage() {
                     rows={4}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Tell us more about your needs..."
+                    
                     className="w-full bg-[#faf9f6] border border-[#e3d8c8]/30 rounded-xl px-4 py-3.5 text-sm text-[#09090b] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] font-semibold resize-none"
                   />
                 </div>

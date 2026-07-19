@@ -39,17 +39,18 @@ export default function QuotationPage() {
       <div className="flex flex-col gap-6 font-poppins text-left">
             {quotationSubView === 'list' ? (
               <>
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                   <div>
                     <h1 className="text-2xl font-extrabold text-slate-900">Quotations Generated</h1>
                     <p className="text-xs text-slate-600 mt-1 font-semibold">Generate and track formal price estimations sent to prospective clients.</p>
                   </div>
-                  <button onClick={() => setQuotationSubView('add')} className="bg-[#c5a880] hover:bg-[#E05E00] text-slate-900 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md">
+                  <button onClick={() => setQuotationSubView('add')} className="bg-[#c5a880] hover:bg-[#E05E00] text-slate-900 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
                     <Plus className="h-4 w-4" /> New Quotation
                   </button>
                 </div>
-                <div className=" bg-white/30 border border-slate-200 rounded-2xl overflow-hidden shadow-md">
-                  <table className="w-full text-left border-collapse text-xs">
+                <div className="bg-white/30 border border-slate-200 rounded-2xl overflow-hidden shadow-md">
+                  <div className="overflow-x-auto w-full">
+                    <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
                     <thead>
                       <tr className="border-b border-slate-200 bg-white/[0.03] text-slate-350 uppercase tracking-wider font-black">
                         <th className="p-4">Quote ID</th>
@@ -75,6 +76,7 @@ export default function QuotationPage() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               </>
             ) : (
@@ -135,16 +137,16 @@ export default function QuotationPage() {
 
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Prospective Client</label>
-                    <input type="text" required value={newQuoteClient} onChange={(e) => setNewQuoteClient(e.target.value)} placeholder="Sharma Family Wedding" className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
+                    <input type="text" required value={newQuoteClient} onChange={(e) => setNewQuoteClient(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Scope of Work</label>
-                    <input type="text" required value={newQuoteScope} onChange={(e) => setNewQuoteScope(e.target.value)} placeholder="3 Day Photography + Cinematography" className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
+                    <input type="text" required value={newQuoteScope} onChange={(e) => setNewQuoteScope(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Estimated Amount (INR)</label>
-                      <input type="number" required value={newQuoteValue} onChange={(e) => setNewQuoteValue(e.target.value)} placeholder="275000" className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
+                      <input type="number" required value={newQuoteValue} onChange={(e) => setNewQuoteValue(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Status</label>

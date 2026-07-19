@@ -626,7 +626,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                         <input 
                           type="text" 
                           className="edit-input" 
-                          placeholder="e.g. Mara Photo"
+                          
                           value={formData.watermarkText}
                           onChange={e => setFormData({...formData, watermarkText: e.target.value})}
                         />

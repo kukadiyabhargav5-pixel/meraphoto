@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
-import { Camera, Upload, CheckCircle } from 'lucide-react';
+import { Camera, Upload, CheckCircle, Edit } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 
 export default function ProfilePage() {
@@ -21,6 +21,7 @@ export default function ProfilePage() {
   const [websiteLink, setWebsiteLink] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   // Sync with context
   useEffect(() => {
@@ -96,12 +97,24 @@ export default function ProfilePage() {
       setErrorMsg(err.message || 'Failed to save configuration');
     } finally {
       setLoading(false);
+      setIsEditing(false);
     }
   };
 
   return (
-    <div className="flex-grow bg-white text-black p-4 md:p-8 flex items-center justify-center min-h-[85vh] font-poppins">
-      <div className="w-full max-w-xl bg-slate-50 p-8 rounded-3xl border border-slate-200 shadow-md flex flex-col items-center gap-6">
+    <div className="flex-grow bg-white text-black p-4 md:p-8 flex flex-col min-h-[85vh] font-poppins relative">
+      {!isEditing && (
+        <div className="absolute top-4 right-4 md:top-8 md:right-8 z-10">
+          <button 
+            onClick={() => setIsEditing(true)}
+            className="bg-[#c5a880] hover:bg-[#b0936b] text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+          >
+            <Edit className="w-4 h-4" /> Edit Details
+          </button>
+        </div>
+      )}
+      <div className="flex-grow flex items-center justify-center">
+        <div className="w-full max-w-xl bg-slate-50 p-8 rounded-3xl border border-slate-200 shadow-md flex flex-col items-center gap-6 relative">
         
         {/* Profile Logo Preview at Top */}
         <div className="flex flex-col items-center gap-2">
@@ -137,9 +150,10 @@ export default function ProfilePage() {
             <input 
               type="text" 
               required 
+              disabled={!isEditing}
               value={name} 
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]" 
+              className="w-full bg-white disabled:bg-slate-50 disabled:text-slate-500 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]" 
             />
           </div>
 
@@ -149,10 +163,11 @@ export default function ProfilePage() {
             <input 
               type="tel" 
               required 
+              disabled={!isEditing}
               value={mobile} 
               onChange={(e) => setMobile(e.target.value)}
-              placeholder="e.g. +91 98765 43210"
-              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]" 
+              
+              className="w-full bg-white disabled:bg-slate-50 disabled:text-slate-500 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]" 
             />
           </div>
 
@@ -173,9 +188,10 @@ export default function ProfilePage() {
             <input 
               type="text" 
               required 
+              disabled={!isEditing}
               value={studioName} 
               onChange={(e) => setStudioName(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]" 
+              className="w-full bg-white disabled:bg-slate-50 disabled:text-slate-500 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]" 
             />
           </div>
 
@@ -186,10 +202,11 @@ export default function ProfilePage() {
             </label>
             <input 
               type="url" 
+              disabled={!isEditing}
               value={websiteLink} 
               onChange={(e) => setWebsiteLink(e.target.value)}
-              placeholder="e.g. https://www.yourstudio.com"
-              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]" 
+              
+              className="w-full bg-white disabled:bg-slate-50 disabled:text-slate-500 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]" 
             />
           </div>
 
@@ -198,29 +215,41 @@ export default function ProfilePage() {
             <label className="text-[11px] text-slate-450 font-bold uppercase tracking-wider flex items-center gap-1">
               Studio Logo <span className="text-[9px] text-slate-400 font-normal">(Optional)</span>
             </label>
-            <div className="relative border border-dashed border-slate-300 rounded-lg p-4 bg-white flex flex-col items-center justify-center cursor-pointer hover:border-[#c5a880] transition-colors">
-              <input 
-                type="file" 
-                accept="image/*"
-                onChange={handleLogoUpload}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
-              />
-              <Upload className="w-5 h-5 text-slate-400 mb-1" />
-              <span className="text-xs font-bold text-slate-600">
-                {logoUrl ? 'Change Logo' : 'Upload Logo'}
-              </span>
-              <span className="text-[9px] text-slate-400 mt-0.5">PNG, JPG, SVG up to 2MB</span>
+            <div className={`relative border border-dashed border-slate-300 rounded-lg p-4 flex flex-col items-center justify-center transition-colors ${!isEditing ? 'bg-slate-50 opacity-80 cursor-default' : 'bg-white cursor-pointer hover:border-[#c5a880]'}`}>
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo Preview" className="max-h-16 object-contain mb-3" />
+              ) : (
+                <Upload className="w-5 h-5 text-slate-400 mb-1" />
+              )}
+              {isEditing && (
+                <>
+                  <input 
+                    type="file" 
+                    accept="image/*"
+                    disabled={!isEditing}
+                    onChange={handleLogoUpload}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
+                  />
+                  <span className="text-xs font-bold text-slate-600 mt-1">
+                    {logoUrl ? 'Change Logo' : 'Upload Logo'}
+                  </span>
+                  <span className="text-[9px] text-slate-400 mt-0.5">PNG, JPG, SVG up to 2MB</span>
+                </>
+              )}
             </div>
           </div>
 
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="w-full bg-[#c5a880] hover:bg-[#b0936b] text-white font-bold py-3.5 rounded-lg text-xs transition-colors shadow-md mt-2 cursor-pointer flex items-center justify-center gap-2"
-          >
-            {loading ? 'Saving Configuration...' : 'Save Profile Configuration'}
-          </button>
+          {isEditing && (
+            <button 
+              type="submit" 
+              disabled={loading}
+              className="w-full bg-[#c5a880] hover:bg-[#b0936b] text-white font-bold py-3.5 rounded-lg text-xs transition-colors shadow-md mt-2 cursor-pointer flex items-center justify-center gap-2"
+            >
+              {loading ? 'Saving Configuration...' : 'Save Profile Configuration'}
+            </button>
+          )}
         </form>
+        </div>
       </div>
     </div>
   );

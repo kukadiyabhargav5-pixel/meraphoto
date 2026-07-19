@@ -409,7 +409,7 @@ export default function EventPhotosPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
+                
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-3.5 text-sm text-slate-800 focus:outline-none focus:border-[#FF6B00] focus:bg-white text-center tracking-wider"
               />
             </div>
@@ -767,7 +767,7 @@ export default function EventPhotosPage() {
                     required
                     value={downloadPassword}
                     onChange={(e) => setDownloadPassword(e.target.value)}
-                    placeholder="Enter password"
+                    
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#FF6B00] text-center"
                   />
                   <button type="submit" className="w-full bg-[#FF6B00] hover:bg-[#E05E00] text-white font-bold py-3.5 rounded-xl text-sm transition-all">
@@ -791,7 +791,7 @@ export default function EventPhotosPage() {
                     required
                     value={downloadMobile}
                     onChange={(e) => setDownloadMobile(e.target.value)}
-                    placeholder="Mobile Number (e.g. 9876543210)"
+                    
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#FF6B00] text-center"
                   />
                   <button type="submit" className="w-full bg-[#FF6B00] hover:bg-[#E05E00] text-white font-bold py-3.5 rounded-xl text-sm transition-all">
@@ -816,7 +816,7 @@ export default function EventPhotosPage() {
                     maxLength={4}
                     value={downloadOtp}
                     onChange={(e) => setDownloadOtp(e.target.value)}
-                    placeholder="1234"
+                    
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-lg font-bold tracking-[0.5em] focus:border-[#FF6B00] text-center"
                   />
                   <button type="submit" className="w-full bg-[#FF6B00] hover:bg-[#E05E00] text-white font-bold py-3.5 rounded-xl text-sm transition-all">

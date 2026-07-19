@@ -74,11 +74,11 @@ export default function SupportHelpPage() {
                   <form onSubmit={handleOpenTicket} className="flex flex-col gap-4">
                     <div className="flex flex-col gap-1">
                       <label className="text-[12px] text-slate-700 font-bold uppercase tracking-wider">Subject</label>
-                      <input type="text" required value={newTicketSubject} onChange={(e) => setNewTicketSubject(e.target.value)} placeholder="Cannot upload RAW files" className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]" />
+                      <input type="text" required value={newTicketSubject} onChange={(e) => setNewTicketSubject(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]" />
                     </div>
                     <div className="flex flex-col gap-1">
                       <label className="text-[12px] text-slate-700 font-bold uppercase tracking-wider">Message Description</label>
-                      <textarea required value={newTicketMessage} onChange={(e) => setNewTicketMessage(e.target.value)} placeholder="Explain the issue you are facing..." rows={4} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880] focus:bg-white/[0.04] resize-none" />
+                      <textarea required value={newTicketMessage} onChange={(e) => setNewTicketMessage(e.target.value)}  rows={4} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880] focus:bg-white/[0.04] resize-none" />
                     </div>
                     <button type="submit" className="w-full bg-[#c5a880] hover:bg-[#E05E00] text-slate-900 font-bold py-3 rounded-lg text-xs transition-colors">
                       Open Ticket
@@ -118,7 +118,7 @@ export default function SupportHelpPage() {
 
                     {selectedTicket.status !== 'RESOLVED' ? (
                       <form onSubmit={handleReplyTicket} className="p-4 border-t border-white/5 bg-slate-50 flex gap-3">
-                        <input type="text" required value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)} placeholder="Type your reply here..." className="flex-1 bg-white border border-slate-250 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[#c5a880]" />
+                        <input type="text" required value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)}  className="flex-1 bg-white border border-slate-250 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[#c5a880]" />
                         <button type="submit" className="bg-[#c5a880] hover:bg-[#E05E00] text-slate-900 p-2.5 rounded-lg transition-colors">
                           <Send className="h-4.5 w-4.5" />
                         </button>

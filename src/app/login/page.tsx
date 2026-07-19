@@ -366,7 +366,7 @@ export default function LoginPage() {
                   required
                   value={loginEmail}
                   onChange={(e) => setLoginEmail(e.target.value)}
-                  placeholder="you@yourstudio.com"
+                  
                   className="login-input"
                   autoComplete="email"
                 />
@@ -383,7 +383,7 @@ export default function LoginPage() {
                   required
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="Enter your password"
+                  
                   className="login-input"
                   style={{ paddingRight: '48px' }}
                   autoComplete="current-password"

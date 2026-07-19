@@ -165,7 +165,7 @@ export default function StudioBrandingPage() {
 
               <div className="flex flex-col gap-1">
                 <label className="text-[12px] text-slate-700 font-bold uppercase tracking-wider">Custom Domain (requires Enterprise Plan)</label>
-                <input type="text" disabled={studio.subscriptionPlan !== 'ENTERPRISE'} value={studioCustomDomain} onChange={(e) => setStudioCustomDomain(e.target.value)} placeholder="gallery.yourdomain.com" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880] focus:bg-white/[0.04] disabled:opacity-50" />
+                <input type="text" disabled={studio.subscriptionPlan !== 'ENTERPRISE'} value={studioCustomDomain} onChange={(e) => setStudioCustomDomain(e.target.value)}  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880] focus:bg-white/[0.04] disabled:opacity-50" />
               </div>
 
               <button type="submit" disabled={isSaving} className="w-full mt-4 bg-[#c5a880] hover:bg-[#b59a72] text-slate-900 font-bold py-3.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50">

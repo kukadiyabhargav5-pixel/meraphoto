@@ -446,7 +446,7 @@ export default function SignupPage() {
             <div className="signup-input-group">
               <label className="signup-label">Full Name <span style={{ color: '#dc2626' }}>*</span></label>
               <div className="signup-input-wrap">
-                <input id="signup-name" type="text" required value={regName} onChange={(e) => setRegName(e.target.value)} placeholder="Yashvi Changela" className="signup-input" autoComplete="name" />
+                <input id="signup-name" type="text" required value={regName} onChange={(e) => setRegName(e.target.value)}  className="signup-input" autoComplete="name" />
                 <UserIcon className="signup-input-icon" style={{ width: 16, height: 16 }} />
               </div>
             </div>
@@ -460,7 +460,7 @@ export default function SignupPage() {
                   required
                   value={regEmail}
                   onChange={(e) => setRegEmail(e.target.value)}
-                  placeholder="you@yourstudio.com"
+                  
                   className={`signup-input ${emailExists ? 'input-error' : regEmail && !emailChecking && !emailExists && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail) ? 'input-success' : ''}`}
                   autoComplete="email"
                 />
@@ -482,7 +482,7 @@ export default function SignupPage() {
             <div className="signup-input-group">
               <label className="signup-label">Mobile Number <span style={{ color: '#dc2626' }}>*</span></label>
               <div className="signup-input-wrap">
-                <input id="signup-phone" type="tel" required value={regPhone} onChange={(e) => setRegPhone(e.target.value)} placeholder="9876543210" className="signup-input" autoComplete="tel" />
+                <input id="signup-phone" type="tel" required value={regPhone} onChange={(e) => setRegPhone(e.target.value)}  className="signup-input" autoComplete="tel" />
                 <Phone className="signup-input-icon" style={{ width: 16, height: 16 }} />
               </div>
             </div>
@@ -490,7 +490,7 @@ export default function SignupPage() {
             <div className="signup-input-group">
               <label className="signup-label">Studio Name <span style={{ color: '#dc2626' }}>*</span></label>
               <div className="signup-input-wrap">
-                <input id="signup-studio" type="text" required value={regStudioName} onChange={(e) => setRegStudioName(e.target.value)} placeholder="Mara Photo Studio" className="signup-input" />
+                <input id="signup-studio" type="text" required value={regStudioName} onChange={(e) => setRegStudioName(e.target.value)}  className="signup-input" />
                 <Store className="signup-input-icon" style={{ width: 16, height: 16 }} />
               </div>
             </div>
@@ -503,7 +503,7 @@ export default function SignupPage() {
             <div className="signup-input-group">
               <label className="signup-label">Studio Website Link</label>
               <div className="signup-input-wrap">
-                <input type="url" value={regWebsite} onChange={(e) => setRegWebsite(e.target.value)} placeholder="https://yourstudio.com" className="signup-input" style={{ paddingLeft: '16px' }} />
+                <input type="url" value={regWebsite} onChange={(e) => setRegWebsite(e.target.value)}  className="signup-input" style={{ paddingLeft: '16px' }} />
               </div>
             </div>
 
@@ -536,7 +536,7 @@ export default function SignupPage() {
                   required
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
-                  placeholder="Capital + small + number + special"
+                  
                   className="signup-input"
                   style={{ paddingRight: '48px' }}
                   autoComplete="new-password"
@@ -569,7 +569,7 @@ export default function SignupPage() {
                   required
                   value={regConfirmPassword}
                   onChange={(e) => setRegConfirmPassword(e.target.value)}
-                  placeholder="Re-enter your password"
+                  
                   className={`signup-input ${regConfirmPassword ? (passwordsMatch ? 'input-success' : 'input-error') : ''}`}
                   style={{ paddingRight: '48px' }}
                   autoComplete="new-password"

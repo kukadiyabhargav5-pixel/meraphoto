@@ -3,8 +3,10 @@ import React, { useState } from 'react';
 import { Plus, Camera, Loader2, Image as ImageIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
+import { useDashboard } from '../DashboardContext';
 
 export default function CreateEventPage() {
+  const context = useDashboard();
   const [eventName, setEventName] = useState('');
   const [clientName, setClientName] = useState('');
   const [clientMobile, setClientMobile] = useState('');
@@ -26,7 +28,7 @@ export default function CreateEventPage() {
   const [watermarkPosition, setWatermarkPosition] = useState('BOTTOM_RIGHT');
   const [watermarkWidth, setWatermarkWidth] = useState(20);
   const [watermarkHeight, setWatermarkHeight] = useState(20);
-  const [watermarkOpacity, setWatermarkOpacity] = useState(0.5);
+  const [watermarkOpacity, setWatermarkOpacity] = useState(50);
 
   const [addToPortfolio, setAddToPortfolio] = useState(false);
   const router = useRouter();
@@ -124,13 +126,27 @@ export default function CreateEventPage() {
                 position: watermarkPosition,
                 width: watermarkWidth,
                 height: watermarkHeight,
-                opacity: watermarkOpacity,
+                opacity: watermarkOpacity / 100,
               }
             });
+            
+            if (context && context.customers) {
+              const existingCust = context.customers.find((c: any) => c.phone === clientMobile || c.email === clientEmail);
+              if (!existingCust) {
+                context.setCustomers([{
+                  name: clientName,
+                  email: clientEmail,
+                  phone: clientMobile,
+                  events: 1,
+                  status: 'Active'
+                }, ...context.customers]);
+              }
+            }
+
             router.push('/dashboard/events');
-          } catch (error) {
+          } catch (error: any) {
             console.error('Failed to create event', error);
-            alert('Failed to create event. Please try again.');
+            alert(error.response?.data?.error || 'Failed to create event. Please try again.');
           } finally {
             setLoading(false);
           }
@@ -140,9 +156,10 @@ export default function CreateEventPage() {
             <input 
               type="text" 
               className="form-input" 
-              placeholder="e.g. Sharma Wedding" 
+               
               value={eventName}
               onChange={(e) => setEventName(e.target.value)}
+              required
             />
           </div>
           
@@ -152,9 +169,10 @@ export default function CreateEventPage() {
               <input 
                 type="text" 
                 className="form-input" 
-                placeholder="Aarav Sharma"
+                
                 value={clientName}
                 onChange={(e) => setClientName(e.target.value)}
+                required
               />
             </div>
             <div>
@@ -162,9 +180,10 @@ export default function CreateEventPage() {
               <input 
                 type="text" 
                 className="form-input" 
-                placeholder="9876543210"
+                
                 value={clientMobile}
                 onChange={(e) => setClientMobile(e.target.value)}
+                required
               />
             </div>
           </div>
@@ -174,9 +193,10 @@ export default function CreateEventPage() {
             <input 
               type="email" 
               className="form-input" 
-              placeholder="client@wedding.com"
+              
               value={clientEmail}
               onChange={(e) => setClientEmail(e.target.value)}
+              required
             />
           </div>
 
@@ -189,6 +209,7 @@ export default function CreateEventPage() {
                 style={{ colorScheme: 'light' }}
                 value={eventDate}
                 onChange={(e) => setEventDate(e.target.value)}
+                required
               />
             </div>
             <div>
@@ -306,7 +327,7 @@ export default function CreateEventPage() {
                     <input 
                       type="text" 
                       className="form-input" 
-                      placeholder="e.g. Mara Photo"
+                      
                       value={watermarkText}
                       onChange={(e) => setWatermarkText(e.target.value)}
                     />
