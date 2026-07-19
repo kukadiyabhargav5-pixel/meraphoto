@@ -13,7 +13,6 @@ const featuresItems = [
   { label: 'Invoice Generator',            href: '/features/invoice-generator',            icon: FileText },
   { label: 'Photographer Portfolio',       href: '/features/photographer-portfolio',       icon: Globe },
   { label: 'Event QR Code Gallery',        href: '/features/event-qr-code-gallery',       icon: QrCode },
-  { label: 'Event Booking',                href: '/features/event-booking',                icon: Clock },
   { label: 'Event Face Recognition',       href: '/features/event-face-recognition',      icon: ScanFace },
   { label: 'Wedding Website Template',     href: '/features/wedding-website-template',    icon: Heart },
 ];
@@ -92,6 +91,143 @@ export default function Header() {
 
   return (
     <header className="bg-[#faf9f6]/95 backdrop-blur-md border-b border-[#e3d8c8]/30 fixed top-0 left-0 right-0 z-50 w-full transition-all duration-300">
+      {/* Internal CSS for button hover effects */}
+      <style dangerouslySetInnerHTML={{__html: `
+        .nav-btn-login {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 10px 24px;
+          font-size: 13px;
+          font-weight: 700;
+          color: #09090b;
+          background: transparent;
+          border: 1.5px solid #e3d8c8;
+          border-radius: 9999px;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          cursor: pointer;
+          text-decoration: none;
+        }
+        .nav-btn-login:hover {
+          background: #09090b;
+          color: #fff;
+          border-color: #09090b;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(9,9,11,0.15);
+        }
+        .nav-btn-register {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 10px 24px;
+          font-size: 13px;
+          font-weight: 700;
+          color: #09090b;
+          background: #c5a880;
+          border: 1.5px solid #c5a880;
+          border-radius: 9999px;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          cursor: pointer;
+          text-decoration: none;
+        }
+        .nav-btn-register:hover {
+          background: #09090b;
+          color: #c5a880;
+          border-color: #09090b;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 16px rgba(197,168,128,0.3);
+        }
+        .nav-btn-dashboard {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 10px 24px;
+          font-size: 13px;
+          font-weight: 700;
+          color: #09090b;
+          background: transparent;
+          border: 1.5px solid #e3d8c8;
+          border-radius: 9999px;
+          letter-spacing: 0.05em;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          cursor: pointer;
+          text-decoration: none;
+        }
+        .nav-btn-dashboard:hover {
+          background: #c5a880;
+          border-color: #c5a880;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(197,168,128,0.2);
+        }
+        .nav-btn-signout {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 10px 24px;
+          font-size: 13px;
+          font-weight: 700;
+          color: #fff;
+          background: #09090b;
+          border: 1.5px solid #09090b;
+          border-radius: 9999px;
+          letter-spacing: 0.05em;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          cursor: pointer;
+        }
+        .nav-btn-signout:hover {
+          background: #dc2626;
+          border-color: #dc2626;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(220,38,38,0.25);
+        }
+        .mobile-btn-login {
+          display: block;
+          width: 100%;
+          text-align: center;
+          padding: 14px;
+          font-size: 14px;
+          font-weight: 700;
+          color: #09090b;
+          background: transparent;
+          border: 1.5px solid #e3d8c8;
+          border-radius: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          transition: all 0.3s ease;
+          text-decoration: none;
+        }
+        .mobile-btn-login:hover {
+          background: #09090b;
+          color: #fff;
+          border-color: #09090b;
+        }
+        .mobile-btn-register {
+          display: block;
+          width: 100%;
+          text-align: center;
+          padding: 14px;
+          font-size: 14px;
+          font-weight: 700;
+          color: #09090b;
+          background: #c5a880;
+          border: 1.5px solid #c5a880;
+          border-radius: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          transition: all 0.3s ease;
+          text-decoration: none;
+        }
+        .mobile-btn-register:hover {
+          background: #09090b;
+          color: #c5a880;
+          border-color: #09090b;
+        }
+      `}} />
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
 
@@ -128,37 +264,31 @@ export default function Header() {
             <Link href="/blog"    className="text-[15px] font-medium text-[#09090b] hover:text-[#c5a880] transition-colors">Blog</Link>
             <Link href="/about"   className="text-[15px] font-medium text-[#09090b] hover:text-[#c5a880] transition-colors">About Us</Link>
             <Link href="/#contact" className="text-[15px] font-medium text-[#09090b] hover:text-[#c5a880] transition-colors">Contact</Link>
-          </nav>          {/* Desktop CTA */}
-          <div className="hidden lg:flex items-center gap-6 font-poppins">
+          </nav>
+
+          {/* Desktop CTA — 2 Separate Buttons */}
+          <div className="hidden lg:flex items-center gap-3 font-poppins">
             {user ? (
               <>
-                <Link
-                  href="/dashboard"
-                  className="text-[15px] font-bold text-[#09090b] hover:text-[#c5a880] transition-colors"
-                >
+                <Link href="/dashboard" className="nav-btn-dashboard">
                   Dashboard
                 </Link>
-                <button
-                  onClick={handleSignOut}
-                  className="text-[15px] font-medium text-white bg-slate-900 hover:bg-[#c5a880] px-5 py-2.5 rounded-full hover:scale-105 active:scale-95 transition-all duration-300 border border-[#e3d8c8]/30 shadow-sm cursor-pointer"
-                >
-                  Sign Out ({user?.name ? user.name.split(' ')[0] : 'User'})
+                <button onClick={handleSignOut} className="nav-btn-signout">
+                  Sign Out
                 </button>
               </>
             ) : (
               <>
-                <Link href="/login" className="text-[15px] font-medium text-[#09090b] hover:text-[#c5a880] transition-all duration-300">
+                <Link href="/login" className="nav-btn-login">
                   Login
                 </Link>
-                <Link
-                  href="/signup"
-                  className="text-[15px] font-medium text-white bg-[#09090b] hover:bg-[#c5a880] px-5 py-2.5 rounded-full hover:scale-105 active:scale-95 transition-all duration-300 border border-[#e3d8c8]/30 shadow-sm"
-                >
-                  Get Started
+                <Link href="/signup" className="nav-btn-register">
+                  Register
                 </Link>
               </>
             )}
           </div>
+
           {/* Mobile Hamburger */}
           <div className="flex items-center lg:hidden">
             <button
@@ -234,30 +364,24 @@ export default function Header() {
             <Link href="/blog"    onClick={() => setMobileOpen(false)} className="flex px-4 py-3 text-[15px] font-medium text-[#09090b] rounded-xl hover:bg-slate-50 transition-all font-poppins">Blog</Link>
             <Link href="/about"   onClick={() => setMobileOpen(false)} className="flex px-4 py-3 text-[15px] font-medium text-[#09090b] rounded-xl hover:bg-slate-50 transition-all font-poppins">About Us</Link>
             <Link href="/#contact" onClick={() => setMobileOpen(false)} className="flex px-4 py-3 text-[15px] font-medium text-[#09090b] rounded-xl hover:bg-slate-50 transition-all font-poppins">Contact</Link>
+
             <div className="pt-3 border-t border-gray-100 flex flex-col gap-3 font-poppins">
               {user ? (
                 <>
-                  <Link
-                    href="/dashboard"
-                    onClick={() => setMobileOpen(false)}
-                    className="w-full text-center py-3 text-[#09090b] font-bold border border-gray-200 rounded-xl hover:bg-slate-50 transition-all"
-                  >
+                  <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="mobile-btn-login">
                     Go to Dashboard
                   </Link>
                   <button
-                    onClick={() => {
-                      setMobileOpen(false);
-                      handleSignOut();
-                    }}
-                    className="w-full text-center py-3 bg-slate-900 text-white rounded-xl font-medium shadow-md hover:bg-[#c5a880] transition-all cursor-pointer"
+                    onClick={() => { setMobileOpen(false); handleSignOut(); }}
+                    className="mobile-btn-register"
                   >
-                    Sign Out ({user?.name ? user.name.split(' ')[0] : 'User'})
+                    Sign Out
                   </button>
                 </>
               ) : (
                 <>
-                  <Link href="/login"  onClick={() => setMobileOpen(false)} className="w-full text-center py-3 text-[#09090b] font-medium border border-gray-200 rounded-xl hover:bg-slate-50 transition-all font-poppins">Login</Link>
-                  <Link href="/signup" onClick={() => setMobileOpen(false)} className="w-full text-center py-3 bg-[#09090b] text-white rounded-xl font-medium shadow-md hover:bg-[#c5a880] transition-all font-poppins">Get Started</Link>
+                  <Link href="/login" onClick={() => setMobileOpen(false)} className="mobile-btn-login">Login</Link>
+                  <Link href="/signup" onClick={() => setMobileOpen(false)} className="mobile-btn-register">Register</Link>
                 </>
               )}
             </div>
