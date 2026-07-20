@@ -56,7 +56,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
     setUploadProgress({ current: 0, total: files.length });
     
     try {
-      const chunkSize = 10;
+      const chunkSize = 1;
       let uploadedCount = 0;
       let successful = 0;
       let failed = 0;
