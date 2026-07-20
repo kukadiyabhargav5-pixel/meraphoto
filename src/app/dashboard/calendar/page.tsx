@@ -3,10 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
 import { apiClient } from '@/lib/api';
 import toast from 'react-hot-toast';
-import {
-  ChevronLeft, ChevronRight, Plus, X, Camera, Video, Clock,
-  MapPin, Loader, Calendar as CalendarIcon, Trash2
-} from 'lucide-react';
+import { Plus, X, Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRight, Edit2, Trash2, Camera, Video } from 'lucide-react';
+import CustomDatePicker from '../../../components/CustomDatePicker';
 
 const EVENT_TYPES = [
   'Wedding', 'Pre-Wedding', 'Reception', 'Engagement', 'Birthday',
@@ -217,7 +215,7 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white text-black p-4 md:p-8">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8">
       <style dangerouslySetInnerHTML={{ __html: `
         .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
         .cal-cell {
@@ -333,7 +331,7 @@ export default function CalendarPage() {
           <div className="flex-1">
             <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
               {/* Month Header */}
-              <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-[#f8f7f4] text-slate-900/50">
                 <div className="flex items-center gap-3">
                   <CalendarIcon className="h-5 w-5 text-[#c5a880]" />
                   <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">
@@ -343,7 +341,7 @@ export default function CalendarPage() {
                 <div className="flex items-center gap-1">
                   <button
                     onClick={goToPrevMonth}
-                    className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
+                    className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </button>
@@ -355,7 +353,7 @@ export default function CalendarPage() {
                   </button>
                   <button
                     onClick={goToNextMonth}
-                    className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
+                    className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
                   >
                     <ChevronRight className="h-5 w-5" />
                   </button>
@@ -368,7 +366,7 @@ export default function CalendarPage() {
                   {/* Day Names Header */}
                   <div className="cal-grid border-b border-slate-100">
                     {DAY_NAMES.map(d => (
-                      <div key={d} className="text-center py-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest bg-slate-50/30">
+                      <div key={d} className="text-center py-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest bg-[#f8f7f4] text-slate-900/30">
                         {d}
                       </div>
                     ))}
@@ -406,7 +404,7 @@ export default function CalendarPage() {
             {showForm && selectedDate ? (
               <div className="form-panel bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
                 {/* Form Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-[#f8f7f4] text-slate-900/50">
                   <div className="flex flex-col gap-2">
                     <h3 className="text-sm font-extrabold text-slate-900">
                       {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -415,14 +413,14 @@ export default function CalendarPage() {
                       <button 
                         type="button" 
                         onClick={() => setWorkType('Event')}
-                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${workType === 'Event' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${workType === 'Event' ? 'bg-[#f8f7f4] text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-600'}`}
                       >
                         Event Shoot
                       </button>
                       <button 
                         type="button" 
                         onClick={() => setWorkType('Other')}
-                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${workType === 'Other' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${workType === 'Other' ? 'bg-[#f8f7f4] text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-600'}`}
                       >
                         Other Work
                       </button>
@@ -431,7 +429,7 @@ export default function CalendarPage() {
                   <button
                     type="button"
                     onClick={() => { setShowForm(false); setSelectedDate(null); }}
-                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors self-start"
+                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors self-start"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -449,10 +447,10 @@ export default function CalendarPage() {
                         <label className="form-label">
                           <Clock className="inline h-3 w-3 mr-1 -mt-0.5" /> Time
                         </label>
-                        <input type="time" className="form-input" value={formData.time} onChange={e => setFormData({ ...formData, time: e.target.value })} required />
+                        <CustomDatePicker type="time" className="form-input" value={formData.time} onChange={val => setFormData({ ...formData, time: val })} required />
                       </div>
-                      <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50">
-                        <label className="form-label mb-3 text-slate-700">Assigned To</label>
+                      <div className="border border-slate-100 rounded-xl p-4 bg-[#f8f7f4] text-slate-900/50">
+                        <label className="form-label mb-3 text-slate-600">Assigned To</label>
                         <div className="flex flex-col gap-2">
                            {formData.photographersNames.map((name, idx) => (
                               <div key={`o-${idx}`} className="flex items-center justify-between bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm text-slate-800 font-medium shadow-sm">
@@ -461,7 +459,7 @@ export default function CalendarPage() {
                               </div>
                            ))}
                            <select 
-                             className="form-input text-sm text-slate-600 bg-white" 
+                             className="form-input text-sm text-slate-400 bg-white" 
                              value=""
                              onChange={(e) => {
                                 if(e.target.value && !formData.photographersNames.includes(e.target.value)) {
@@ -495,7 +493,7 @@ export default function CalendarPage() {
                         <label className="form-label">
                           <Clock className="inline h-3 w-3 mr-1 -mt-0.5" /> Shoot Time
                         </label>
-                        <input type="time" className="form-input" value={formData.time} onChange={e => setFormData({ ...formData, time: e.target.value })} required />
+                        <CustomDatePicker type="time" className="form-input" value={formData.time} onChange={val => setFormData({ ...formData, time: val })} required />
                       </div>
 
                       {/* Event Name */}
@@ -515,7 +513,7 @@ export default function CalendarPage() {
                       </div>
 
                       {/* Photographers */}
-                      <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50">
+                      <div className="border border-slate-100 rounded-xl p-4 bg-[#f8f7f4] text-slate-900/50">
                         <label className="form-label mb-3 flex items-center gap-1.5">
                           <Camera className="h-3.5 w-3.5 text-[#c5a880]" /> Photographers
                         </label>
@@ -527,7 +525,7 @@ export default function CalendarPage() {
                               </div>
                            ))}
                            <select 
-                             className="form-input text-sm text-slate-600 bg-white" 
+                             className="form-input text-sm text-slate-400 bg-white" 
                              value=""
                              onChange={(e) => {
                                 if(e.target.value && !formData.photographersNames.includes(e.target.value)) {
@@ -545,7 +543,7 @@ export default function CalendarPage() {
                       </div>
 
                       {/* Videographers */}
-                      <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50">
+                      <div className="border border-slate-100 rounded-xl p-4 bg-[#f8f7f4] text-slate-900/50">
                         <label className="form-label mb-3 flex items-center gap-1.5">
                           <Video className="h-3.5 w-3.5 text-[#c5a880]" /> Videographers
                         </label>
@@ -557,7 +555,7 @@ export default function CalendarPage() {
                               </div>
                            ))}
                            <select 
-                             className="form-input text-sm text-slate-600 bg-white" 
+                             className="form-input text-sm text-slate-400 bg-white" 
                              value=""
                              onChange={(e) => {
                                 if(e.target.value && !formData.videographersNames.includes(e.target.value)) {
@@ -610,9 +608,9 @@ export default function CalendarPage() {
                   </h3>
                   {upcomingShoots.length === 0 ? (
                     <div className="text-center py-8">
-                      <CalendarIcon className="h-8 w-8 text-slate-200 mx-auto mb-3" />
+                      <CalendarIcon className="h-8 w-8 text-slate-700 mx-auto mb-3" />
                       <p className="text-xs text-slate-400 font-semibold">No upcoming shoots scheduled</p>
-                      <p className="text-[10px] text-slate-300 mt-1">Click on a date to add a new shoot</p>
+                      <p className="text-[10px] text-slate-600 mt-1">Click on a date to add a new shoot</p>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -631,7 +629,7 @@ export default function CalendarPage() {
                                   <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">{shoot.eventType}</span>
                                   
                                   {shoot.photographersNames?.map((name: string, i: number) => (
-                                    <span key={`p-${i}`} className={`text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 border ${shoot.eventType === 'Other Work' ? 'text-slate-600 bg-slate-50 border-slate-200' : 'text-[#c5a880] bg-[#c5a880]/10 border-[#c5a880]/20'}`}>
+                                    <span key={`p-${i}`} className={`text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 border ${shoot.eventType === 'Other Work' ? 'text-slate-400 bg-[#f8f7f4] text-slate-900 border-slate-200' : 'text-[#c5a880] bg-[#c5a880]/10 border-[#c5a880]/20'}`}>
                                       {shoot.eventType !== 'Other Work' && <Camera className="h-2.5 w-2.5" />} {name}
                                     </span>
                                   ))}
@@ -645,7 +643,7 @@ export default function CalendarPage() {
                               </div>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleDeleteShoot(shoot._id); }}
-                                className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 text-slate-300 hover:text-red-500 transition-all"
+                                className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 text-slate-600 hover:text-red-500 transition-all"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -684,7 +682,7 @@ export default function CalendarPage() {
       {viewingShoot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
-            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-[#f8f7f4] text-slate-900/50">
               <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Shoot Details</h2>
               <button onClick={() => setViewingShoot(null)} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors">
                 <X className="h-5 w-5" />
@@ -693,7 +691,7 @@ export default function CalendarPage() {
             <div className="p-6 space-y-5">
               <div>
                 <h3 className="text-xl font-bold text-slate-900 mb-1">{viewingShoot.eventName}</h3>
-                <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600 font-medium">
+                <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400 font-medium">
                   <span>{new Date(viewingShoot.date).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
                   <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {viewingShoot.time || '09:00'}</span>
@@ -701,7 +699,7 @@ export default function CalendarPage() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <span className="px-3 py-1 bg-slate-100 text-slate-700 text-xs font-bold rounded-lg border border-slate-200">{viewingShoot.eventType}</span>
+                <span className="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg border border-slate-200">{viewingShoot.eventType}</span>
                 {viewingShoot.location && (
                   <span className="px-3 py-1 bg-[#c5a880]/10 text-[#c5a880] text-xs font-bold rounded-lg border border-[#c5a880]/20 flex items-center gap-1">
                     <MapPin className="h-3.5 w-3.5" /> {viewingShoot.location}
@@ -714,7 +712,7 @@ export default function CalendarPage() {
                   <h4 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">Assigned Team</h4>
                   <div className="flex flex-col gap-2">
                     {viewingShoot.photographersNames?.map((name: string, idx: number) => (
-                      <div key={`p-${idx}`} className={`flex items-center gap-2 p-2 rounded-lg border ${viewingShoot.eventType === 'Other Work' ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-[#c5a880]/5 border-[#c5a880]/20 text-[#c5a880]'}`}>
+                      <div key={`p-${idx}`} className={`flex items-center gap-2 p-2 rounded-lg border ${viewingShoot.eventType === 'Other Work' ? 'bg-[#f8f7f4] text-slate-900 border-slate-200 text-slate-600' : 'bg-[#c5a880]/5 border-[#c5a880]/20 text-[#c5a880]'}`}>
                         {viewingShoot.eventType !== 'Other Work' ? <Camera className="h-4 w-4" /> : <div className="h-4 w-4" />}
                         <span className="text-sm font-bold">{name}</span>
                       </div>
@@ -732,16 +730,16 @@ export default function CalendarPage() {
               {viewingShoot.notes && (
                 <div className="pt-3 border-t border-slate-100">
                   <h4 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Notes</h4>
-                  <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100 whitespace-pre-wrap leading-relaxed">
+                  <p className="text-sm text-slate-400 bg-[#f8f7f4] text-slate-900 p-3 rounded-xl border border-slate-100 whitespace-pre-wrap leading-relaxed">
                     {viewingShoot.notes}
                   </p>
                 </div>
               )}
             </div>
-            <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end">
+            <div className="p-6 border-t border-slate-100 bg-[#f8f7f4] text-slate-900/50 flex justify-end">
               <button 
                 onClick={() => setViewingShoot(null)} 
-                className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors"
+                className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-900 rounded-xl text-sm font-bold shadow-md transition-colors"
               >
                 Close Details
               </button>

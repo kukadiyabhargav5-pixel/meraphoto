@@ -130,14 +130,14 @@ export default function CustomersPage() {
   );
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white text-black p-4 md:p-8">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8">
       <div className="flex flex-col gap-6 font-poppins text-left">
             {customerSubView === 'list' ? (
               <>
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                   <div>
                     <h1 className="text-2xl font-extrabold text-slate-900">Customers Directory</h1>
-                    <p className="text-xs text-slate-600 mt-1 font-semibold">Manage your client relationships, contact details, and bookings.</p>
+                    <p className="text-xs text-slate-400 mt-1 font-semibold">Manage your client relationships, contact details, and bookings.</p>
                   </div>
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
                     <div className="relative w-full sm:w-auto">
@@ -152,7 +152,7 @@ export default function CustomersPage() {
                       {searchQuery && (
                         <button 
                           onClick={() => setSearchQuery('')}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-400 focus:outline-none cursor-pointer"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -175,15 +175,15 @@ export default function CustomersPage() {
                         <th className="p-4 text-center">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5 text-slate-200">
+                    <tbody className="divide-y divide-slate-200 text-slate-700">
                       {filteredCustomers.map((cust: any, i: number) => (
                         <tr key={i} className="hover:bg-white/[0.01] transition-colors">
                           <td className="p-4 text-center font-bold text-slate-900">{cust.name}</td>
-                          <td className="p-4 text-center text-slate-700 font-semibold">{cust.email}</td>
-                          <td className="p-4 text-center font-mono font-semibold text-slate-700">{cust.phone}</td>
+                          <td className="p-4 text-center text-slate-600 font-semibold">{cust.email}</td>
+                          <td className="p-4 text-center font-mono font-semibold text-slate-600">{cust.phone}</td>
                           <td className="p-4 text-center font-bold text-[#c5a880]">{cust.eventName}</td>
                           <td className="p-4 text-center flex justify-center gap-2">
-                            <button onClick={() => handleEdit(cust)} className="p-1.5 bg-slate-100 text-slate-600 hover:text-[#c5a880] hover:bg-white rounded-lg transition-colors border border-slate-200 shadow-sm">
+                            <button onClick={() => handleEdit(cust)} className="p-1.5 bg-slate-100 text-slate-400 hover:text-[#c5a880] hover:bg-white rounded-lg transition-colors border border-slate-200 shadow-sm">
                               <Edit className="w-4 h-4" />
                             </button>
                             <button onClick={() => handleDelete(cust)} className="p-1.5 bg-rose-50 text-rose-500 hover:text-rose-600 hover:bg-white rounded-lg transition-colors border border-rose-200 shadow-sm">
@@ -206,7 +206,7 @@ export default function CustomersPage() {
               </>
             ) : (
               <div className="w-full relative">
-                <button onClick={resetForm} className="absolute top-0 left-0 inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-white hover:text-white text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer z-10">
+                <button onClick={resetForm} className="absolute top-0 left-0 inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-slate-900 hover:text-slate-700 text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer z-10">
                   <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
                   <span>Back to Customers</span>
                 </button>
@@ -248,17 +248,17 @@ export default function CustomersPage() {
                       setErrorMsg(customerSubView === 'edit' ? 'Failed to update record' : 'Failed to add customer');
                     }
                   }
-                }} className=" bg-slate-50 border border-slate-200 p-8 rounded-2xl flex flex-col gap-4 text-left shadow-sm">
+                }} className=" bg-[#f8f7f4] text-slate-900 border border-slate-200 p-8 rounded-2xl flex flex-col gap-4 text-left shadow-sm">
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Full Name</label>
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Full Name</label>
                     <input type="text" required value={newCustName} onChange={(e) => setNewCustName(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Email Address</label>
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Email Address</label>
                     <input type="email" value={newCustEmail} onChange={(e) => setNewCustEmail(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Mobile Phone</label>
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Mobile Phone</label>
                     <input type="tel" value={newCustPhone} onChange={(e) => setNewCustPhone(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
                   </div>
                   <button type="submit" className="w-full bg-[#c5a880] hover:bg-white text-[#09090b] font-bold py-3.5 rounded-lg text-xs mt-3 cursor-pointer transition-colors shadow-md">

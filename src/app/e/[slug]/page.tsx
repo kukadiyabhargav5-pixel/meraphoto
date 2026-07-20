@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import confetti from 'canvas-confetti';
-import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Users, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy, ZoomIn, Play, ShieldCheck, RefreshCw, ScanFace, ChevronRight, ChevronLeft, LayoutGrid, Sliders, X, Download, Loader, Sparkles, CalendarDays, Lock, Key, AlertCircle, Search } from 'lucide-react';
+import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy, ZoomIn, Play, ShieldCheck, RefreshCw, ScanFace, ChevronRight, ChevronLeft, LayoutGrid, Sliders, X, Download, Loader, Sparkles, CalendarDays, Lock, Key, AlertCircle, Search } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { MasonryPhotoAlbum, RowsPhotoAlbum } from "react-photo-album";
 import "react-photo-album/masonry.css";
@@ -60,11 +60,13 @@ export default function ClientGallery() {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // Visitor Form States
-  const [showVisitorForm, setShowVisitorForm] = useState(false);
-  const [visitorForm, setVisitorForm] = useState({ name: '', phone: '', email: '' });
-  const [visitorSubmitLoading, setVisitorSubmitLoading] = useState(false);
-
+  // Guest Sign-In States
+  const [isGuest, setIsGuest] = useState(false);
+  const [guestName, setGuestName] = useState('');
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
+  const [guestError, setGuestError] = useState('');
+  const [guestSubmitting, setGuestSubmitting] = useState(false);
 
   // Gallery view configurations
   const [viewType, setViewType] = useState<'grid' | 'masonry' | 'timeline'>('masonry');
@@ -115,17 +117,6 @@ export default function ClientGallery() {
   // Drag & Drop state
   const [isDragOver, setIsDragOver] = useState(false);
 
-  // Scroll state for dynamic header
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
   const fetchGalleryMedia = async (eventId: string) => {
     try {
       const res = await apiClient.get(`/media/event/${eventId}`);
@@ -144,13 +135,7 @@ export default function ClientGallery() {
       if (res.data.event.accessType === 'PASSWORD') {
         setIsLocked(true);
       } else {
-        const visitedStr = localStorage.getItem('visited_events');
-        const visitedEvents = visitedStr ? JSON.parse(visitedStr) : [];
-        if (!visitedEvents.includes(res.data.event._id)) {
-          setShowVisitorForm(true);
-        } else {
-          fetchGalleryMedia(res.data.event._id);
-        }
+        fetchGalleryMedia(res.data.event._id);
       }
     } catch (err: any) {
       console.error(err);
@@ -161,6 +146,12 @@ export default function ClientGallery() {
   };
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const guestStatus = localStorage.getItem(`mara_guest_${slug}`);
+      if (guestStatus === 'true') {
+        setIsGuest(true);
+      }
+    }
     fetchEventData();
   }, [slug]);
 
@@ -202,16 +193,37 @@ export default function ClientGallery() {
     try {
       await apiClient.post(`/event/code/${slug}/verify-password`, { password });
       setIsLocked(false);
-      
-      const visitedStr = localStorage.getItem('visited_events');
-      const visitedEvents = visitedStr ? JSON.parse(visitedStr) : [];
-      if (!visitedEvents.includes(event._id)) {
-        setShowVisitorForm(true);
-      } else {
-        fetchGalleryMedia(event._id);
-      }
+      fetchGalleryMedia(event._id);
     } catch (err: any) {
       setAuthError('Incorrect gallery password.');
+    }
+  };
+
+  const handleGuestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGuestError('');
+    setGuestSubmitting(true);
+    
+    if (!guestName.trim() || !guestPhone.trim()) {
+      setGuestError('Name and Phone are required.');
+      setGuestSubmitting(false);
+      return;
+    }
+
+    try {
+      await apiClient.post(`/visitors/event/code/${slug}`, {
+        name: guestName,
+        phone: guestPhone,
+        email: guestEmail
+      });
+      
+      localStorage.setItem(`mara_guest_${slug}`, 'true');
+      setIsGuest(true);
+    } catch (err: any) {
+      console.error(err);
+      setGuestError(err.response?.data?.error || 'Failed to submit details. Please try again.');
+    } finally {
+      setGuestSubmitting(false);
     }
   };
 
@@ -439,7 +451,7 @@ export default function ClientGallery() {
           <form onSubmit={handleUnlock} className="flex flex-col gap-4 mt-6">
             <div className="relative">
               <Key className="absolute left-3.5 top-1/2 translate-y-[-50%] h-4.5 w-4.5 text-slate-400" />
-              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)}  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-[#FF6B00] focus:bg-white text-center tracking-wider" />
+              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password" className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-[#FF6B00] focus:bg-white text-center tracking-wider" />
             </div>
             <button type="submit" className="bg-[#FF6B00] hover:bg-[#E05E00] text-white font-bold py-3.5 rounded-xl text-xs transition-all shadow-md shadow-orange-500/20">
               Unlock Gallery
@@ -450,89 +462,75 @@ export default function ClientGallery() {
     );
   }
 
-  const handleVisitorSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setVisitorSubmitLoading(true);
-    try {
-      await apiClient.post(`/visitors/event/code/${slug}`, visitorForm);
-      const visitedStr = localStorage.getItem('visited_events');
-      const visitedEvents = visitedStr ? JSON.parse(visitedStr) : [];
-      if (event && event._id && !visitedEvents.includes(event._id)) {
-        visitedEvents.push(event._id);
-        localStorage.setItem('visited_events', JSON.stringify(visitedEvents));
-      }
-      setShowVisitorForm(false);
-      fetchGalleryMedia(event?._id);
-    } catch (err) {
-      console.error(err);
-      alert('Something went wrong. Please try again.');
-    } finally {
-      setVisitorSubmitLoading(false);
-    }
-  };
-
-  if (showVisitorForm) {
+  // 2. Guest Sign-In Page
+  if (!isGuest && !isLocked) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col items-center justify-center p-6 relative">
-        {/* Background Image */}
-        <div className="absolute inset-0 z-0">
-          {event?.coverImageUrl ? (
-            <img src={event.coverImageUrl} alt="Cover" className="w-full h-full object-cover blur-md brightness-[0.2]" />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-slate-900 to-slate-800" />
-          )}
-        </div>
-
-        <div className="relative z-10 w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 border border-white/20">
-          <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 bg-[#c5a880]/10 rounded-full flex items-center justify-center mb-4">
-              <Users className="h-8 w-8 text-[#c5a880]" />
-            </div>
-            <h2 className="text-2xl font-black text-slate-800 text-center">Guest Book</h2>
-            <p className="text-sm text-slate-500 font-medium mt-2 text-center">
-              Please enter your details to view the gallery photos.
-            </p>
+        <div className="w-full max-w-md glass-panel bg-white border-slate-200 p-8 rounded-3xl text-center shadow-lg relative z-10">
+          <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center mx-auto mb-6">
+            <User className="h-5 w-5 text-blue-600" />
           </div>
-
-          <form onSubmit={handleVisitorSubmit} className="flex flex-col gap-4">
+          <h2 className="text-xl font-bold text-slate-800">{event?.name || 'Event Gallery'}</h2>
+          <p className="text-xs text-slate-500 font-semibold mt-2 mb-8">Please enter your details to view the album.</p>
+          
+          <form onSubmit={handleGuestSubmit} className="flex flex-col gap-4 text-left">
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-1.5 ml-1">Full Name <span className="text-rose-500">*</span></label>
-              <input 
-                type="text" 
-                required 
-                value={visitorForm.name} 
-                onChange={(e) => setVisitorForm({...visitorForm, name: e.target.value})}  
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] transition-colors font-medium" 
-              />
+              <label className="text-[10px] font-bold text-slate-500 mb-1.5 block uppercase tracking-wider">Full Name *</label>
+              <div className="relative">
+                <input 
+                  type="text" 
+                  required
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 pl-10 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#FF6B00] focus:bg-white transition-all"
+                  placeholder="John Doe"
+                />
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              </div>
             </div>
             
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-1.5 ml-1">Phone Number <span className="text-rose-500">*</span></label>
-              <input 
-                type="tel" 
-                required 
-                value={visitorForm.phone} 
-                onChange={(e) => setVisitorForm({...visitorForm, phone: e.target.value})}  
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] transition-colors font-medium" 
-              />
+              <label className="text-[10px] font-bold text-slate-500 mb-1.5 block uppercase tracking-wider">Phone Number *</label>
+              <div className="relative">
+                <input 
+                  type="tel" 
+                  required
+                  value={guestPhone}
+                  onChange={(e) => setGuestPhone(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 pl-10 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#FF6B00] focus:bg-white transition-all"
+                  placeholder="+91 9876543210"
+                />
+                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-1.5 ml-1">Email <span className="text-slate-400 font-normal normal-case tracking-normal">(Optional)</span></label>
-              <input 
-                type="email" 
-                value={visitorForm.email} 
-                onChange={(e) => setVisitorForm({...visitorForm, email: e.target.value})}  
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] transition-colors font-medium" 
-              />
+              <label className="text-[10px] font-bold text-slate-500 mb-1.5 block uppercase tracking-wider">Email Address (Optional)</label>
+              <div className="relative">
+                <input 
+                  type="email" 
+                  value={guestEmail}
+                  onChange={(e) => setGuestEmail(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 pl-10 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#FF6B00] focus:bg-white transition-all"
+                  placeholder="john@example.com"
+                />
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              </div>
             </div>
 
+            {guestError && (
+              <div className="mt-2 bg-rose-50 border border-rose-100 text-rose-700 p-3 rounded-lg text-xs flex items-center justify-center gap-2 font-semibold">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{guestError}</span>
+              </div>
+            )}
+            
             <button 
               type="submit" 
-              disabled={visitorSubmitLoading}
-              className="mt-4 bg-[#c5a880] hover:bg-[#b69970] text-white font-bold py-3.5 rounded-xl text-sm transition-all shadow-md shadow-[#c5a880]/20 disabled:opacity-70"
+              disabled={guestSubmitting}
+              className="mt-4 bg-[#FF6B00] hover:bg-[#E05E00] text-white font-bold py-3.5 rounded-xl text-xs transition-all shadow-md shadow-orange-500/20 w-full flex justify-center items-center gap-2"
             >
-              {visitorSubmitLoading ? 'Opening...' : 'View Gallery'}
+              {guestSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enter Gallery'}
             </button>
           </form>
         </div>
@@ -543,87 +541,51 @@ export default function ClientGallery() {
   const galleryMedia = searchActive ? matchedMedia : media;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col relative selection:bg-orange-500 selection:text-white font-sans">
-      {/* Premium Dynamic Header */}
-      <header className={`fixed top-0 inset-x-0 z-50 transition-all duration-500 ${scrolled ? 'bg-white/90 backdrop-blur-xl border-b border-slate-200/50 shadow-sm py-1' : 'bg-transparent py-4 border-b border-transparent'}`}>
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between transition-all duration-500">
-          <div className="flex items-center gap-4 group cursor-pointer">
-            <div className={`relative flex items-center justify-center p-2 rounded-xl transition-all duration-500 ${scrolled ? 'bg-white shadow-sm border border-slate-100' : 'bg-white/10 backdrop-blur-md border border-white/20 shadow-xl'}`}>
-              {event?.studioId?.logoUrl ? (
-                <img src={event.studioId.logoUrl} alt="Logo" className="h-7 max-w-[140px] object-contain transition-transform duration-500 group-hover:scale-105" />
-              ) : (
-                <span className={`font-black text-sm tracking-[0.2em] uppercase transition-colors duration-500 ${scrolled ? 'text-slate-800' : 'text-white drop-shadow-md'}`}>
-                  {event?.studioId?.name}
-                </span>
-              )}
-            </div>
+    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col relative selection:bg-orange-500 selection:text-white">
+      {/* Whitelabel Header */}
+      <header className="sticky top-0 z-40 glass-panel border-b border-slate-200 bg-white/70 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {event?.studioId?.logoUrl ? (
+              <img src={event.studioId.logoUrl} alt="Logo" className="h-8 max-w-[120px] object-contain" />
+            ) : (
+              <span className="font-extrabold text-sm tracking-widest text-[#FF6B00] uppercase">
+                {event?.studioId?.name}
+              </span>
+            )}
           </div>
           
-          <div className={`hidden md:flex items-center gap-6 transition-colors duration-500 ${scrolled ? 'text-slate-800' : 'text-white drop-shadow-md'}`}>
-            <div className="flex flex-col items-end">
-              <span className={`text-[9px] font-black uppercase tracking-widest mb-0.5 opacity-70`}>Event Gallery</span>
-              <span className="text-sm font-bold tracking-wide">{event?.name}</span>
-            </div>
-            <div className={`h-8 w-[1px] ${scrolled ? 'bg-slate-200' : 'bg-white/20'}`} />
-            <div className="flex flex-col items-start">
-              <span className={`text-[9px] font-black uppercase tracking-widest mb-0.5 opacity-70`}>Date</span>
-              <span className={`text-sm font-bold tracking-wide ${scrolled ? 'text-[#FF6B00]' : 'text-orange-300'}`}>{new Date(event?.date).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-            </div>
+          <div className="flex items-center gap-4 text-xs font-bold text-slate-500">
+            <span>{event?.name}</span>
+            <span className="h-4 w-[1px] bg-slate-200" />
+            <span>{new Date(event?.date).toLocaleDateString()}</span>
           </div>
         </div>
       </header>
 
-      {/* Cinematic Hero Banner */}
-      <div className="relative w-full h-[75vh] min-h-[500px] max-h-[800px] flex items-end justify-center overflow-hidden">
-        {/* Background Image with Parallax effect */}
-        <div className="absolute inset-0 w-full h-full">
-          {event?.coverImageUrl ? (
-            <img src={event.coverImageUrl} alt="Cover" className="w-full h-full object-cover transform scale-105" />
-          ) : (
-            <div className="w-full h-full" style={{ background: 'radial-gradient(circle at 10% 20%, rgb(90, 92, 106) 0%, rgb(32, 45, 58) 81.3%)' }} />
-          )}
-        </div>
-        
-        {/* Elegant Overlays */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-[#0F172A]" />
-        
-        {/* Content Container */}
-        <div className="relative z-10 w-full max-w-7xl mx-auto px-6 pb-24 flex flex-col md:flex-row md:items-end justify-between gap-8">
-          <div className="flex-1 max-w-4xl">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 mb-6 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
-              <span className="text-[10px] uppercase font-bold tracking-[0.3em] text-white/90">
-                {event?.type}
-              </span>
-            </div>
-            
-            <h1 className="text-5xl md:text-7xl lg:text-[5.5rem] font-black tracking-tighter text-white leading-[1.05] mb-8 drop-shadow-2xl">
-              {event?.name}
-            </h1>
-            
-            <div className="flex flex-wrap items-center gap-4 text-sm font-semibold text-white/90">
-              <div className="flex items-center gap-2.5 bg-white/10 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 shadow-lg hover:bg-white/20 transition-colors">
-                <CalendarDays className="h-4 w-4 text-orange-400" />
-                <span className="tracking-wide">{new Date(event?.date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
-              </div>
-              
-              {event?.location && (
-                <div className="flex items-center gap-2.5 bg-white/10 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 shadow-lg hover:bg-white/20 transition-colors">
-                  <svg className="h-4 w-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  <span className="tracking-wide">{event.location}</span>
-                </div>
-              )}
-            </div>
-          </div>
+      {/* Hero Banner Cover */}
+      <div className="h-72 w-full relative overflow-hidden">
+        {event?.coverImageUrl ? (
+          <img src={event.coverImageUrl} alt="Cover" className="w-full h-full object-cover brightness-50" />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-r from-[#000053] via-slate-900 to-slate-950 brightness-75" />
+        )}
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#F8FAFC] to-transparent h-48" />
+        <div className="absolute inset-0 flex flex-col justify-end p-8 max-w-7xl mx-auto">
+          <span className="text-[10px] uppercase font-bold tracking-widest bg-[#FF6B00] text-white px-2.5 py-1 rounded-full w-max shadow-md mb-3">
+            {event?.type}
+          </span>
+          <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-slate-800">{event?.name}</h1>
+          <p className="text-xs text-slate-500 font-semibold mt-2 flex items-center gap-1.5">
+            <CalendarDays className="h-4 w-4 text-[#FF6B00]" />
+            {event?.location || 'Studio Photography Session'}
+          </p>
         </div>
       </div>
 
-      {/* Modern Gallery Controls bar */}
-      <div className="max-w-7xl mx-auto w-full px-6 flex flex-col sm:flex-row items-center justify-between gap-4 -mt-10 relative z-20">
-        <div className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-3 bg-white/70 backdrop-blur-xl p-2 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.08)] border border-white/60">
+      {/* Gallery Controls bar */}
+      <div className="max-w-7xl mx-auto w-full px-6 py-6 flex items-center justify-between border-b border-slate-200">
+        <div className="flex items-center gap-3">
 
 
           {searchActive && searchStats && (

@@ -76,14 +76,14 @@ export default function TeamPage() {
   );
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white text-black p-4 md:p-8">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8">
       <div className="flex flex-col gap-6 font-poppins text-left">
             {teamSubView === 'list' ? (
               <>
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                   <div>
                     <h1 className="text-2xl font-extrabold text-slate-900">Studio Team & Collaborators</h1>
-                    <p className="text-xs text-slate-600 mt-1 font-semibold">Assign permissions, manage editors, and invite second-shooters.</p>
+                    <p className="text-xs text-slate-400 mt-1 font-semibold">Assign permissions, manage editors, and invite second-shooters.</p>
                   </div>
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
                     <div className="relative w-full sm:w-auto">
@@ -98,7 +98,7 @@ export default function TeamPage() {
                       {searchQuery && (
                         <button 
                           onClick={() => setSearchQuery('')}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-400 focus:outline-none cursor-pointer"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -121,15 +121,15 @@ export default function TeamPage() {
                         <th className="p-4 text-center">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5 text-slate-200">
+                    <tbody className="divide-y divide-slate-200 text-slate-700">
                       {filteredTeam.map((member: any, i: number) => (
                         <tr key={i} className="hover:bg-white/[0.01] transition-colors">
                           <td className="p-4 text-center font-bold text-slate-900">{member.name}</td>
-                          <td className="p-4 text-center text-slate-700 font-semibold">{member.email}</td>
-                          <td className="p-4 text-center font-mono font-semibold text-slate-700">{member.phone || '-'}</td>
+                          <td className="p-4 text-center text-slate-600 font-semibold">{member.email}</td>
+                          <td className="p-4 text-center font-mono font-semibold text-slate-600">{member.phone || '-'}</td>
                           <td className="p-4 text-center font-bold text-[#c5a880]">{member.role}</td>
                           <td className="p-4 text-center flex justify-center gap-2">
-                            <button onClick={() => handleEdit(member)} className="p-1.5 bg-slate-100 text-slate-600 hover:text-[#c5a880] hover:bg-white rounded-lg transition-colors border border-slate-200 shadow-sm">
+                            <button onClick={() => handleEdit(member)} className="p-1.5 bg-slate-100 text-slate-400 hover:text-[#c5a880] hover:bg-white rounded-lg transition-colors border border-slate-200 shadow-sm">
                               <Edit className="w-4 h-4" />
                             </button>
                             <button onClick={() => handleDelete(member)} className="p-1.5 bg-rose-50 text-rose-500 hover:text-rose-600 hover:bg-white rounded-lg transition-colors border border-rose-200 shadow-sm">
@@ -152,7 +152,7 @@ export default function TeamPage() {
               </>
             ) : (
               <div className="w-full relative">
-                <button onClick={resetForm} className="absolute top-0 left-0 inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-white hover:text-white text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer z-10">
+                <button onClick={resetForm} className="absolute top-0 left-0 inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-slate-900 hover:text-slate-700 text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer z-10">
                   <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
                   <span>Back to Team</span>
                 </button>
@@ -184,52 +184,52 @@ export default function TeamPage() {
                       setIsSubmitting(false);
                     }
                   }
-                }} className="bg-slate-50 border border-slate-200 p-8 sm:p-10 rounded-2xl flex flex-col gap-5 text-center shadow-sm mt-2">
+                }} className="bg-[#f8f7f4] text-slate-900 border border-slate-200 p-8 sm:p-10 rounded-2xl flex flex-col gap-5 text-center shadow-sm mt-2">
                   <div className="flex flex-col gap-1.5 items-center">
-                    <label className="text-[11px] text-slate-600 uppercase font-black tracking-widest text-center">Full Name</label>
+                    <label className="text-[11px] text-slate-400 uppercase font-black tracking-widest text-center">Full Name</label>
                     <input type="text" required value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} className="w-full text-center bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] transition-all" />
                   </div>
                   <div className="flex flex-col gap-1.5 items-center">
-                    <label className="text-[11px] text-slate-600 uppercase font-black tracking-widest text-center">Mobile Number</label>
+                    <label className="text-[11px] text-slate-400 uppercase font-black tracking-widest text-center">Mobile Number</label>
                     <input type="tel" value={newMemberPhone} onChange={(e) => setNewMemberPhone(e.target.value)} className="w-full text-center bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] transition-all" />
                   </div>
                   <div className="flex flex-col gap-1.5 items-center">
-                    <label className="text-[11px] text-slate-600 uppercase font-black tracking-widest text-center">Email Address</label>
+                    <label className="text-[11px] text-slate-400 uppercase font-black tracking-widest text-center">Email Address</label>
                     <input type="email" required value={newMemberEmail} onChange={(e) => setNewMemberEmail(e.target.value)} className="w-full text-center bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] transition-all" />
                   </div>
                   <div className="flex flex-col gap-1.5 items-center">
-                    <label className="text-[11px] text-slate-600 uppercase font-black tracking-widest text-center">Role / Specialization</label>
+                    <label className="text-[11px] text-slate-400 uppercase font-black tracking-widest text-center">Role / Specialization</label>
                     <select value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)} className="w-full text-center bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] transition-all cursor-pointer">
-                      <optgroup label="Photography Team" className="text-slate-500 font-bold bg-slate-50">
-                        <option className="bg-white text-slate-900 font-semibold" value="Lead Photographer">Lead Photographer</option>
-                        <option className="bg-white text-slate-900 font-semibold" value="Second Shooter">Second Shooter</option>
-                        <option className="bg-white text-slate-900 font-semibold" value="Assistant Photographer">Assistant Photographer</option>
-                        <option className="bg-white text-slate-900 font-semibold" value="Candid Photographer">Candid Photographer</option>
-                        <option className="bg-white text-slate-900 font-semibold" value="Traditional Photographer">Traditional Photographer</option>
-                        <option className="bg-white text-slate-900 font-semibold" value="Pre-Wedding Specialist">Pre-Wedding Specialist</option>
-                        <option className="bg-white text-slate-900 font-semibold" value="Portrait Specialist">Portrait Specialist</option>
+                      <optgroup label="Photography Team" className="text-slate-500 font-bold bg-[#f8f7f4] text-slate-900">
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Lead Photographer">Lead Photographer</option>
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Second Shooter">Second Shooter</option>
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Assistant Photographer">Assistant Photographer</option>
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Candid Photographer">Candid Photographer</option>
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Traditional Photographer">Traditional Photographer</option>
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Pre-Wedding Specialist">Pre-Wedding Specialist</option>
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Portrait Specialist">Portrait Specialist</option>
                       </optgroup>
-                      <optgroup label="Videography & Cinematography Team" className="text-slate-500 font-bold bg-slate-50">
-                        <option className="bg-white text-slate-900 font-semibold" value="Lead Cinematographer">Lead Cinematographer</option>
-                        <option className="bg-white text-slate-900 font-semibold" value="Traditional Videographer">Traditional Videographer</option>
-                        <option className="bg-white text-slate-900 font-semibold" value="Candid Videographer">Candid Videographer</option>
-                        <option className="bg-white text-slate-900 font-semibold" value="Drone/Aerial Specialist">Drone / Aerial Specialist</option>
-                        <option className="bg-white text-slate-900 font-semibold" value="Assistant Videographer">Assistant Videographer</option>
+                      <optgroup label="Videography & Cinematography Team" className="text-slate-500 font-bold bg-[#f8f7f4] text-slate-900">
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Lead Cinematographer">Lead Cinematographer</option>
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Traditional Videographer">Traditional Videographer</option>
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Candid Videographer">Candid Videographer</option>
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Drone/Aerial Specialist">Drone / Aerial Specialist</option>
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Assistant Videographer">Assistant Videographer</option>
                       </optgroup>
-                      <optgroup label="Editing & Post-Production" className="text-slate-500 font-bold bg-slate-50">
-                        <option className="bg-white text-slate-900 font-semibold" value="Chief Photo Editor">Chief Photo Editor</option>
-                        <option className="bg-white text-slate-900 font-semibold" value="Chief Video Editor">Chief Video Editor</option>
-                        <option className="bg-white text-slate-900 font-semibold" value="AI Tuning & Retoucher">AI Tuning & Retoucher</option>
-                        <option className="bg-white text-slate-900 font-semibold" value="Highlight Reel Editor">Highlight Reel Editor</option>
+                      <optgroup label="Editing & Post-Production" className="text-slate-500 font-bold bg-[#f8f7f4] text-slate-900">
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Chief Photo Editor">Chief Photo Editor</option>
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Chief Video Editor">Chief Video Editor</option>
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="AI Tuning & Retoucher">AI Tuning & Retoucher</option>
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Highlight Reel Editor">Highlight Reel Editor</option>
                       </optgroup>
-                      <optgroup label="Management & Support" className="text-slate-500 font-bold bg-slate-50">
-                        <option className="bg-white text-slate-900 font-semibold" value="Studio Manager">Studio Manager</option>
-                        <option className="bg-white text-slate-900 font-semibold" value="Client Coordinator">Client Coordinator</option>
-                        <option className="bg-white text-slate-900 font-semibold" value="Lighting Technician">Lighting Technician</option>
+                      <optgroup label="Management & Support" className="text-slate-500 font-bold bg-[#f8f7f4] text-slate-900">
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Studio Manager">Studio Manager</option>
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Client Coordinator">Client Coordinator</option>
+                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Lighting Technician">Lighting Technician</option>
                       </optgroup>
                     </select>
                   </div>
-                  <button type="submit" disabled={isSubmitting} className="flex justify-center items-center gap-2 w-full bg-[#09090b] hover:bg-[#c5a880] text-white hover:text-[#09090b] uppercase tracking-wider font-bold py-4 rounded-xl text-xs mt-4 cursor-pointer transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                  <button type="submit" disabled={isSubmitting} className="flex justify-center items-center gap-2 w-full bg-white hover:bg-[#c5a880] text-slate-900 hover:text-[#09090b] uppercase tracking-wider font-bold py-4 rounded-xl text-xs mt-4 cursor-pointer transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
                     {isSubmitting ? <Loader className="h-4 w-4 animate-spin" /> : (teamSubView === 'edit' ? 'Save Changes' : 'Send Invitation Link')}
                   </button>
                 </form>

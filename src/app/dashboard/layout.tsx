@@ -141,10 +141,10 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="h-screen bg-white text-black flex overflow-hidden">
+    <div className="h-screen bg-[#f8f7f4] text-[#09090b] flex overflow-hidden">
 
       {/* ===== DESKTOP SIDEBAR ===== */}
-      <aside className="hidden lg:flex w-64 bg-[#0c0c0e] text-slate-100 flex-col justify-between p-6 shrink-0 border-r border-slate-200 shadow-2xl sticky top-0 h-screen">
+      <aside className="hidden lg:flex w-64 bg-[#0c0c0e] text-slate-100 flex-col justify-between p-6 shrink-0 border-r border-white/5 shadow-2xl sticky top-0 h-screen">
         <SidebarContent pathname={pathname} user={user} onLogout={handleLogout} />
       </aside>
 
@@ -195,7 +195,7 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto bg-[#f8f7f4]">
           {children}
         </div>
       </div>

@@ -32,10 +32,10 @@ export default function SupportHelpPage() {
   const handleReplyTicket = (e: any) => { e.preventDefault(); setSuccessMsg('Reply sent (Dummy)'); setReplyMessage(''); };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50/50 text-black p-4 md:p-8">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8">
       <div className="flex flex-col gap-8 max-w-6xl mx-auto">
         {/* ── TOP HERO BANNER: Dark Expert Support Card ── */}
-        <div className="w-full bg-[#09090b] text-white rounded-3xl p-8 md:p-14 relative overflow-hidden border border-[#e3d8c8]/20 shadow-2xl flex flex-col items-center text-center">
+        <div className="w-full bg-[#f8f7f4] text-slate-900 rounded-3xl p-8 md:p-14 relative overflow-hidden border border-[#e3d8c8]/20 shadow-2xl flex flex-col items-center text-center">
           {/* Subtle background glow */}
           <div className="absolute inset-0 pointer-events-none select-none">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[250px] rounded-full bg-[#c5a880]/10 opacity-30 blur-3xl" />
@@ -104,7 +104,7 @@ export default function SupportHelpPage() {
               {tickets.length > 0 ? (
                 <div className="flex flex-col gap-3">
                   {tickets.map((t) => (
-                    <div key={t._id} onClick={() => setSelectedTicket(t)} className={`p-4 rounded-2xl cursor-pointer border transition-all ${selectedTicket?._id === t._id ? 'bg-[#c5a880]/10 text-slate-900 border-[#c5a880] shadow-sm' : 'bg-slate-50 border-slate-200 hover:border-[#c5a880]/50'}`}>
+                    <div key={t._id} onClick={() => setSelectedTicket(t)} className={`p-4 rounded-2xl cursor-pointer border transition-all ${selectedTicket?._id === t._id ? 'bg-[#c5a880]/10 text-slate-900 border-[#c5a880] shadow-sm' : 'bg-[#f8f7f4] text-slate-900 border-slate-200 hover:border-[#c5a880]/50'}`}>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-bold text-slate-900 truncate pr-2">{t.subject}</span>
                         <span className={`text-[9px] font-black px-2 py-1 rounded uppercase tracking-wider shrink-0 ${t.status === 'OPEN' ? 'bg-[#c5a880]/20 text-[#9e825a]' : t.status === 'IN_PROGRESS' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -118,7 +118,7 @@ export default function SupportHelpPage() {
                   ))}
                 </div>
               ) : (
-                <div className="py-12 bg-slate-50 rounded-2xl text-center text-sm text-slate-500 font-medium border border-dashed border-slate-200">
+                <div className="py-12 bg-[#f8f7f4] text-slate-900 rounded-2xl text-center text-sm text-slate-500 font-medium border border-dashed border-slate-200">
                   No support tickets found
                 </div>
               )}
@@ -129,13 +129,13 @@ export default function SupportHelpPage() {
               <form onSubmit={handleCreateTicket} className="flex flex-col gap-5">
                 <div className="flex flex-col gap-2">
                   <label className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">Subject</label>
-                  <input type="text" required value={newTicketSubject} onChange={(e) => setNewTicketSubject(e.target.value)}  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 font-medium focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880]" />
+                  <input type="text" required value={newTicketSubject} onChange={(e) => setNewTicketSubject(e.target.value)}  className="w-full bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 font-medium focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880]" />
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">Message Description</label>
-                  <textarea required value={newTicketMessage} onChange={(e) => setNewTicketMessage(e.target.value)}  rows={4} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 font-medium focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] resize-none" />
+                  <textarea required value={newTicketMessage} onChange={(e) => setNewTicketMessage(e.target.value)}  rows={4} className="w-full bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 font-medium focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] resize-none" />
                 </div>
-                <button type="submit" className="w-full bg-slate-900 hover:bg-[#c5a880] text-white py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-md">
+                <button type="submit" className="w-full bg-slate-900 hover:bg-[#c5a880] text-slate-900 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-md">
                   Submit Ticket
                 </button>
               </form>
@@ -146,7 +146,7 @@ export default function SupportHelpPage() {
           <div className="lg:col-span-7">
             {selectedTicket ? (
               <div className="bg-white border border-slate-200 rounded-3xl flex flex-col h-[650px] overflow-hidden shadow-sm">
-                <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                <div className="p-6 border-b border-slate-100 bg-[#f8f7f4] text-slate-900 flex items-center justify-between">
                   <div>
                     <h4 className="text-[10px] font-bold text-[#c5a880] uppercase tracking-widest mb-1">Ticket Thread</h4>
                     <h3 className="text-lg font-black text-slate-900">{selectedTicket.subject}</h3>
@@ -156,12 +156,12 @@ export default function SupportHelpPage() {
                   </span>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 bg-slate-50/50">
+                <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 bg-[#f8f7f4] text-slate-900/50">
                   {selectedTicket.messages.map((msg: any, i: number) => {
                     const isAdmin = msg.sender === 'ADMIN';
                     return (
                       <div key={i} className={`flex flex-col max-w-[85%] ${isAdmin ? 'self-start' : 'self-end items-end'}`}>
-                        <div className={`p-4 rounded-2xl text-sm font-medium leading-relaxed shadow-sm ${isAdmin ? 'bg-white border border-slate-200 rounded-tl-sm text-slate-700' : 'bg-[#c5a880] text-white rounded-tr-sm'}`}>
+                        <div className={`p-4 rounded-2xl text-sm font-medium leading-relaxed shadow-sm ${isAdmin ? 'bg-white border border-slate-200 rounded-tl-sm text-slate-600' : 'bg-[#c5a880] text-slate-900 rounded-tr-sm'}`}>
                           {msg.message}
                         </div>
                         <span className="text-[9px] text-slate-400 font-bold mt-1.5 font-mono uppercase tracking-wider">
@@ -174,8 +174,8 @@ export default function SupportHelpPage() {
 
                 {selectedTicket.status !== 'RESOLVED' ? (
                   <form onSubmit={handleReplyTicket} className="p-5 border-t border-slate-100 bg-white flex gap-3">
-                    <input type="text" required placeholder="Type your reply..." value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)}  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880]" />
-                    <button type="submit" className="bg-[#c5a880] hover:bg-slate-900 text-white px-5 rounded-xl transition-all flex items-center justify-center">
+                    <input type="text" required placeholder="Type your reply..." value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)}  className="flex-1 bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880]" />
+                    <button type="submit" className="bg-[#c5a880] hover:bg-slate-900 text-slate-900 px-5 rounded-xl transition-all flex items-center justify-center">
                       <Send className="h-5 w-5" />
                     </button>
                   </form>
@@ -187,10 +187,10 @@ export default function SupportHelpPage() {
               </div>
             ) : (
               <div className="h-full min-h-[400px] bg-white border border-slate-200 rounded-3xl flex flex-col items-center justify-center text-center p-8 text-slate-400 shadow-sm">
-                <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-4">
-                  <HelpCircle className="h-8 w-8 text-slate-300" />
+                <div className="w-16 h-16 bg-[#f8f7f4] text-slate-900 rounded-2xl flex items-center justify-center mb-4">
+                  <HelpCircle className="h-8 w-8 text-slate-600" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-700 mb-1">No Ticket Selected</h3>
+                <h3 className="text-lg font-bold text-slate-600 mb-1">No Ticket Selected</h3>
                 <span className="text-sm font-medium max-w-[250px]">Select a support ticket from the list to view the conversation thread.</span>
               </div>
             )}

@@ -25,7 +25,7 @@ export default function EventsManagementPage() {
   }, []);
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white text-slate-900 p-4 md:p-8 font-poppins">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8 font-poppins">
       <style dangerouslySetInnerHTML={{__html: `
         .event-card {
           background: #ffffff;
@@ -83,7 +83,7 @@ export default function EventsManagementPage() {
 
           {loading ? (
             <div className="col-span-full py-12 flex justify-center items-center">
-              <Loader2 className="h-8 w-8 text-slate-300 animate-spin" />
+              <Loader2 className="h-8 w-8 text-slate-600 animate-spin" />
             </div>
           ) : (
             events.map((event, idx) => (
@@ -101,7 +101,7 @@ export default function EventsManagementPage() {
 
                   {/* Content (z-10 relative) */}
                   <div className="relative z-10 flex justify-between items-start">
-                    <span className="px-3 py-1 rounded-full bg-black/40 border border-white/10 text-[10px] font-bold text-[#c5a880] uppercase tracking-wider backdrop-blur-md">
+                    <span className="px-3 py-1 rounded-full bg-black/40 border border-slate-200 text-[10px] font-bold text-[#c5a880] uppercase tracking-wider backdrop-blur-md">
                       {event.type || 'EVENT'}
                     </span>
                     <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/20 text-[10px] font-bold text-emerald-400 uppercase tracking-wider backdrop-blur-md">
@@ -110,7 +110,7 @@ export default function EventsManagementPage() {
                   </div>
 
                   <div className="relative z-10 mt-auto">
-                    <h3 className="text-xl font-bold text-white mb-4 line-clamp-2 leading-tight">{event.name}</h3>
+                    <h3 className="text-xl font-bold text-slate-900 mb-4 line-clamp-2 leading-tight">{event.name}</h3>
                     
                     <div className="h-[1px] w-full bg-white/20" />
                   </div>

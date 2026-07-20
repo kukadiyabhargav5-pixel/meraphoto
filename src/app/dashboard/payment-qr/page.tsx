@@ -101,7 +101,7 @@ export default function PaymentQRPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-6 md:p-10 flex items-start md:items-center justify-center min-h-full font-poppins">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 sm:p-6 md:p-10 flex items-start md:items-center justify-center min-h-full font-poppins">
 
       {/* Success Toast */}
       {successMsg && (
@@ -129,7 +129,7 @@ export default function PaymentQRPage() {
                 <div className="p-1.5 bg-[#c5a880]/10 rounded-lg">
                   <QrCode className="w-4 h-4 text-[#c5a880]" />
                 </div>
-                <span className="text-sm font-bold text-slate-700">Payment QR</span>
+                <span className="text-sm font-bold text-slate-600">Payment QR</span>
               </div>
               <button
                 onClick={handleChangeQR}
@@ -154,13 +154,13 @@ export default function PaymentQRPage() {
               <div className="flex gap-3 w-full">
                 <button
                   onClick={handleDownload}
-                  className="flex-1 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer"
+                  className="flex-1 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer"
                 >
                   <Download className="w-4 h-4" /> Download
                 </button>
                 <button
                   onClick={handleShare}
-                  className="flex-1 flex items-center justify-center gap-2 bg-[#c5a880] hover:bg-[#b0936b] text-white py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all shadow-md cursor-pointer"
+                  className="flex-1 flex items-center justify-center gap-2 bg-[#c5a880] hover:bg-[#b0936b] text-slate-900 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all shadow-md cursor-pointer"
                 >
                   <Share2 className="w-4 h-4" /> Share
                 </button>
@@ -186,7 +186,7 @@ export default function PaymentQRPage() {
               {/* Upload area */}
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full border-2 border-dashed border-slate-200 hover:border-[#c5a880] rounded-2xl p-6 flex flex-col items-center gap-3 cursor-pointer transition-all bg-slate-50 hover:bg-[#c5a880]/[0.02] group"
+                className="w-full border-2 border-dashed border-slate-200 hover:border-[#c5a880] rounded-2xl p-6 flex flex-col items-center gap-3 cursor-pointer transition-all bg-[#f8f7f4] text-slate-900 hover:bg-[#c5a880]/[0.02] group"
               >
                 {previewUrl ? (
                   // Show preview of selected file
@@ -204,7 +204,7 @@ export default function PaymentQRPage() {
                       <Upload className="w-6 h-6 text-slate-400 group-hover:text-[#c5a880] transition-colors" />
                     </div>
                     <div className="text-center">
-                      <p className="text-sm font-bold text-slate-700">Click to upload QR image</p>
+                      <p className="text-sm font-bold text-slate-600">Click to upload QR image</p>
                       <p className="text-xs text-slate-400 mt-1">PNG, JPG, WEBP — Max 10MB</p>
                     </div>
                   </>
@@ -222,7 +222,7 @@ export default function PaymentQRPage() {
               <button
                 onClick={handleSave}
                 disabled={!previewUrl || loading}
-                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl text-xs uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="w-full bg-slate-900 hover:bg-slate-800 text-slate-900 font-bold py-4 rounded-xl text-xs uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
                 {loading ? (
                   <><RefreshCw className="w-4 h-4 animate-spin" /> Saving...</>
@@ -235,7 +235,7 @@ export default function PaymentQRPage() {
               {uploadedQrUrl && (
                 <button
                   onClick={() => { setPreviewUrl(''); setMode('VIEW'); }}
-                  className="w-full text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                  className="w-full text-xs font-bold text-slate-400 hover:text-slate-400 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>

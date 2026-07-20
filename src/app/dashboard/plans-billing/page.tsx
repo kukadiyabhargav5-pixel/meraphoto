@@ -121,7 +121,7 @@ export default function PlansBillingPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50/50 text-black p-4 md:p-8 flex flex-col min-h-full">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8 flex flex-col min-h-full">
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
       
       <div className="flex flex-col gap-8 w-full max-w-7xl mx-auto bg-white p-8 md:p-12 rounded-[2rem] shadow-sm border border-slate-200 animate-fade-in">
@@ -140,7 +140,7 @@ export default function PlansBillingPage() {
             <span className="text-[10px] text-[#c5a880] font-extrabold uppercase tracking-widest bg-[#c5a880]/10 px-3 py-1.5 rounded-lg border border-[#c5a880]/20 shadow-sm">
               Active Plan
             </span>
-            <h3 className="text-3xl font-black mt-5 text-white tracking-tight">{studio.subscriptionPlan || 'BASIC'}</h3>
+            <h3 className="text-3xl font-black mt-5 text-slate-900 tracking-tight">{studio.subscriptionPlan || 'BASIC'}</h3>
             <p className="text-xs text-slate-400 font-semibold mt-2 tracking-wide flex items-center justify-center md:justify-start gap-1.5">
               Status: <span className="flex items-center gap-1 text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> {studio.subscriptionStatus || 'ACTIVE'}</span>
             </p>
@@ -176,7 +176,7 @@ export default function PlansBillingPage() {
                 )}
                 
                 {(!isActive && p.highlight) && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-black tracking-widest px-4 py-1.5 rounded-full shadow-md whitespace-nowrap">
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-slate-900 text-slate-900 text-[9px] font-black tracking-widest px-4 py-1.5 rounded-full shadow-md whitespace-nowrap">
                     MOST POPULAR
                   </div>
                 )}
@@ -192,10 +192,10 @@ export default function PlansBillingPage() {
                   <ul className="mt-6 space-y-4 mb-8">
                     {p.features.map((feature, i) => (
                       <li key={i} className="flex items-start gap-3">
-                        <div className={`mt-0.5 rounded-full p-1 ${isActive || p.highlight ? 'bg-[#c5a880]/20 text-[#c5a880]' : 'bg-slate-100 text-slate-600'}`}>
+                        <div className={`mt-0.5 rounded-full p-1 ${isActive || p.highlight ? 'bg-[#c5a880]/20 text-[#c5a880]' : 'bg-slate-100 text-slate-400'}`}>
                           <Check className="w-3 h-3" strokeWidth={3} />
                         </div>
-                        <span className="text-xs font-semibold text-slate-700 leading-snug">{feature}</span>
+                        <span className="text-xs font-semibold text-slate-600 leading-snug">{feature}</span>
                       </li>
                     ))}
                   </ul>
@@ -212,8 +212,8 @@ export default function PlansBillingPage() {
                       disabled={loadingPlan === p.name}
                       className={`w-full py-3.5 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer flex items-center justify-center gap-2 ${
                         p.highlight 
-                          ? 'bg-slate-900 hover:bg-slate-800 text-white shadow-md' 
-                          : 'bg-slate-50 hover:bg-[#c5a880] text-slate-700 hover:text-white border border-slate-200 hover:border-[#c5a880] shadow-sm'
+                          ? 'bg-slate-900 hover:bg-slate-800 text-slate-900 shadow-md' 
+                          : 'bg-[#f8f7f4] text-slate-900 hover:bg-[#c5a880] text-slate-600 hover:text-slate-700 border border-slate-200 hover:border-[#c5a880] shadow-sm'
                       }`}
                     >
                       {loadingPlan === p.name ? <Loader className="w-4 h-4 animate-spin" /> : 'Select Plan'}

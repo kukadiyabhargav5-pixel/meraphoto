@@ -1,6 +1,7 @@
 'use client';
 import React, { useState } from 'react';
-import { Plus, Camera, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Eye, EyeOff, Plus, Trash2, Calendar, Clock, MapPin, Loader, Loader2, Upload, AlertCircle, Camera, Image as ImageIcon } from 'lucide-react';
+import CustomDatePicker from '../../../components/CustomDatePicker';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import { useDashboard } from '../DashboardContext';
@@ -47,7 +48,7 @@ export default function CreateEventPage() {
   ];
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white text-slate-900 p-4 md:p-8 font-poppins">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8 font-poppins">
       <style dangerouslySetInnerHTML={{__html: `
         .form-input {
           width: 100%;
@@ -101,7 +102,7 @@ export default function CreateEventPage() {
         }
       `}} />
       
-      <div className="max-w-3xl bg-slate-50 border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm">
+      <div className="max-w-3xl bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm">
         <div className="flex items-center gap-3 mb-2">
           <Plus className="text-slate-500 h-6 w-6" />
           <h1 className="text-3xl font-bold text-slate-900">Create New Event Gallery</h1>
@@ -218,7 +219,7 @@ export default function CreateEventPage() {
               onChange={(e) => setEventType(e.target.value)}
             >
               {EVENT_TYPES.map(type => (
-                <option key={type} value={type} className="bg-white text-slate-900">
+                <option key={type} value={type} className="bg-[#f8f7f4] text-slate-900">
                   {type}
                 </option>
               ))}
@@ -281,23 +282,19 @@ export default function CreateEventPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="form-label">Date</label>
-                <input 
-                  type="date" 
-                  className="form-input"
-                  style={{ colorScheme: 'light' }}
+                <CustomDatePicker
+                  type="date"
                   value={eventDate}
-                  onChange={(e) => setEventDate(e.target.value)}
+                  onChange={(val) => setEventDate(val)}
                   required
                 />
               </div>
               <div>
                 <label className="form-label">Time</label>
-                <input 
-                  type="time" 
-                  className="form-input"
-                  style={{ colorScheme: 'light' }}
+                <CustomDatePicker
+                  type="time"
                   value={eventTime}
-                  onChange={(e) => setEventTime(e.target.value)}
+                  onChange={(val) => setEventTime(val)}
                   required
                 />
               </div>
@@ -320,14 +317,12 @@ export default function CreateEventPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="form-label">Date</label>
-                  <input 
-                    type="date" 
-                    className="form-input"
-                    style={{ colorScheme: 'light' }}
+                  <CustomDatePicker
+                    type="date"
                     value={day.date}
-                    onChange={(e) => {
+                    onChange={(val) => {
                       const newDays = [...eventDays];
-                      newDays[idx].date = e.target.value;
+                      newDays[idx].date = val;
                       setEventDays(newDays);
                     }}
                     required
@@ -335,14 +330,12 @@ export default function CreateEventPage() {
                 </div>
                 <div>
                   <label className="form-label">Time</label>
-                  <input 
-                    type="time" 
-                    className="form-input"
-                    style={{ colorScheme: 'light' }}
+                  <CustomDatePicker
+                    type="time"
                     value={day.time}
-                    onChange={(e) => {
+                    onChange={(val) => {
                       const newDays = [...eventDays];
-                      newDays[idx].time = e.target.value;
+                      newDays[idx].time = val;
                       setEventDays(newDays);
                     }}
                     required
@@ -418,7 +411,7 @@ export default function CreateEventPage() {
                     }
                   }}
                 />
-                <div className={`w-full bg-white border border-slate-200 text-sm font-bold rounded-xl py-4 text-center transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-2 ${uploadingImage ? 'text-slate-400' : 'text-slate-700 hover:bg-slate-50'}`}>
+                <div className={`w-full bg-white border border-slate-200 text-sm font-bold rounded-xl py-4 text-center transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-2 ${uploadingImage ? 'text-slate-400' : 'text-slate-600 hover:bg-[#f8f7f4] text-slate-900'}`}>
                   {uploadingImage ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -435,8 +428,8 @@ export default function CreateEventPage() {
           <div className="border-t border-slate-200 pt-6 mt-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-600 font-bold">W</span>
-                <span className="text-xs font-bold text-slate-700 uppercase">Custom Event Watermark</span>
+                <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-400 font-bold">W</span>
+                <span className="text-xs font-bold text-slate-600 uppercase">Custom Event Watermark</span>
               </div>
               <div 
                 className="toggle-switch" 
@@ -474,11 +467,11 @@ export default function CreateEventPage() {
                   <div>
                     <label className="form-label">Watermark Logo Image</label>
                     <div className="flex gap-4 items-center mt-1">
-                      <div className="w-[60px] h-[60px] rounded border border-dashed border-slate-300 flex items-center justify-center shrink-0 bg-slate-50">
-                          {uploadingWatermark ? <Loader2 className="h-5 w-5 animate-spin text-[#c5a880]" /> : (watermarkLogoUrl ? <img src={watermarkLogoUrl} className="max-w-[40px] max-h-[40px] object-contain" /> : <Camera className="h-5 w-5 text-slate-600" />)}
+                      <div className="w-[60px] h-[60px] rounded border border-dashed border-slate-300 flex items-center justify-center shrink-0 bg-[#f8f7f4] text-slate-900">
+                          {uploadingWatermark ? <Loader2 className="h-5 w-5 animate-spin text-[#c5a880]" /> : (watermarkLogoUrl ? <img src={watermarkLogoUrl} className="max-w-[40px] max-h-[40px] object-contain" /> : <Camera className="h-5 w-5 text-slate-400" />)}
                       </div>
                       <div className="flex-1 flex flex-col">
-                        <label className="w-full text-center border border-slate-200 text-[#b69970] font-bold text-[13px] py-2 rounded-lg bg-white cursor-pointer hover:bg-slate-50 transition-colors shadow-sm">
+                        <label className="w-full text-center border border-slate-200 text-[#b69970] font-bold text-[13px] py-2 rounded-lg bg-white cursor-pointer hover:bg-[#f8f7f4] text-slate-900 transition-colors shadow-sm">
                             Choose File
                             <input 
                               type="file" 
@@ -517,7 +510,7 @@ export default function CreateEventPage() {
                               }} 
                             />
                         </label>
-                        <p className="text-[10px] text-slate-700 font-bold mt-2">PNG with transparent background recommended.</p>
+                        <p className="text-[10px] text-slate-600 font-bold mt-2">PNG with transparent background recommended.</p>
                       </div>
                     </div>
                   </div>
@@ -608,7 +601,7 @@ export default function CreateEventPage() {
                       )}
                       {watermarkType === 'TEXT' && watermarkText && (
                           <div 
-                            className="absolute pointer-events-none text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] font-bold whitespace-nowrap"
+                            className="absolute pointer-events-none text-slate-900 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] font-bold whitespace-nowrap"
                             style={{
                               opacity: watermarkOpacity / 100,
                               fontSize: `${watermarkWidth * 0.3}px`, 
@@ -634,8 +627,8 @@ export default function CreateEventPage() {
 
           <div className="flex items-center justify-between border-t border-slate-200 pt-6 pb-6 mb-6">
             <div className="flex items-center gap-2">
-              <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-600 font-bold">P</span>
-              <span className="text-xs font-bold text-slate-700 uppercase">Add to Portfolio</span>
+              <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-400 font-bold">P</span>
+              <span className="text-xs font-bold text-slate-600 uppercase">Add to Portfolio</span>
             </div>
             <div 
               className="toggle-switch" 
