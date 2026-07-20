@@ -61,14 +61,34 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
       let successful = 0;
       let failed = 0;
       
+      const imageCompression = (await import('browser-image-compression')).default;
+
       for (let i = 0; i < files.length; i += chunkSize) {
         const chunk = Array.from(files).slice(i, i + chunkSize);
         const formData = new FormData();
         
-        chunk.forEach(file => {
-          formData.append('files', file);
+        for (const file of chunk) {
+          let fileToUpload: File | Blob = file;
+          
+          if (file.type.startsWith('image/')) {
+            try {
+              const options = {
+                maxSizeMB: 2,
+                maxWidthOrHeight: 2500,
+                useWebWorker: true,
+                alwaysKeepResolution: true
+              };
+              const compressedBlob = await imageCompression(file, options);
+              // Maintain original filename
+              fileToUpload = new File([compressedBlob], file.name, { type: compressedBlob.type });
+            } catch (err) {
+              console.error('Compression skipped:', err);
+            }
+          }
+
+          formData.append('files', fileToUpload);
           formData.append('folderPaths', file.webkitRelativePath || '');
-        });
+        }
         
         try {
           await apiClient.post(`/media/event/${event._id}/upload`, formData, {
