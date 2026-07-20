@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
+import { apiClient } from '@/lib/api';
 import {
   Camera, LayoutDashboard, Calendar, Settings, CreditCard, HelpCircle,
   LogOut, Plus, Upload, Trash2, Download, ExternalLink, Shield,

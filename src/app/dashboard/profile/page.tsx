@@ -79,7 +79,9 @@ export default function ProfilePage() {
       const res = await apiClient.put('/studio/me', {
         name: studioName,
         logoUrl: logoUrl,
-        customDomain: websiteLink
+        customDomain: websiteLink,
+        userName: name,
+        userPhone: mobile
       });
       if (res.data && res.data.studio) {
         setStudio(res.data.studio);

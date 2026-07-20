@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import toast, { Toaster } from 'react-hot-toast';
 import PublicWrapper from '../../components/PublicWrapper';
 import { Mail, Phone, MapPin, Send, MessageSquare, Clock, Users, ArrowRight } from 'lucide-react';
 
@@ -20,12 +21,13 @@ export default function ContactPage() {
       setPhone('');
       setMessage('');
       setSubmitted(false);
-      alert('Message sent successfully! Our team will contact you shortly.');
+      toast.success('Message sent successfully! Our team will contact you shortly.');
     }, 1000);
   };
 
   return (
     <PublicWrapper>
+      <Toaster position="bottom-right" />
       <main className="bg-[#faf9f6] text-[#09090b] py-12 md:py-16 font-sans">
         <div className="max-w-7xl mx-auto px-6 lg:px-8 space-y-16">
           

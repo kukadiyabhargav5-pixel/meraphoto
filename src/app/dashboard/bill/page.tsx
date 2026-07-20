@@ -6,7 +6,7 @@ import {
   Camera, LayoutDashboard, Calendar, Settings, CreditCard, HelpCircle,
   LogOut, Plus, Upload, Trash2, Download, ExternalLink, Shield,
   RefreshCw, Send, CheckCircle, AlertCircle, Loader, ChevronRight, FolderUp,
-  X, ChevronLeft, CheckSquare, Square, ImageIcon, Film, Edit, Printer,
+  X, ChevronLeft, CheckSquare, Square, ImageIcon, Film, Edit, Printer, Search,
   Users, Users2, FileText, QrCode, User, BookOpen, Receipt, FileSpreadsheet, Briefcase
 } from 'lucide-react';
 
@@ -38,6 +38,9 @@ export default function BillPage() {
   const [newBillAmount, setNewBillAmount] = useState('');
   const [selectedEventCodeForBill, setSelectedEventCodeForBill] = useState('');
   const [newBillDate, setNewBillDate] = useState('');
+  const [newEventDate, setNewEventDate] = useState('');
+  const [newTokenPaymentDate, setNewTokenPaymentDate] = useState('');
+  const [newPaymentMethod, setNewPaymentMethod] = useState('Cash');
   const [newBillAdvance, setNewBillAdvance] = useState('');
   const [newBillStatus, setNewBillStatus] = useState('Pending');
   const [eventsData, setEventsData] = useState<any[]>([]);
@@ -77,9 +80,12 @@ export default function BillPage() {
     setNewBillEmail(bill.clientEmail || '');
     setNewBillMobile(bill.clientMobile || '');
     setNewBillEventName(bill.eventName || '');
+    setNewEventDate(bill.eventDate ? bill.eventDate.split('T')[0] : '');
     setNewBillDate(bill.issueDate ? bill.issueDate.split('T')[0] : (bill.date || ''));
     setNewBillAmount(bill.amount?.toString() || '');
     setNewBillAdvance(bill.advance?.toString() || '');
+    setNewTokenPaymentDate(bill.tokenPaymentDate ? bill.tokenPaymentDate.split('T')[0] : '');
+    setNewPaymentMethod(bill.paymentMethod || 'Cash');
     setNewBillStatus(bill.status || 'Pending');
     setBillSubView('edit');
   };
@@ -89,9 +95,12 @@ export default function BillPage() {
     setNewBillEmail(bill.clientEmail || '');
     setNewBillMobile(bill.clientMobile || '');
     setNewBillEventName(bill.eventName || '');
+    setNewEventDate(bill.eventDate ? bill.eventDate.split('T')[0] : '');
     setNewBillDate(bill.issueDate ? bill.issueDate.split('T')[0] : (bill.date || ''));
     setNewBillAmount(bill.amount?.toString() || '');
     setNewBillAdvance(bill.advance?.toString() || '');
+    setNewTokenPaymentDate(bill.tokenPaymentDate ? bill.tokenPaymentDate.split('T')[0] : '');
+    setNewPaymentMethod(bill.paymentMethod || 'Cash');
     setNewBillStatus(bill.status || 'Pending');
     
     setTimeout(() => {
@@ -103,15 +112,21 @@ export default function BillPage() {
   const resetForm = () => {
     setEditingBill(null);
     setNewBillClient(''); setNewBillEmail(''); setNewBillMobile(''); setNewBillEventName('');
+    setNewEventDate(''); setNewTokenPaymentDate(''); setNewPaymentMethod('Cash');
     setNewBillDate(''); setNewBillAmount(''); setNewBillAdvance(''); 
     setSelectedEventCodeForBill('');
     setBillSubView('list');
   };
 
   const filteredBills = bills.filter((bill: any) => {
-    const matchesSearch = (bill.clientName || bill.client || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (bill.invoiceNo || bill.id || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (bill.status || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const searchLower = searchQuery.toLowerCase();
+    const dateStr = (bill.issueDate || bill.date || '').split('T')[0];
+    const amountStr = (bill.amount || 0).toString();
+    const matchesSearch = (bill.clientName || bill.client || '').toLowerCase().includes(searchLower) ||
+                          (bill.invoiceNo || bill.id || '').toLowerCase().includes(searchLower) ||
+                          (bill.status || '').toLowerCase().includes(searchLower) ||
+                          dateStr.includes(searchLower) ||
+                          amountStr.includes(searchLower);
     
     const matchesFilter = filterStatus === 'All' || bill.status === filterStatus;
     
@@ -137,9 +152,12 @@ export default function BillPage() {
         clientEmail: newBillEmail,
         clientMobile: newBillMobile,
         eventName: newBillEventName,
+        eventDate: newEventDate ? newEventDate : undefined,
         invoiceNo: `INV-2026-${String(bills.length + 101).padStart(3, '0')}`,
         amount: totalVal,
         advance: advVal,
+        tokenPaymentDate: newTokenPaymentDate ? newTokenPaymentDate : undefined,
+        paymentMethod: newPaymentMethod,
         balance: balVal,
         issueDate: newBillDate ? newBillDate : undefined,
         status: newBillStatus || 'Pending'
@@ -192,10 +210,11 @@ export default function BillPage() {
                       </select>
                     </div>
                     <div className="relative w-full sm:w-auto">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                       <input 
                         type="text" 
-                         
-                        className="w-full sm:w-56 bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880] pr-8 shadow-sm transition-colors"
+                        placeholder="Search bills..."
+                        className="w-full sm:w-56 bg-white border border-slate-200 rounded-xl px-4 py-2.5 pl-9 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880] pr-8 shadow-sm transition-colors"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                       />
@@ -231,15 +250,15 @@ export default function BillPage() {
 
                 <div className="bg-white/30 border border-slate-200 rounded-2xl overflow-hidden shadow-md">
                   <div className="overflow-x-auto w-full">
-                    <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
+                    <table className="w-full text-center border-collapse text-xs whitespace-nowrap">
                     <thead>
                       <tr className="border-b border-slate-200 bg-white/[0.03] text-slate-350 uppercase tracking-wider font-black">
-                        <th className="p-4">Invoice ID</th>
-                        <th className="p-4">Billed Client</th>
-                        <th className="p-4">Issue Date</th>
-                        <th className="p-4">Total Amount</th>
-                        <th className="p-4 text-[#c5a880]">Token Paid</th>
-                        <th className="p-4 text-rose-450">Balance Left</th>
+                        <th className="p-4 text-center">Invoice ID</th>
+                        <th className="p-4 text-center">Billed Client</th>
+                        <th className="p-4 text-center">Issue Date</th>
+                        <th className="p-4 text-center">Total Amount</th>
+                        <th className="p-4 text-slate-900 text-center">Token Paid</th>
+                        <th className="p-4 text-rose-450 text-center">Balance Left</th>
                         <th className="p-4 text-center">Status</th>
                         <th className="p-4 text-center">Actions</th>
                       </tr>
@@ -247,12 +266,12 @@ export default function BillPage() {
                     <tbody className="divide-y divide-white/5 text-slate-200">
                       {filteredBills.map((invoice: any, i: number) => (
                         <tr key={i} className="hover:bg-white/[0.01] transition-colors">
-                          <td className="p-4 font-mono font-bold text-[#c5a880]">{invoice.invoiceNo || invoice.id}</td>
-                          <td className="p-4 font-bold text-slate-900">{invoice.clientName || invoice.client}</td>
-                          <td className="p-4 font-semibold text-slate-700">{(invoice.issueDate || invoice.date)?.split('T')[0]}</td>
-                          <td className="p-4 font-black text-slate-900">₹{invoice.amount?.toLocaleString()}</td>
-                          <td className="p-4 font-bold text-[#c5a880]">₹{(invoice.advance || 0).toLocaleString()}</td>
-                          <td className="p-4 font-black text-rose-400">₹{(invoice.balance || 0).toLocaleString()}</td>
+                          <td className="p-4 font-mono font-bold text-[#c5a880] text-center">{invoice.invoiceNo || invoice.id}</td>
+                          <td className="p-4 font-bold text-slate-900 text-center">{invoice.clientName || invoice.client}</td>
+                          <td className="p-4 font-semibold text-slate-700 text-center">{(invoice.issueDate || invoice.date)?.split('T')[0]}</td>
+                          <td className="p-4 font-black text-slate-900 text-center">₹{invoice.amount?.toLocaleString()}</td>
+                          <td className="p-4 font-bold text-[#c5a880] text-center">₹{(invoice.advance || 0).toLocaleString()}</td>
+                          <td className="p-4 font-black text-rose-400 text-center">₹{(invoice.balance || 0).toLocaleString()}</td>
                           <td className="p-4 text-center">
                             <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${invoice.status === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10' : invoice.status === 'Overdue' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/10' : 'bg-amber-500/10 text-amber-400 border border-amber-500/10'}`}>
                               {invoice.status}
@@ -285,7 +304,7 @@ export default function BillPage() {
               </>
             ) : (
               <div className="w-full relative">
-                <button onClick={resetForm} className="absolute top-0 left-0 inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 hover:text-[#c5a880] text-[11px] font-black uppercase tracking-wider rounded-xl border border-slate-200 hover:border-[#c5a880] transition-all duration-300 shadow-sm hover:shadow group cursor-pointer z-10">
+                <button onClick={resetForm} className="absolute top-0 left-0 inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-white hover:text-white text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer z-10">
                   <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
                   <span>Back to Bills</span>
                 </button>
@@ -296,6 +315,7 @@ export default function BillPage() {
                 <form onSubmit={(e) => { e.preventDefault(); handleSaveInvoice(false); }} className=" bg-slate-50 border border-slate-200 p-8 rounded-2xl flex flex-col gap-4 text-left shadow-sm">
                   
                   {/* Select Event */}
+                  {billSubView !== 'edit' && (
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Select Event</label>
                     <select
@@ -309,17 +329,19 @@ export default function BillPage() {
                           setNewBillEmail(ev.clientEmail || '');
                           setNewBillMobile(ev.clientMobile || '');
                           setNewBillEventName(ev.name || '');
-                          setNewBillDate(ev.date ? ev.date.split('T')[0] : new Date().toISOString().split('T')[0]);
+                          setNewBillDate(new Date().toISOString().split('T')[0]);
+                          setNewEventDate(ev.date ? ev.date.split('T')[0] : '');
                         }
                       }}
                       className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]"
                     >
-                      <option className="bg-white text-slate-900" value="">-- Or Select Existing Event --</option>
+                      <option className="bg-white text-slate-900" value="">Select Event...</option>
                       {eventsData.map((ev) => (
                         <option className="bg-white text-slate-900" key={ev._id} value={ev._id}>{ev.name} ({ev.clientName})</option>
                       ))}
                     </select>
                   </div>
+                  )}
 
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Client Name</label>
@@ -339,35 +361,65 @@ export default function BillPage() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Event Name</label>
+                      <input type="text" value={newBillEventName} onChange={(e) => setNewBillEventName(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Event Date</label>
+                      <input type="date" value={newEventDate} onChange={(e) => setNewEventDate(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Invoice Date</label>
                       <input type="date" required value={newBillDate} onChange={(e) => setNewBillDate(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Total Amount (INR)</label>
-                      <input type="number" required value={newBillAmount} onChange={(e) => setNewBillAmount(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                        <input type="number" required value={newBillAmount} onChange={(e) => setNewBillAmount(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg pl-7 pr-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Token / Advance Paid (INR)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                        <input type="number" value={newBillAdvance} onChange={(e) => setNewBillAdvance(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg pl-7 pr-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Token Date</label>
+                      <input type="date" value={newTokenPaymentDate} onChange={(e) => setNewTokenPaymentDate(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Method</label>
+                      <select value={newPaymentMethod} onChange={(e) => setNewPaymentMethod(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]">
+                        <option value="Cash">Cash</option>
+                        <option value="Online">Online</option>
+                      </select>
                     </div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Token / Advance Paid (INR)</label>
-                      <input type="number" value={newBillAdvance} onChange={(e) => setNewBillAdvance(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
-                    </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Balance Left / Due (Auto)</label>
                       <div className="w-full bg-white/50 border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-350 font-bold font-mono">
                         ₹{(Math.max(0, (parseFloat(newBillAmount) || 0) - (parseFloat(newBillAdvance) || 0))).toLocaleString()}
                       </div>
                     </div>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Invoice status</label>
-                    <select value={newBillStatus} onChange={(e) => setNewBillStatus(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]">
-                      <option className="bg-white text-slate-900" value="Pending">Pending</option>
-                      <option className="bg-white text-slate-900" value="Paid">Paid</option>
-                      <option className="bg-white text-slate-900" value="Overdue">Overdue</option>
-                    </select>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">Invoice status</label>
+                      <select value={newBillStatus} onChange={(e) => setNewBillStatus(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]">
+                        <option className="bg-white text-slate-900" value="Pending">Pending</option>
+                        <option className="bg-white text-slate-900" value="Paid">Paid</option>
+                        <option className="bg-white text-slate-900" value="Overdue">Overdue</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="flex gap-4 mt-3">
                     <button type="submit" className="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-lg text-xs cursor-pointer transition-colors shadow-md">
@@ -392,7 +444,7 @@ export default function BillPage() {
                     <p className="text-sm font-semibold text-slate-500 uppercase tracking-widest">Mara Photo Studio</p>
                   </div>
                   <div className="text-right">
-                    <img src="/logo.png" alt="Mara Photo Logo" className="h-14 object-contain ml-auto mb-2 filter grayscale brightness-0 opacity-80" />
+                    <img src={studio?.logoUrl || "/logo.png"} alt="Studio Logo" className={`h-14 object-contain ml-auto mb-2 ${!studio?.logoUrl ? 'filter grayscale brightness-0 opacity-80' : ''}`} />
                     <p className="text-xs text-slate-500">maraphoto.com</p>
                     <p className="text-xs text-slate-500">+91 9876543210</p>
                   </div>

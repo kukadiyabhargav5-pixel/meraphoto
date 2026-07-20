@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
 import { apiClient } from '@/lib/api';
+import toast from 'react-hot-toast';
 import {
   ChevronLeft, ChevronRight, Plus, X, Camera, Video, Clock,
   MapPin, Loader, Calendar as CalendarIcon, Trash2
@@ -166,7 +167,7 @@ export default function CalendarPage() {
       setShowForm(false);
       // Stay on the selected date to show the updated list
     } catch (err) {
-      alert('Error saving shoot. Please try again.');
+      toast.error('Error saving shoot. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -179,7 +180,7 @@ export default function CalendarPage() {
       await apiClient.delete(`/dashboard/shoots/${shootId}`);
       setShoots(shoots.filter((s: any) => s._id !== shootId));
     } catch (err) {
-      alert('Error deleting shoot.');
+      toast.error('Error deleting shoot.');
     }
   };
 

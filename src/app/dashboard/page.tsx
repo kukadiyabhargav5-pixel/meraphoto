@@ -63,9 +63,9 @@ export default function DashboardOverview() {
     fetchStats();
   }, [fetchStats]);
 
-  // Auto-refresh every 30 seconds (real-time feel)
+  // Auto-refresh every 5 minutes (300000 ms) to reduce server load
   useEffect(() => {
-    const interval = setInterval(() => fetchStats(), 30000);
+    const interval = setInterval(() => fetchStats(), 300000);
     return () => clearInterval(interval);
   }, [fetchStats]);
 
@@ -186,26 +186,7 @@ export default function DashboardOverview() {
           })}
         </div>
 
-        {/* Auto-refresh indicator */}
-        <div className="flex items-center gap-3 px-4 py-3 bg-white rounded-xl border border-slate-100 shadow-sm">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-          </span>
-          <p className="text-xs text-slate-500 font-medium">
-            Auto-refreshes every <span className="text-slate-700 font-bold">30 seconds</span> from MongoDB database
-          </p>
-        </div>
 
-        {/* Coming Soon Section */}
-        <div className="bg-white border border-dashed border-[#c5a880]/40 rounded-2xl p-8 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#c5a880]/10 rounded-full mb-4">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#c5a880] animate-pulse" />
-            <span className="text-xs font-bold text-[#9c7c56] uppercase tracking-wider">Coming Soon</span>
-          </div>
-          <h2 className="text-lg font-bold text-slate-700 mb-1">Total Clients & Revenue</h2>
-          <p className="text-sm text-slate-400">These stats will be added as per your instructions</p>
-        </div>
 
       </div>
     </div>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import toast from 'react-hot-toast';
 
 export default function EventUploadPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -27,6 +28,25 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
 
+  const fetchEventDetails = async () => {
+    try {
+      const res = await apiClient.get(`/event/code/${eventId}`);
+      if (res.data && res.data.event) {
+        setEvent(res.data.event);
+        try {
+           const mediaRes = await apiClient.get(`/media/event/${res.data.event._id}`);
+           if (mediaRes.data && mediaRes.data.media) setMediaItems(mediaRes.data.media);
+        } catch (me) {
+           console.error("Failed to fetch media", me);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch event:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
     const files = e.target.files;
     if (!files || files.length === 0 || !event) return;
@@ -35,55 +55,49 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
     setUploadProgress({ current: 0, total: files.length });
     
     try {
-      const sigRes = await apiClient.get(`/media/cloudinary-signature?folder=events/${event._id}/media`);
-      const { signature, timestamp, cloudName, apiKey, folder } = sigRes.data;
+      const chunkSize = 10;
+      let uploadedCount = 0;
+      let successful = 0;
+      let failed = 0;
       
-      const mediaList: any[] = [];
-      
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      for (let i = 0; i < files.length; i += chunkSize) {
+        const chunk = Array.from(files).slice(i, i + chunkSize);
         const formData = new FormData();
-        formData.append('file', file);
-        formData.append('api_key', apiKey);
-        formData.append('timestamp', timestamp);
-        formData.append('signature', signature);
-        formData.append('folder', folder);
+        
+        chunk.forEach(file => {
+          formData.append('files', file);
+          formData.append('folderPaths', file.webkitRelativePath || '');
+        });
         
         try {
-          const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
-            method: 'POST',
-            body: formData
-          }).then(res => res.json());
-          
-          if (uploadRes.secure_url) {
-              mediaList.push({
-                 url: uploadRes.secure_url,
-                 publicId: uploadRes.public_id,
-                 type: file.type.startsWith('video') ? 'VIDEO' : 'PHOTO',
-                 size: file.size,
-                 folderPath: file.webkitRelativePath || '',
-                 width: uploadRes.width,
-                 height: uploadRes.height
-              });
-          }
-        } catch (upErr) {
-          console.error('Cloudinary upload error:', upErr);
+          await apiClient.post(`/media/event/${event._id}/upload`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          successful += chunk.length;
+        } catch (err) {
+          failed += chunk.length;
         }
-        setUploadProgress({ current: i + 1, total: files.length });
+        
+        uploadedCount += chunk.length;
+        setUploadProgress({ current: uploadedCount, total: files.length });
       }
       
-      if (mediaList.length > 0) {
-         await apiClient.post(`/media/event/${event._id}/bulk-create`, { mediaList });
-         const mediaRes = await apiClient.get(`/media/event/${event._id}`);
-         if (mediaRes.data && mediaRes.data.media) setMediaItems(mediaRes.data.media);
-         alert(`Successfully uploaded ${mediaList.length} files!`);
+      if (failed > 0) {
+        toast.error(`Uploaded ${successful}, failed ${failed}`);
+      } else {
+        toast.success(`Successfully uploaded ${files.length} files!`);
       }
-    } catch (err) {
-       console.error('Upload process failed:', err);
-       alert('Upload failed. Please check console for details.');
+      fetchEventDetails();
+    } catch (err: any) {
+       console.error('Upload error:', err);
+       if (err.response?.status === 413) {
+         toast.error('Files too large. Please select fewer files.');
+       } else {
+         toast.error(err?.response?.data?.error || 'Upload failed. Please check console for details.');
+       }
     } finally {
        setUploadingMedia(false);
-       e.target.value = '';
+       if (e.target) e.target.value = '';
     }
   };
 
@@ -102,10 +116,6 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
     return () => clearInterval(interval);
   }, [mediaItems, event?._id]);
-
-  const toggleSelectMedia = (id: string) => {
-    setSelectedMediaIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
 
   const getPreviewPosition = (pos: string) => {
     switch (pos) {
@@ -133,10 +143,11 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
       
       if (res.data && res.data.url) {
         setFormData(prev => ({...prev, watermarkLogoUrl: res.data.url}));
+        toast.success('Logo uploaded successfully');
       }
     } catch (err) {
-      console.error('Failed to upload logo:', err);
-      alert('Failed to upload logo');
+      console.error('Logo upload error:', err);
+      toast.error('Failed to upload logo');
     } finally {
       setUploadingLogo(false);
       if (e.target) e.target.value = '';
@@ -152,6 +163,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
     type: 'WEDDING',
     location: '',
     accessType: 'PUBLIC',
+    password: '',
     customWatermark: false,
     addToPortfolio: false,
     coverImageUrl: '',
@@ -180,6 +192,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
         type: event.type || 'WEDDING',
         location: event.location || '',
         accessType: event.accessType || 'PUBLIC',
+        password: '',
         customWatermark: !!event.watermark?.isActive,
         addToPortfolio: !!event.addToPortfolio,
         coverImageUrl: event.coverImageUrl || '',
@@ -194,25 +207,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
   }, [event]);
 
   useEffect(() => {
-    const fetchEvent = async () => {
-      try {
-        const res = await apiClient.get(`/event/code/${eventId}`);
-        if (res.data && res.data.event) {
-          setEvent(res.data.event);
-          try {
-             const mediaRes = await apiClient.get(`/media/event/${res.data.event._id}`);
-             if (mediaRes.data && mediaRes.data.media) setMediaItems(mediaRes.data.media);
-          } catch (me) {
-             console.error("Failed to fetch media", me);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch event:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchEvent();
+    fetchEventDetails();
   }, [eventId]);
 
   if (loading) {
@@ -227,7 +222,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
     return (
       <div className="flex-1 bg-white p-8">
         <h1 className="text-2xl font-bold text-slate-900">Event not found</h1>
-        <Link href="/dashboard/events" className="inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 hover:text-[#c5a880] text-[11px] font-black uppercase tracking-wider rounded-xl border border-slate-200 hover:border-[#c5a880] transition-all duration-300 shadow-sm hover:shadow group cursor-pointer mt-4">
+        <Link href="/dashboard/events" className="inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-white hover:text-white text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer mt-4">
           <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
           <span>Back to Events</span>
         </Link>
@@ -239,18 +234,15 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
     <div className="flex-1 overflow-y-auto bg-white text-slate-900 p-4 md:p-8 font-poppins">
       <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-8">
         
-        {/* Left/Center - Main Content */}
         <div className="flex-1 flex flex-col">
-          {/* Header */}
           <div className="flex items-center gap-4 mb-8">
-            <Link href="/dashboard/events" className="inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 hover:text-[#c5a880] text-[11px] font-black uppercase tracking-wider rounded-xl border border-slate-200 hover:border-[#c5a880] transition-all duration-300 shadow-sm hover:shadow group cursor-pointer">
+            <Link href="/dashboard/events" className="inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-white hover:text-white text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer">
               <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
               <span>Back to Events</span>
             </Link>
             <h1 className="text-3xl font-bold text-slate-900 ml-4 border-l-2 border-slate-200 pl-4">{event.name}</h1>
           </div>
 
-          {/* Upload Section */}
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8 shadow-sm mb-8">
             <div className="flex flex-col items-center justify-center mb-8">
               <Upload className="h-10 w-10 text-[#c5a880] mb-4" />
@@ -259,7 +251,6 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative">
-              {/* Hidden Inputs */}
               <input type="file" {...{ webkitdirectory: "true", directory: "true" }} multiple ref={folderInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'FOLDER')} />
               <input type="file" accept="image/*" multiple ref={photoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'PHOTO')} />
               <input type="file" accept="video/*" multiple ref={videoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'VIDEO')} />
@@ -288,16 +279,11 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
-          {/* Media Files List */}
           <div className="mt-8">
             <div className="flex items-center justify-between mb-4">
                <h3 className="text-lg font-bold text-slate-900">Media Files ({mediaItems.length})</h3>
                <button 
-                 onClick={async () => {
-                   if (!event) return;
-                   const res = await apiClient.get(`/media/event/${event._id}`);
-                   if (res.data && res.data.media) setMediaItems(res.data.media);
-                 }}
+                 onClick={fetchEventDetails}
                  className="text-xs font-bold text-slate-500 hover:text-[#c5a880] transition-colors"
                >
                  Refresh
@@ -342,7 +328,6 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
 
-        {/* Right - Event Details Sidebar */}
         <div className="w-full lg:w-[400px] shrink-0">
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm sticky top-8">
             <div className="flex items-center gap-2 mb-6 border-b border-slate-200 pb-4">
@@ -438,17 +423,14 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                   }
                 };
 
-                await apiClient.put(`/event/${eventId}`, payload);
-                alert('Event updated successfully!');
-                
-                // Update local event state to reflect new settings
-                setEvent({
-                  ...event,
-                  ...payload
-                });
-                setHasSavedDetails(true);
+                const res = await apiClient.put(`/event/${eventId}`, payload);
+                if (res.data.event) {
+                  setEvent(res.data.event);
+                  toast.success('Event updated successfully!');
+                  setHasSavedDetails(true);
+                }
               } catch (err) {
-                alert('Error updating event');
+                toast.error('Error updating event');
               } finally {
                 setSaving(false);
               }
@@ -551,13 +533,9 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        e.target.value = ''; // Allow selecting same file again
+                        e.target.value = '';
                         setUploadingCover(true);
                         try {
-                          const reader = new FileReader();
-                          reader.onload = (e) => setFormData(prev => ({...prev, coverImageUrl: e.target?.result as string}));
-                          reader.readAsDataURL(file);
-
                           const uploadData = new FormData();
                           uploadData.append('file', file);
                           const res = await apiClient.post('/media/upload-asset', uploadData, {
@@ -568,6 +546,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                           }
                         } catch (err) {
                           console.error("Cover upload failed", err);
+                          toast.error('Failed to upload cover');
                         } finally {
                           setUploadingCover(false);
                         }
@@ -592,6 +571,19 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                   <option value="OTP">OTP VERIFICATION</option>
                 </select>
               </div>
+
+              {formData.accessType === 'PASSWORD' && (
+                <div>
+                  <label className="edit-label text-rose-500">New Password</label>
+                  <input 
+                    type="text" 
+                    className="edit-input border-rose-200 focus:border-rose-500 bg-rose-50/30" 
+                    value={formData.password}
+                    onChange={(e) => setFormData({...formData, password: e.target.value})}
+                    placeholder="Leave empty to keep current password, or enter a new one"
+                  />
+                </div>
+              )}
 
               <div className="flex flex-col border-t border-b border-slate-200 py-4 my-2">
                 <div className="flex items-center justify-between">
@@ -736,7 +728,6 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                     if (saving) return;
                     const newValue = !formData.addToPortfolio;
                     
-                    // Optimistic update
                     setFormData({...formData, addToPortfolio: newValue});
                     setSaving(true);
                     
@@ -745,14 +736,11 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                         addToPortfolio: newValue 
                       });
                       
-                      // Also update the main event object in state so it matches DB
                       if (event) {
                         setEvent({...event, addToPortfolio: newValue});
                       }
                     } catch (err) {
-                      console.error("Failed to update portfolio status", err);
-                      alert("Failed to save portfolio status.");
-                      // Revert on failure
+                      toast.error("Failed to save portfolio status.");
                       setFormData({...formData, addToPortfolio: !newValue});
                     } finally {
                       setSaving(false);
@@ -812,8 +800,9 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                         setSaving(true);
                         await apiClient.delete(`/event/${eventId}`);
                         router.push('/dashboard/events');
-                      } catch (err) {
-                        alert('Error deleting event.');
+                      } catch (error) {
+                        console.error('Error deleting event:', error);
+                        toast.error('Error deleting event.');
                         setSaving(false);
                       }
                     }

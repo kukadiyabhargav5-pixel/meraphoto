@@ -4,6 +4,7 @@ import { Plus, Camera, Loader2, Image as ImageIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import { useDashboard } from '../DashboardContext';
+import toast from 'react-hot-toast';
 
 export default function CreateEventPage() {
   const context = useDashboard();
@@ -13,6 +14,12 @@ export default function CreateEventPage() {
   const [clientEmail, setClientEmail] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [eventType, setEventType] = useState('WEDDING');
+  const [accessType, setAccessType] = useState('PUBLIC');
+  const [password, setPassword] = useState('');
+  const [eventLocation, setEventLocation] = useState('');
+  const [eventTime, setEventTime] = useState('');
+  const [totalDays, setTotalDays] = useState(1);
+  const [eventDays, setEventDays] = useState<{date: string, time: string, location: string}[]>([]);
   const [loading, setLoading] = useState(false);
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
@@ -104,7 +111,7 @@ export default function CreateEventPage() {
         <form onSubmit={async (e) => {
           e.preventDefault();
           if (!eventName) {
-            alert('Event name is required');
+            toast.error('Event name is required');
             return;
           }
           try {
@@ -116,6 +123,13 @@ export default function CreateEventPage() {
               clientEmail,
               date: eventDate || new Date().toISOString(),
               type: eventType,
+              location: eventLocation,
+              time: eventTime,
+              accessType,
+              password,
+              isMultiDay: totalDays > 1,
+              totalDays,
+              days: totalDays > 1 ? eventDays : [],
               coverImageUrl: coverImage,
               addToPortfolio,
               watermark: {
@@ -146,7 +160,7 @@ export default function CreateEventPage() {
             router.push('/dashboard/events');
           } catch (error: any) {
             console.error('Failed to create event', error);
-            alert(error.response?.data?.error || 'Failed to create event. Please try again.');
+            toast.error(error.response?.data?.error || 'Failed to create event. Please try again.');
           } finally {
             setLoading(false);
           }
@@ -163,29 +177,26 @@ export default function CreateEventPage() {
             />
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="form-label">Client Name</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <label className="form-label">Client Mobile</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                
-                value={clientMobile}
-                onChange={(e) => setClientMobile(e.target.value)}
-                required
-              />
-            </div>
+          <div>
+            <label className="form-label">Client Name</label>
+            <input 
+              type="text" 
+              className="form-input" 
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="form-label">Client Mobile</label>
+            <input 
+              type="text" 
+              className="form-input" 
+              value={clientMobile}
+              onChange={(e) => setClientMobile(e.target.value)}
+              required
+            />
           </div>
 
           <div>
@@ -193,40 +204,167 @@ export default function CreateEventPage() {
             <input 
               type="email" 
               className="form-input" 
-              
               value={clientEmail}
               onChange={(e) => setClientEmail(e.target.value)}
               required
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="form-label">Event Type</label>
+            <select 
+              className="form-input"
+              value={eventType}
+              onChange={(e) => setEventType(e.target.value)}
+            >
+              {EVENT_TYPES.map(type => (
+                <option key={type} value={type} className="bg-white text-slate-900">
+                  {type}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="form-label">Access Type</label>
+            <select 
+              className="form-input font-bold tracking-wide"
+              value={accessType}
+              onChange={(e) => setAccessType(e.target.value)}
+            >
+              <option value="PUBLIC">PUBLIC</option>
+              <option value="PASSWORD">PASSWORD PROTECTED</option>
+              <option value="OTP">OTP VERIFICATION</option>
+            </select>
+          </div>
+
+          {accessType === 'PASSWORD' && (
             <div>
-              <label className="form-label">Event Date</label>
+              <label className="form-label text-rose-500">Event Password</label>
               <input 
-                type="date" 
-                className="form-input"
-                style={{ colorScheme: 'light' }}
-                value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
+                type="text" 
+                className="form-input border-rose-200 focus:border-rose-500 bg-rose-50/30" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Set a password for the gallery"
                 required
               />
             </div>
-            <div>
-              <label className="form-label">Event Type</label>
-              <select 
-                className="form-input"
-                value={eventType}
-                onChange={(e) => setEventType(e.target.value)}
-              >
-                {EVENT_TYPES.map(type => (
-                  <option key={type} value={type} className="bg-white text-slate-900">
-                    {type}
-                  </option>
-                ))}
-              </select>
+          )}
+
+          <div>
+            <label className="form-label">Number of Event Days</label>
+            <input 
+              type="number" 
+              className="form-input"
+              min="1"
+              value={totalDays}
+              onChange={(e) => {
+                const num = parseInt(e.target.value) || 1;
+                setTotalDays(num);
+                if (num > 1) {
+                  const newDays = [...eventDays];
+                  while (newDays.length < num - 1) {
+                    newDays.push({ date: '', time: '', location: '' });
+                  }
+                  setEventDays(newDays.slice(0, num - 1));
+                } else {
+                  setEventDays([]);
+                }
+              }}
+              required
+            />
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-xl p-4 md:p-6 space-y-6">
+            <h3 className="text-sm font-bold text-slate-900 mb-2">{totalDays > 1 ? 'Day 1 Schedule' : 'Event Schedule'}</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label className="form-label">Date</label>
+                <input 
+                  type="date" 
+                  className="form-input"
+                  style={{ colorScheme: 'light' }}
+                  value={eventDate}
+                  onChange={(e) => setEventDate(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="form-label">Time</label>
+                <input 
+                  type="time" 
+                  className="form-input"
+                  style={{ colorScheme: 'light' }}
+                  value={eventTime}
+                  onChange={(e) => setEventTime(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="form-label">Location</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  value={eventLocation}
+                  onChange={(e) => setEventLocation(e.target.value)}
+                  required
+                />
+              </div>
             </div>
           </div>
+
+          {totalDays > 1 && eventDays.map((day, idx) => (
+            <div key={idx} className="bg-white border border-slate-200 rounded-xl p-4 md:p-6 space-y-6">
+              <h3 className="text-sm font-bold text-slate-900 mb-2">Day {idx + 2} Schedule</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label className="form-label">Date</label>
+                  <input 
+                    type="date" 
+                    className="form-input"
+                    style={{ colorScheme: 'light' }}
+                    value={day.date}
+                    onChange={(e) => {
+                      const newDays = [...eventDays];
+                      newDays[idx].date = e.target.value;
+                      setEventDays(newDays);
+                    }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Time</label>
+                  <input 
+                    type="time" 
+                    className="form-input"
+                    style={{ colorScheme: 'light' }}
+                    value={day.time}
+                    onChange={(e) => {
+                      const newDays = [...eventDays];
+                      newDays[idx].time = e.target.value;
+                      setEventDays(newDays);
+                    }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Location</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    value={day.location}
+                    onChange={(e) => {
+                      const newDays = [...eventDays];
+                      newDays[idx].location = e.target.value;
+                      setEventDays(newDays);
+                    }}
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
 
           <div>
             <label className="form-label">Cover Image</label>

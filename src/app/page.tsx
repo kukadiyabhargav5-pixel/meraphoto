@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import PublicWrapper from '../components/PublicWrapper';
 import {
   Camera, QrCode, ScanFace, Download, Star, Check,
@@ -42,12 +43,12 @@ const howItWorks = [
 ];
 
 const features = [
-  { icon: ScanFace, title: 'Instant Face Recognition',  desc: 'Eliminate manual photo searching. Guests upload a selfie and view their personalized, matched photos in under 2 seconds.' },
-  { icon: QrCode,   title: 'Elegant QR Branding',       desc: 'Generate custom branded QR codes showing your studio logo. Print or display them at event tables and entries.' },
-  { icon: Zap,      title: 'Real-time Live Delivery',    desc: 'Photos stream live to guests as you shoot and upload. Drive organic social shares while the event is still happening.' },
-  { icon: Globe,    title: 'Fully White-Labeled',        desc: 'Use your own custom subdomain, branding colors, and logo. Deliver a luxury, high-end gallery experience to premium clients.' },
-  { icon: Shield,   title: 'End-to-End Privacy',         desc: 'Encrypt and protect your client\'s personal photos. Only authorized guests with the unique event QR code can view.' },
-  { icon: Users,    title: 'Unlimited Guest Delivery',   desc: 'Deliver photos to thousands of guests simultaneously with zero lag, zero performance drops, and zero limits.' },
+  { icon: ScanFace, title: 'Instant Face Recognition',  desc: 'Eliminate the friction of manual photo browsing. Our proprietary AI engine analyzes and matches faces in under 2 seconds, delivering a highly personalized and seamless memory retrieval experience for every guest.' },
+  { icon: QrCode,   title: 'Elegant QR Branding',       desc: 'Enhance your studio\'s prestige with beautifully designed, custom-branded QR codes. Display them on elegant table tents or digital screens to provide guests with frictionless, instant access to the event gallery.' },
+  { icon: Zap,      title: 'Real-time Live Delivery',    desc: 'Revolutionize client satisfaction by streaming high-resolution photos instantly as the event unfolds. Drive unprecedented organic social media engagement and immediate word-of-mouth marketing for your studio.' },
+  { icon: Globe,    title: 'Fully White-Labeled',        desc: 'Maintain absolute brand authority with fully customized subdomains, tailored color palettes, and integrated studio logos. Deliver a truly luxurious, uninterrupted brand experience to your most premium clientele.' },
+  { icon: Shield,   title: 'End-to-End Privacy',         desc: 'Guarantee peace of mind with enterprise-grade encryption and stringent access controls. Rest assured that private event memories remain strictly confidential, accessible only to authorized guests via secure QR authentication.' },
+  { icon: Users,    title: 'Unlimited Guest Delivery',   desc: 'Scale effortlessly to accommodate events of any magnitude. Our robust cloud infrastructure delivers thousands of high-resolution images to an unlimited number of concurrent guests with zero latency or performance degradation.' },
 ];
 
 const plans = [
@@ -185,7 +186,7 @@ export default function HomePage() {
 
   const handleHomeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    alert('Thank you for contacting Mara Photo! Our team will get back to you within 24 hours.');
+    toast.success('Thank you for contacting Mara Photo! Our team will get back to you within 24 hours.');
     (e.target as HTMLFormElement).reset();
   };
 

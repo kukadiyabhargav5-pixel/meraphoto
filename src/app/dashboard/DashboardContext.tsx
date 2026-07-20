@@ -52,49 +52,52 @@ export const DashboardProvider = ({ children }: { children: React.ReactNode }) =
           if (authStudio) setStudio(authStudio);
         }
 
-        // Fetch dashboard data
+        // Fetch dashboard data concurrently to improve loading speed
         try {
-          const custRes = await apiClient.get('/dashboard/customers');
-          setCustomers(custRes.data || []);
-        } catch {}
-        try {
-          const teamRes = await apiClient.get('/dashboard/team');
-          setTeam(teamRes.data || []);
-        } catch {}
-        try {
-          const bookRes = await apiClient.get('/dashboard/bookings');
-          setBookings(bookRes.data || []);
-        } catch {}
-        try {
-          const quoteRes = await apiClient.get('/dashboard/quotations');
-          setQuotations(quoteRes.data || []);
-        } catch {}
-        try {
-          const billRes = await apiClient.get('/dashboard/bills');
-          setBills(billRes.data || []);
-        } catch {}
-        try {
-          const shootRes = await apiClient.get('/dashboard/shoots');
-          setShoots(shootRes.data || []);
-        } catch {}
+          const [
+            custRes,
+            teamRes,
+            bookRes,
+            quoteRes,
+            billRes,
+            shootRes,
+            portfolioRes,
+            coverRes
+          ] = await Promise.allSettled([
+            apiClient.get('/dashboard/customers'),
+            apiClient.get('/dashboard/team'),
+            apiClient.get('/dashboard/bookings'),
+            apiClient.get('/dashboard/quotations'),
+            apiClient.get('/dashboard/bills'),
+            apiClient.get('/dashboard/shoots'),
+            apiClient.get('/dashboard/portfolio'),
+            apiClient.get('/dashboard/event-cover')
+          ]);
 
-        // Fetch portfolios
-        try {
-          const portfolioRes = await apiClient.get('/dashboard/portfolio');
-          if (portfolioRes.data && portfolioRes.data.portfolios) {
-            setPortfolios(portfolioRes.data.portfolios);
+          if (custRes.status === 'fulfilled') setCustomers(custRes.value.data || []);
+          if (teamRes.status === 'fulfilled') setTeam(teamRes.value.data || []);
+          if (bookRes.status === 'fulfilled') setBookings(bookRes.value.data || []);
+          if (quoteRes.status === 'fulfilled') setQuotations(quoteRes.value.data || []);
+          if (billRes.status === 'fulfilled') setBills(billRes.value.data || []);
+          if (shootRes.status === 'fulfilled') setShoots(shootRes.value.data || []);
+          if (portfolioRes.status === 'fulfilled' && portfolioRes.value.data?.portfolios) {
+            setPortfolios(portfolioRes.value.data.portfolios);
           }
-        } catch {}
-
-        // Fetch event covers
-        try {
-          const coverRes = await apiClient.get('/dashboard/event-cover');
-          if (coverRes.data && coverRes.data.covers) {
-            setEventCovers(coverRes.data.covers);
+          if (coverRes.status === 'fulfilled' && coverRes.value.data?.covers) {
+            setEventCovers(coverRes.value.data.covers);
           }
-        } catch {}
+        } catch (err) {
+          console.error('Error fetching dashboard bulk data:', err);
+        }
+        
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('dashboard-loaded'));
+        }
       } catch (err) {
         console.error('Error loading dashboard data:', err);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('dashboard-loaded'));
+        }
       }
     };
     loadData();

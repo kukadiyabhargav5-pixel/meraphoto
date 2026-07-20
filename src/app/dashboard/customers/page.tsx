@@ -6,7 +6,7 @@ import {
   Camera, LayoutDashboard, Calendar, Settings, CreditCard, HelpCircle,
   LogOut, Plus, Upload, Trash2, Download, ExternalLink, Shield,
   RefreshCw, Send, CheckCircle, AlertCircle, Loader, ChevronRight, FolderUp,
-  X, ChevronLeft, CheckSquare, Square, ImageIcon, Film, Edit,
+  X, ChevronLeft, CheckSquare, Square, ImageIcon, Film, Edit, Search,
   Users, Users2, FileText, QrCode, User, BookOpen, Receipt, FileSpreadsheet, Briefcase
 } from 'lucide-react';
 
@@ -141,10 +141,11 @@ export default function CustomersPage() {
                   </div>
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
                     <div className="relative w-full sm:w-auto">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                       <input 
                         type="text" 
-                         
-                        className="w-full sm:w-64 bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880] pr-8 shadow-sm transition-colors"
+                        placeholder="Search customers..."
+                        className="w-full sm:w-64 bg-white border border-slate-200 rounded-xl px-4 py-2.5 pl-9 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880] pr-8 shadow-sm transition-colors"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                       />
@@ -205,7 +206,7 @@ export default function CustomersPage() {
               </>
             ) : (
               <div className="w-full relative">
-                <button onClick={resetForm} className="absolute top-0 left-0 inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 hover:text-[#c5a880] text-[11px] font-black uppercase tracking-wider rounded-xl border border-slate-200 hover:border-[#c5a880] transition-all duration-300 shadow-sm hover:shadow group cursor-pointer z-10">
+                <button onClick={resetForm} className="absolute top-0 left-0 inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-white hover:text-white text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer z-10">
                   <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
                   <span>Back to Customers</span>
                 </button>

@@ -6,7 +6,7 @@ import {
   Camera, LayoutDashboard, Calendar, Settings, CreditCard, HelpCircle,
   LogOut, Plus, Upload, Trash2, Download, ExternalLink, Shield,
   RefreshCw, Send, CheckCircle, AlertCircle, Loader, ChevronRight, FolderUp,
-  X, ChevronLeft, CheckSquare, Square, ImageIcon, Film, Edit,
+  X, ChevronLeft, CheckSquare, Square, ImageIcon, Film, Edit, Search,
   Users, Users2, FileText, QrCode, User, BookOpen, Receipt, FileSpreadsheet, Briefcase
 } from 'lucide-react';
 
@@ -36,6 +36,7 @@ export default function TeamPage() {
   const [newMemberRole, setNewMemberRole] = useState('Lead Photographer');
   const [searchQuery, setSearchQuery] = useState('');
   const [editingMember, setEditingMember] = useState<any>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleDelete = async (member: any) => {
     if (confirm('Are you sure you want to delete this team member?')) {
@@ -86,10 +87,11 @@ export default function TeamPage() {
                   </div>
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
                     <div className="relative w-full sm:w-auto">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                       <input 
                         type="text" 
-                         
-                        className="w-full sm:w-64 bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880] pr-8 shadow-sm transition-colors"
+                        placeholder="Search team members..."
+                        className="w-full sm:w-64 bg-white border border-slate-200 rounded-xl px-4 py-2.5 pl-9 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880] pr-8 shadow-sm transition-colors"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                       />
@@ -150,7 +152,7 @@ export default function TeamPage() {
               </>
             ) : (
               <div className="w-full relative">
-                <button onClick={resetForm} className="absolute top-0 left-0 inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 hover:text-[#c5a880] text-[11px] font-black uppercase tracking-wider rounded-xl border border-slate-200 hover:border-[#c5a880] transition-all duration-300 shadow-sm hover:shadow group cursor-pointer z-10">
+                <button onClick={resetForm} className="absolute top-0 left-0 inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-white hover:text-white text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer z-10">
                   <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
                   <span>Back to Team</span>
                 </button>
@@ -162,8 +164,9 @@ export default function TeamPage() {
                   </div>
                 <form onSubmit={async (e) => {
                   e.preventDefault();
-                  if (newMemberName) {
+                  if (newMemberName && !isSubmitting) {
                     try {
+                      setIsSubmitting(true);
                       if (teamSubView === 'edit' && editingMember) {
                         const res = await apiClient.put(`/dashboard/team/${editingMember._id}`, { name: newMemberName, email: newMemberEmail, phone: newMemberPhone, role: newMemberRole });
                         setTeam(team.map((m: any) => m._id === editingMember._id ? res.data : m));
@@ -174,9 +177,11 @@ export default function TeamPage() {
                         setSuccessMsg('Team member invitation sent!');
                       }
                       resetForm();
-                    } catch (err) {
+                    } catch (err: any) {
                       console.error(err);
-                      setErrorMsg(teamSubView === 'edit' ? 'Failed to update member' : 'Failed to invite member');
+                      setErrorMsg(err.response?.data?.error || (teamSubView === 'edit' ? 'Failed to update member' : 'Failed to invite member'));
+                    } finally {
+                      setIsSubmitting(false);
                     }
                   }
                 }} className="bg-slate-50 border border-slate-200 p-8 sm:p-10 rounded-2xl flex flex-col gap-5 text-center shadow-sm mt-2">
@@ -224,8 +229,8 @@ export default function TeamPage() {
                       </optgroup>
                     </select>
                   </div>
-                  <button type="submit" className="w-full bg-[#09090b] hover:bg-[#c5a880] text-white hover:text-[#09090b] uppercase tracking-wider font-bold py-4 rounded-xl text-xs mt-4 cursor-pointer transition-all shadow-md">
-                    {teamSubView === 'edit' ? 'Save Changes' : 'Send Invitation Link'}
+                  <button type="submit" disabled={isSubmitting} className="flex justify-center items-center gap-2 w-full bg-[#09090b] hover:bg-[#c5a880] text-white hover:text-[#09090b] uppercase tracking-wider font-bold py-4 rounded-xl text-xs mt-4 cursor-pointer transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                    {isSubmitting ? <Loader className="h-4 w-4 animate-spin" /> : (teamSubView === 'edit' ? 'Save Changes' : 'Send Invitation Link')}
                   </button>
                 </form>
               </div>

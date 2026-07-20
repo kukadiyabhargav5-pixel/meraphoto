@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useDashboard } from '../DashboardContext';
 import { Download, Share2, Upload, CheckCircle, QrCode, RefreshCw } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import toast from 'react-hot-toast';
 
 export default function PaymentQRPage() {
   const context = useDashboard();
@@ -78,7 +79,7 @@ export default function PaymentQRPage() {
       a.download = 'Payment_QR.png';
       a.click();
     } catch {
-      alert('Could not download QR code.');
+      toast.error('Could not download QR code.');
     }
   };
 
@@ -89,7 +90,7 @@ export default function PaymentQRPage() {
         await navigator.share({ title: 'Payment QR Code', url: uploadedQrUrl });
       } catch {}
     } else {
-      alert('Sharing not supported on this browser.');
+      toast.error('Sharing not supported on this browser.');
     }
   };
 
