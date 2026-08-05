@@ -5,6 +5,7 @@ import "./datepicker-custom.css";
 import { AuthProvider } from "../lib/AuthContext";
 import PageLoader from "../components/PageLoader";
 import NavigationProgress from "../components/NavigationProgress";
+import ToastProvider from "../components/ToastProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,6 +40,7 @@ export default function RootLayout({
         <AuthProvider>
           {children}
         </AuthProvider>
+        <ToastProvider />
       </body>
     </html>
   );

@@ -12,6 +12,7 @@ import {
 import { DashboardProvider, useDashboard } from './DashboardContext';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import { useAuth } from '../../lib/AuthContext';
+import ChatbotWidget from '../../components/ChatbotWidget';
 
 const NAV_ITEMS = [
   {
@@ -47,6 +48,7 @@ const NAV_ITEMS = [
   {
     category: 'System',
     links: [
+      { href: '/dashboard/studio-settings', label: 'Studio Settings', icon: Settings },
       { href: '/dashboard/studio-branding', label: 'Studio Branding', icon: Settings },
       { href: '/dashboard/plans-billing', label: 'Plans & Billing', icon: CreditCard },
       { href: '/dashboard/support-help', label: 'Support Help', icon: HelpCircle },
@@ -198,6 +200,9 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
         <div className="flex-1 overflow-y-auto bg-[#f8f7f4]">
           {children}
         </div>
+        
+        {/* AI Chatbot Widget */}
+        <ChatbotWidget />
       </div>
 
     </div>

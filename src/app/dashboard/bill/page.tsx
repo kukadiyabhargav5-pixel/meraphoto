@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
+import { useAuth } from '@/lib/AuthContext';
 import { apiClient } from '@/lib/api';
 import {
   Camera, LayoutDashboard, Calendar, Settings, CreditCard, HelpCircle,
@@ -26,9 +27,9 @@ export default function BillPage() {
     tickets, setTickets,
     successMsg, setSuccessMsg,
     errorMsg, setErrorMsg
-
-    
   } = context;
+
+  const { user } = useAuth();
 
   const [billSubView, setBillSubView] = useState('list');
   const [newBillClient, setNewBillClient] = useState('');
@@ -91,23 +92,200 @@ export default function BillPage() {
     setBillSubView('edit');
   };
 
+  const openPrintWindow = (invoice: any) => {
+    const studioName = studio?.name || 'Mara Photo';
+    const studioLogo = studio?.logoUrl || '';
+    const studioEmail = user?.email || '';
+    const studioPhone = user?.phone || '';
+    const clientName = invoice.clientName || invoice.client || '';
+    const total = parseFloat(invoice.amount || 0);
+    const advance = parseFloat(invoice.advance || 0);
+    const balance = invoice.balance !== undefined ? parseFloat(invoice.balance) : Math.max(0, total - advance);
+    const invoiceDate = new Date(invoice.issueDate || invoice.date || Date.now());
+    const invoiceNumber = invoice.invoiceNo || invoice.id || `INV-${Math.floor(Math.random()*10000)}`;
+    const eventName = invoice.eventName || '';
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Invoice - ${clientName}</title>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body {
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+                background: white;
+                color: #111827;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                line-height: 1.5;
+              }
+              
+              @page {
+                size: A4;
+                margin: 0; 
+              }
+              
+              @media print {
+                body { padding: 1.5cm; }
+              }
+
+              @media screen {
+                body { background: #f3f4f6; padding: 40px; }
+                .invoice-page { margin: 0 auto; box-shadow: 0 10px 40px -10px rgba(0,0,0,0.1); padding: 1.5cm; }
+              }
+
+              .invoice-page { max-width: 21cm; background: white; position: relative; }
+
+              .invoice-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #e5e7eb; padding-bottom: 30px; margin-bottom: 30px; }
+              .studio-info { display: flex; flex-direction: column; gap: 12px; }
+              .studio-logo-wrapper { margin-bottom: 8px; }
+              .studio-logo { max-width: 140px; max-height: 60px; object-fit: contain; }
+              .studio-name { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; color: #111827; text-transform: uppercase; }
+              .studio-contact { font-size: 13px; font-weight: 500; color: #4b5563; }
+              .studio-contact div { margin-bottom: 2px; }
+              
+              .invoice-title { text-align: right; }
+              .invoice-title h2 { font-size: 36px; font-weight: 900; letter-spacing: 0.05em; color: #c5a880; text-transform: uppercase; line-height: 1; }
+              .invoice-title .quote-num { font-size: 14px; font-weight: 600; color: #6b7280; margin-top: 8px; }
+
+              .invoice-meta { display: flex; justify-content: space-between; margin-bottom: 40px; }
+              .meta-block { flex: 1; }
+              .meta-block.billed-to { flex: 2; }
+              .meta-block h4 { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #9ca3af; margin-bottom: 6px; }
+              .meta-block p { font-size: 15px; font-weight: 600; color: #111827; }
+              .status-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid currentColor; }
+              .status-pending { color: #d97706; background: #fffbeb; }
+              .status-paid { color: #059669; background: #ecfdf5; }
+              .status-overdue { color: #dc2626; background: #fef2f2; }
+
+              table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+              thead th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #ffffff; background-color: #111827; padding: 12px 16px; text-align: left; }
+              thead th:first-child { border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
+              thead th:last-child { text-align: right; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+              
+              tbody td { padding: 16px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+              tbody td:last-child { text-align: right; font-weight: 700; color: #111827; white-space: nowrap; }
+              .item-name { font-size: 15px; font-weight: 600; color: #111827; }
+              .item-num { font-size: 13px; font-weight: 500; color: #9ca3af; }
+              .item-price { font-size: 15px; }
+
+              .invoice-total { width: 350px; float: right; background: #f9fafb; padding: 24px; border-radius: 8px; border: 1px solid #e5e7eb; }
+              .total-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; }
+              .total-row.grand { border-top: 2px solid #e5e7eb; margin-top: 12px; padding-top: 16px; }
+              .total-label { font-size: 13px; font-weight: 600; color: #4b5563; }
+              .total-value { font-size: 15px; font-weight: 700; color: #111827; }
+              .total-row.advance .total-value { color: #059669; }
+              .grand .total-label { font-size: 15px; font-weight: 800; color: #111827; text-transform: uppercase; }
+              .grand .total-value { font-size: 24px; font-weight: 900; color: #dc2626; }
+              .clearfix::after { content: ""; clear: both; display: table; }
+
+              .invoice-footer { margin-top: 80px; padding-top: 30px; border-top: 2px solid #e5e7eb; display: flex; justify-content: space-between; align-items: flex-end; }
+              .footer-note { font-size: 12px; font-weight: 500; color: #6b7280; line-height: 1.6; max-width: 400px; }
+              .footer-brand { text-align: right; }
+              .footer-brand .brand-name { font-size: 18px; font-weight: 800; color: #111827; letter-spacing: 0.02em; }
+              .footer-brand .brand-tagline { font-size: 10px; font-weight: 700; color: #c5a880; text-transform: uppercase; letter-spacing: 0.15em; margin-top: 4px; }
+            </style>
+          </head>
+          <body>
+            <div class="invoice-page">
+              <div class="invoice-header">
+                <div class="studio-info">
+                  <div class="studio-logo-wrapper">
+                    ${studioLogo ? `<img src="${studioLogo}" class="studio-logo" alt="Logo" />` : `<div style="font-size:28px;font-weight:900;color:#c5a880;">${studioName.charAt(0)}</div>`}
+                  </div>
+                  <div>
+                    <div class="studio-name">${studioName}</div>
+                    <div class="studio-contact">
+                      ${studioEmail ? `<div>E: ${studioEmail}</div>` : ''}
+                      ${studioPhone ? `<div>M: ${studioPhone}</div>` : ''}
+                    </div>
+                  </div>
+                </div>
+                <div class="invoice-title">
+                  <h2>INVOICE</h2>
+                  <div class="quote-num">${invoiceNumber}</div>
+                </div>
+              </div>
+
+              <div class="invoice-meta">
+                <div class="meta-block billed-to">
+                  <h4>Billed To</h4>
+                  <p>${clientName}</p>
+                </div>
+                <div class="meta-block">
+                  <h4>Invoice Date</h4>
+                  <p>${invoiceDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                </div>
+                <div class="meta-block" style="text-align:right;">
+                  <h4>Status</h4>
+                  <span class="status-badge status-${(invoice.status || 'Pending').toLowerCase()}">${invoice.status || 'Pending'}</span>
+                </div>
+              </div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:40px">#</th>
+                    <th>Description</th>
+                    <th style="text-align:right">Amount (₹)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="item-num">01</td>
+                    <td>
+                      <div class="item-name">Photography / Videography Services</div>
+                      ${eventName ? `<div style="font-size: 13px; color: #6b7280; margin-top: 4px;">Event: ${eventName}</div>` : ''}
+                    </td>
+                    <td class="item-price">₹${total.toLocaleString('en-IN')}</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div class="clearfix">
+                <div class="invoice-total">
+                  <div class="total-row">
+                    <span class="total-label">Subtotal</span>
+                    <span class="total-value">₹${total.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div class="total-row advance">
+                    <span class="total-label">Advance / Token Paid</span>
+                    <span class="total-value">- ₹${advance.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div class="total-row grand">
+                    <span class="total-label">Balance Due</span>
+                    <span class="total-value">₹${balance.toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="invoice-footer">
+                <div class="footer-note">
+                  Thank you for choosing <strong>${studioName}</strong>!<br/>
+                  All balances are due prior to final deliverables unless agreed otherwise.
+                </div>
+                <div class="footer-brand">
+                  <div class="brand-name">${studioName}</div>
+                  <div class="brand-tagline">Professional Photography</div>
+                </div>
+              </div>
+            </div>
+            <script>
+              window.onload = () => { setTimeout(() => { window.print(); }, 500); };
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  };
+
   const handlePrintExisting = (bill: any) => {
-    setNewBillClient(bill.clientName || bill.client || '');
-    setNewBillEmail(bill.clientEmail || '');
-    setNewBillMobile(bill.clientMobile || '');
-    setNewBillEventName(bill.eventName || '');
-    setNewEventDate(bill.eventDate ? bill.eventDate.split('T')[0] : '');
-    setNewBillDate(bill.issueDate ? bill.issueDate.split('T')[0] : (bill.date || ''));
-    setNewBillAmount(bill.amount?.toString() || '');
-    setNewBillAdvance(bill.advance?.toString() || '');
-    setNewTokenPaymentDate(bill.tokenPaymentDate ? bill.tokenPaymentDate.split('T')[0] : '');
-    setNewPaymentMethod(bill.paymentMethod || 'Cash');
-    setNewBillStatus(bill.status || 'Pending');
-    
-    setTimeout(() => {
-      window.print();
-      resetForm();
-    }, 150);
+    openPrintWindow(bill);
   };
 
   const resetForm = () => {
@@ -173,10 +351,9 @@ export default function BillPage() {
       }
       
       if (shouldPrint) {
-        setTimeout(() => {
-          window.print();
-          resetForm();
-        }, 100);
+        openPrintWindow(reqBody);
+        setSuccessMsg(billSubView === 'edit' ? 'Invoice updated successfully!' : 'GST Invoice created successfully!');
+        resetForm();
       } else {
         setSuccessMsg(billSubView === 'edit' ? 'Invoice updated successfully!' : 'GST Invoice created successfully!');
         resetForm();
@@ -435,82 +612,8 @@ export default function BillPage() {
               </div>
             )}
 
-            {/* PRINT LAYOUT */}
-            <div className="hidden print:block fixed inset-0 z-[99999] bg-[#f8f7f4] text-slate-900 p-12">
-              <div className="max-w-4xl mx-auto flex flex-col gap-8">
-                {/* Header */}
-                <div className="flex justify-between items-start border-b-2 border-slate-900 pb-8">
-                  <div>
-                    <h1 className="text-4xl font-extrabold tracking-tighter text-slate-900 mb-2">INVOICE</h1>
-                    <p className="text-sm font-semibold text-slate-500 uppercase tracking-widest">Mara Photo Studio</p>
-                  </div>
-                  <div className="text-right">
-                    <img src={studio?.logoUrl || "/logo.png"} alt="Studio Logo" className={`h-14 object-contain ml-auto mb-2 ${!studio?.logoUrl ? 'filter grayscale brightness-0 opacity-80' : ''}`} />
-                    <p className="text-xs text-slate-500">maraphoto.com</p>
-                    <p className="text-xs text-slate-500">+91 9876543210</p>
-                  </div>
-                </div>
+            {/* Print layout removed as it's now handled by popup window */}
 
-                {/* Details */}
-                <div className="flex justify-between items-start">
-                  <div className="flex flex-col gap-1">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Billed To</p>
-                    <h3 className="text-lg font-bold text-slate-900">{newBillClient || 'Client Name'}</h3>
-                    {newBillEmail && <p className="text-sm text-slate-400">{newBillEmail}</p>}
-                    {newBillMobile && <p className="text-sm text-slate-400">{newBillMobile}</p>}
-                    {newBillEventName && <p className="text-sm text-slate-400 font-semibold mt-1">Event: {newBillEventName}</p>}
-                  </div>
-                  <div className="flex flex-col gap-1 text-right">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Invoice Details</p>
-                    <p className="text-sm text-slate-900 font-bold">No: INV-2026-{String(bills.length + 101).padStart(3, '0')}</p>
-                    <p className="text-sm text-slate-400">Date: {newBillDate || new Date().toISOString().split('T')[0]}</p>
-                    <p className="text-sm text-slate-400 font-bold">Status: <span className="uppercase">{newBillStatus}</span></p>
-                  </div>
-                </div>
-
-                {/* Table */}
-                <div className="mt-8">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b-2 border-slate-200">
-                        <th className="py-3 text-xs font-bold uppercase tracking-wider text-slate-500">Description</th>
-                        <th className="py-3 text-xs font-bold uppercase tracking-wider text-slate-500 text-right">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-b border-slate-100">
-                        <td className="py-4 text-sm font-semibold text-slate-900">Photography / Videography Services - {newBillEventName || 'Event Package'}</td>
-                        <td className="py-4 text-sm font-bold text-slate-900 text-right">₹{parseFloat(newBillAmount || '0').toLocaleString()}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Summary */}
-                <div className="flex justify-end mt-4">
-                  <div className="w-1/2 flex flex-col gap-3">
-                    <div className="flex justify-between items-center">
-                      <p className="text-sm font-semibold text-slate-500">Subtotal</p>
-                      <p className="text-sm font-bold text-slate-900">₹{parseFloat(newBillAmount || '0').toLocaleString()}</p>
-                    </div>
-                    <div className="flex justify-between items-center text-[#c5a880]">
-                      <p className="text-sm font-semibold">Advance / Token Paid</p>
-                      <p className="text-sm font-bold">- ₹{parseFloat(newBillAdvance || '0').toLocaleString()}</p>
-                    </div>
-                    <div className="flex justify-between items-center border-t-2 border-slate-900 pt-3 mt-1">
-                      <p className="text-lg font-black text-slate-900 uppercase">Balance Due</p>
-                      <p className="text-2xl font-black text-rose-500">₹{Math.max(0, parseFloat(newBillAmount || '0') - parseFloat(newBillAdvance || '0')).toLocaleString()}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="mt-16 pt-8 border-t border-slate-200 text-center flex flex-col gap-1">
-                  <p className="text-sm font-bold text-slate-900">Thank you for choosing Mara Photo Studio!</p>
-                  <p className="text-xs text-slate-500">All balances are due prior to final deliverables unless agreed otherwise.</p>
-                </div>
-              </div>
-            </div>
 
           </div>
     </div>

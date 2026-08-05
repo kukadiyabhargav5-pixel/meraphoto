@@ -1,8 +1,9 @@
 'use client';
 import React, { useEffect, useState, useCallback } from 'react';
 import { useDashboard } from './DashboardContext';
-import { Calendar, Image as ImageIcon, RefreshCw, TrendingUp, Zap } from 'lucide-react';
+import { Calendar, Image as ImageIcon, RefreshCw, TrendingUp, Zap, ExternalLink, Settings, Camera } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import Link from 'next/link';
 
 interface Stats {
   events: number;
@@ -125,6 +126,48 @@ export default function DashboardOverview() {
             Refresh
           </button>
         </div>
+
+        {/* Studio Info Card */}
+        {context.studio && (
+          <div className="relative bg-white rounded-2xl p-5 overflow-hidden transition-all duration-300 hover:shadow-xl"
+            style={{ border: '1px solid rgba(197,168,128,0.25)', boxShadow: '0 4px 24px rgba(197,168,128,0.06)' }}
+          >
+            <div className="absolute inset-0 opacity-30 pointer-events-none"
+              style={{ background: 'radial-gradient(ellipse 50% 50% at 90% 20%, rgba(197,168,128,0.15) 0%, transparent 70%)' }}
+            />
+            <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl border-2 border-[#e3d8c8] bg-[#faf9f6] flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  {context.studio.logoUrl ? (
+                    <img src={context.studio.logoUrl} alt="Studio" className="w-full h-full object-contain p-1" />
+                  ) : (
+                    <Camera className="h-6 w-6 text-slate-300" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">{context.studio.name || 'My Studio'}</h3>
+                  {context.studio.subdomain && (
+                    <a
+                      href={`https://${context.studio.subdomain}.maraphoto.com`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-bold text-[#c5a880] hover:text-[#9c7c56] flex items-center gap-1 mt-0.5 transition-colors"
+                    >
+                      {context.studio.subdomain}.maraphoto.com
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </div>
+              </div>
+              <Link
+                href="/dashboard/studio-settings"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#c5a880]/10 border border-[#c5a880]/20 text-[#9c7c56] hover:bg-[#c5a880] hover:text-white transition-all shadow-sm"
+              >
+                <Settings className="h-3.5 w-3.5" /> Change
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Stats Cards — Events & Photos */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">

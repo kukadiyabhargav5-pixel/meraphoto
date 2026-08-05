@@ -100,6 +100,7 @@ export default function QuotationPage() {
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(`
+        <!DOCTYPE html>
         <html>
           <head>
             <title>Invoice - ${clientName}</title>
@@ -108,137 +109,201 @@ export default function QuotationPage() {
               * { margin: 0; padding: 0; box-sizing: border-box; }
               body {
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-                background: #f8f7f4;
-                color: #1e293b;
-                padding: 0;
+                background: white;
+                color: #111827;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
+                line-height: 1.5;
               }
+              
+              /* Hide browser headers/footers on print */
+              @page {
+                size: A4;
+                margin: 0; /* Removes browser header/footer text like 'about:blank' */
+              }
+              
+              @media print {
+                body {
+                  padding: 1.5cm; /* Give space back inside the printable area */
+                }
+              }
+
+              /* For screen preview */
+              @media screen {
+                body {
+                  background: #f3f4f6;
+                  padding: 40px;
+                }
+                .invoice-page {
+                  margin: 0 auto;
+                  box-shadow: 0 10px 40px -10px rgba(0,0,0,0.1);
+                  padding: 1.5cm;
+                }
+              }
+
               .invoice-page {
-                max-width: 800px;
-                margin: 0 auto;
+                max-width: 21cm;
                 background: white;
-                min-height: 100vh;
                 position: relative;
               }
 
               /* ─── Header ─── */
               .invoice-header {
-                background: linear-gradient(135deg, #0c0c0e 0%, #1a1a2e 100%);
-                color: white;
-                padding: 40px 48px;
                 display: flex;
                 justify-content: space-between;
                 align-items: flex-start;
+                border-bottom: 2px solid #e5e7eb;
+                padding-bottom: 30px;
+                margin-bottom: 30px;
               }
-              .studio-info { display: flex; align-items: center; gap: 16px; }
+              .studio-info { 
+                display: flex; 
+                flex-direction: column;
+                gap: 12px;
+              }
+              .studio-logo-wrapper {
+                margin-bottom: 8px;
+              }
               .studio-logo {
-                width: 56px; height: 56px;
-                border-radius: 14px;
+                max-width: 140px;
+                max-height: 60px;
                 object-fit: contain;
-                background: rgba(255,255,255,0.08);
-                padding: 6px;
-                border: 1px solid rgba(197,168,128,0.3);
               }
               .studio-name {
-                font-size: 22px; font-weight: 800;
-                letter-spacing: 0.02em;
-              }
-              .studio-email {
-                font-size: 11px; font-weight: 500;
-                color: #c5a880; margin-top: 4px;
-                letter-spacing: 0.03em;
-              }
-              .invoice-badge {
-                text-align: right;
-              }
-              .invoice-badge h2 {
-                font-size: 28px; font-weight: 900;
-                letter-spacing: 0.08em;
-                color: #c5a880;
+                font-size: 24px; 
+                font-weight: 800;
+                letter-spacing: -0.02em;
+                color: #111827;
                 text-transform: uppercase;
               }
-              .invoice-badge .quote-num {
-                font-size: 10px; font-weight: 600;
-                color: rgba(255,255,255,0.5);
-                margin-top: 6px;
+              .studio-contact {
+                font-size: 13px; 
+                font-weight: 500;
+                color: #4b5563;
+              }
+              .studio-contact div {
+                margin-bottom: 2px;
+              }
+              
+              .invoice-title {
+                text-align: right;
+              }
+              .invoice-title h2 {
+                font-size: 36px; 
+                font-weight: 900;
                 letter-spacing: 0.05em;
+                color: #c5a880;
+                text-transform: uppercase;
+                line-height: 1;
+              }
+              .invoice-title .quote-num {
+                font-size: 14px; 
+                font-weight: 600;
+                color: #6b7280;
+                margin-top: 8px;
               }
 
               /* ─── Meta Section ─── */
               .invoice-meta {
                 display: flex;
                 justify-content: space-between;
-                padding: 32px 48px;
-                border-bottom: 1px solid #f1f0ed;
+                margin-bottom: 40px;
+              }
+              .meta-block {
+                flex: 1;
+              }
+              .meta-block.billed-to {
+                flex: 2;
               }
               .meta-block h4 {
-                font-size: 9px; font-weight: 700;
+                font-size: 10px; 
+                font-weight: 700;
                 text-transform: uppercase;
-                letter-spacing: 0.12em;
-                color: #94a3b8;
-                margin-bottom: 8px;
+                letter-spacing: 0.1em;
+                color: #9ca3af;
+                margin-bottom: 6px;
               }
               .meta-block p {
-                font-size: 14px; font-weight: 600;
-                color: #1e293b;
+                font-size: 15px; 
+                font-weight: 600;
+                color: #111827;
               }
-              .meta-block p.sub {
-                font-size: 11px; font-weight: 500;
-                color: #64748b; margin-top: 2px;
+              .status-badge {
+                display: inline-block;
+                padding: 4px 12px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                border: 1px solid currentColor;
               }
+              .status-pending { color: #d97706; background: #fffbeb; }
+              .status-accepted { color: #059669; background: #ecfdf5; }
+              .status-rejected { color: #dc2626; background: #fef2f2; }
 
               /* ─── Table ─── */
-              .invoice-table {
-                padding: 0 48px;
-                margin-top: 24px;
-              }
               table {
                 width: 100%;
                 border-collapse: collapse;
+                margin-bottom: 40px;
               }
               thead th {
-                font-size: 9px; font-weight: 700;
+                font-size: 11px; 
+                font-weight: 700;
                 text-transform: uppercase;
-                letter-spacing: 0.1em;
-                color: #94a3b8;
+                letter-spacing: 0.05em;
+                color: #ffffff;
+                background-color: #111827;
                 padding: 12px 16px;
                 text-align: left;
-                border-bottom: 2px solid #f1f0ed;
               }
-              thead th:last-child { text-align: right; }
+              thead th:first-child { border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
+              thead th:last-child { 
+                text-align: right; 
+                border-top-right-radius: 6px; 
+                border-bottom-right-radius: 6px;
+              }
+              
               tbody td {
-                padding: 16px 16px;
-                border-bottom: 1px solid #f8f7f4;
+                padding: 16px;
+                border-bottom: 1px solid #e5e7eb;
                 vertical-align: top;
               }
               tbody td:last-child {
                 text-align: right;
                 font-weight: 700;
+                color: #111827;
                 white-space: nowrap;
               }
               .item-name {
-                font-size: 14px; font-weight: 600;
-                color: #1e293b;
+                font-size: 15px; 
+                font-weight: 600;
+                color: #111827;
               }
               .item-notes {
-                font-size: 11px; font-weight: 400;
-                color: #94a3b8; margin-top: 4px;
-                line-height: 1.5;
+                font-size: 13px; 
+                font-weight: 400;
+                color: #6b7280; 
+                margin-top: 4px;
               }
               .item-num {
-                font-size: 12px; font-weight: 500;
-                color: #94a3b8;
+                font-size: 13px; 
+                font-weight: 500;
+                color: #9ca3af;
               }
               .item-price {
-                font-size: 14px; font-weight: 700;
-                color: #1e293b;
+                font-size: 15px; 
               }
 
               /* ─── Total Section ─── */
               .invoice-total {
-                padding: 24px 48px;
-                margin-top: 16px;
+                width: 350px;
+                float: right;
+                background: #f9fafb;
+                padding: 24px;
+                border-radius: 8px;
+                border: 1px solid #e5e7eb;
               }
               .total-row {
                 display: flex;
@@ -247,152 +312,145 @@ export default function QuotationPage() {
                 padding: 8px 0;
               }
               .total-row.grand {
-                border-top: 2px solid #0c0c0e;
-                margin-top: 8px;
+                border-top: 2px solid #e5e7eb;
+                margin-top: 12px;
                 padding-top: 16px;
               }
               .total-label {
-                font-size: 12px; font-weight: 600;
-                color: #64748b;
-                text-transform: uppercase;
-                letter-spacing: 0.08em;
+                font-size: 13px; 
+                font-weight: 600;
+                color: #4b5563;
               }
               .total-value {
-                font-size: 14px; font-weight: 700;
-                color: #1e293b;
+                font-size: 15px; 
+                font-weight: 700;
+                color: #111827;
               }
               .grand .total-label {
-                font-size: 14px; font-weight: 800;
-                color: #0c0c0e;
+                font-size: 15px; 
+                font-weight: 800;
+                color: #111827;
+                text-transform: uppercase;
               }
               .grand .total-value {
-                font-size: 28px; font-weight: 900;
+                font-size: 24px; 
+                font-weight: 900;
                 color: #c5a880;
+              }
+              .clearfix::after {
+                content: "";
+                clear: both;
+                display: table;
               }
 
               /* ─── Footer ─── */
               .invoice-footer {
-                margin-top: 48px;
-                padding: 32px 48px;
-                border-top: 1px solid #f1f0ed;
+                margin-top: 80px;
+                padding-top: 30px;
+                border-top: 2px solid #e5e7eb;
                 display: flex;
                 justify-content: space-between;
                 align-items: flex-end;
               }
               .footer-note {
-                font-size: 11px; font-weight: 500;
-                color: #94a3b8;
-                line-height: 1.7;
-                max-width: 340px;
+                font-size: 12px; 
+                font-weight: 500;
+                color: #6b7280;
+                line-height: 1.6;
+                max-width: 400px;
               }
               .footer-brand {
                 text-align: right;
               }
               .footer-brand .brand-name {
-                font-size: 16px; font-weight: 800;
-                color: #c5a880;
-                letter-spacing: 0.04em;
+                font-size: 18px; 
+                font-weight: 800;
+                color: #111827;
+                letter-spacing: 0.02em;
               }
               .footer-brand .brand-tagline {
-                font-size: 9px; font-weight: 600;
-                color: #cbd5e1;
+                font-size: 10px; 
+                font-weight: 700;
+                color: #c5a880;
                 text-transform: uppercase;
                 letter-spacing: 0.15em;
                 margin-top: 4px;
-              }
-
-              .status-badge {
-                display: inline-block;
-                padding: 4px 12px;
-                border-radius: 20px;
-                font-size: 10px;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 0.08em;
-              }
-              .status-pending { background: #fef3c7; color: #92400e; }
-              .status-accepted { background: #d1fae5; color: #065f46; }
-              .status-rejected { background: #fee2e2; color: #991b1b; }
-
-              @media print {
-                body { padding: 0; background: white; }
-                .invoice-page { max-width: 100%; box-shadow: none; }
-                .no-print { display: none !important; }
               }
             </style>
           </head>
           <body>
             <div class="invoice-page">
+              
               <!-- Header -->
               <div class="invoice-header">
                 <div class="studio-info">
-                  ${studioLogo ? `<img src="${studioLogo}" class="studio-logo" alt="Logo" />` : `<div class="studio-logo" style="display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;color:#c5a880;">${studioName.charAt(0)}</div>`}
+                  <div class="studio-logo-wrapper">
+                    ${studioLogo ? `<img src="${studioLogo}" class="studio-logo" alt="Logo" />` : `<div style="font-size:28px;font-weight:900;color:#c5a880;">${studioName.charAt(0)}</div>`}
+                  </div>
                   <div>
                     <div class="studio-name">${studioName}</div>
-                    ${studioEmail ? `<div class="studio-email">${studioEmail}</div>` : ''}
-                    ${studioPhone ? `<div class="studio-email">${studioPhone}</div>` : ''}
+                    <div class="studio-contact">
+                      ${studioEmail ? `<div>E: ${studioEmail}</div>` : ''}
+                      ${studioPhone ? `<div>M: ${studioPhone}</div>` : ''}
+                    </div>
                   </div>
                 </div>
-                <div class="invoice-badge">
-                  <h2>Invoice</h2>
+                <div class="invoice-title">
+                  <h2>QUOTATION</h2>
                   <div class="quote-num">${quoteNumber}</div>
                 </div>
               </div>
 
               <!-- Meta -->
               <div class="invoice-meta">
-                <div class="meta-block">
+                <div class="meta-block billed-to">
                   <h4>Billed To</h4>
                   <p>${clientName}</p>
                 </div>
                 <div class="meta-block">
-                  <h4>Invoice Date</h4>
+                  <h4>Date</h4>
                   <p>${quoteDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                 </div>
                 <div class="meta-block">
                   <h4>Valid Until</h4>
                   <p>${validUntil.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                 </div>
-                <div class="meta-block">
-                  <h4>Status</h4>
-                  <span class="status-badge status-${(quote.status || 'Pending').toLowerCase()}">${quote.status || 'Pending'}</span>
-                </div>
               </div>
 
               <!-- Table -->
-              <div class="invoice-table">
-                <table>
-                  <thead>
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:40px">#</th>
+                    <th>Description</th>
+                    <th style="text-align:right">Amount (₹)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${(quote.items || []).map((item: any, idx: number) => `
                     <tr>
-                      <th style="width:40px">#</th>
-                      <th>Description</th>
-                      <th style="text-align:right">Amount (₹)</th>
+                      <td class="item-num">${String(idx+1).padStart(2,'0')}</td>
+                      <td>
+                        <div class="item-name">${item.name}</div>
+                        ${item.notes ? `<div class="item-notes">${item.notes}</div>` : ''}
+                      </td>
+                      <td class="item-price">₹${Number(item.price).toLocaleString('en-IN')}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    ${(quote.items || []).map((item: any, idx: number) => `
-                      <tr>
-                        <td class="item-num">${String(idx+1).padStart(2,'0')}</td>
-                        <td>
-                          <div class="item-name">${item.name}</div>
-                          ${item.notes ? `<div class="item-notes">${item.notes}</div>` : ''}
-                        </td>
-                        <td class="item-price">₹${Number(item.price).toLocaleString('en-IN')}</td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-              </div>
+                  `).join('')}
+                </tbody>
+              </table>
 
               <!-- Total -->
-              <div class="invoice-total">
-                <div class="total-row">
-                  <span class="total-label">Subtotal</span>
-                  <span class="total-value">₹${total.toLocaleString('en-IN')}</span>
-                </div>
-                <div class="total-row grand">
-                  <span class="total-label">Total Amount</span>
-                  <span class="total-value">₹${total.toLocaleString('en-IN')}</span>
+              <div class="clearfix">
+                <div class="invoice-total">
+                  <div class="total-row">
+                    <span class="total-label">Subtotal</span>
+                    <span class="total-value">₹${total.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div class="total-row grand">
+                    <span class="total-label">Total Amount</span>
+                    <span class="total-value">₹${total.toLocaleString('en-IN')}</span>
+                  </div>
                 </div>
               </div>
 
@@ -400,17 +458,22 @@ export default function QuotationPage() {
               <div class="invoice-footer">
                 <div class="footer-note">
                   Thank you for choosing <strong>${studioName}</strong>.<br/>
-                  This is a computer-generated invoice. For any queries, please contact us at <strong>${studioEmail || 'our studio'}</strong>.
+                  If you have any questions concerning this quotation, please contact us.
                 </div>
                 <div class="footer-brand">
                   <div class="brand-name">${studioName}</div>
                   <div class="brand-tagline">Professional Photography</div>
                 </div>
               </div>
+
             </div>
 
             <script>
-              window.onload = () => window.print();
+              window.onload = () => {
+                setTimeout(() => {
+                  window.print();
+                }, 500);
+              };
             </script>
           </body>
         </html>
