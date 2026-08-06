@@ -15,6 +15,8 @@ interface AuthStudio {
   id: string;
   name: string;
   subdomain: string;
+  instagramUrl?: string;
+  facebookUrl?: string;
 }
 
 interface AuthContextType {

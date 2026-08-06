@@ -27,6 +27,8 @@ export default function StudioSettingsPage() {
   const [studioLogo, setStudioLogo] = useState('');
   const [studioSubdomain, setStudioSubdomain] = useState('');
   const [studioWebsite, setStudioWebsite] = useState('');
+  const [studioInstagram, setStudioInstagram] = useState('');
+  const [studioFacebook, setStudioFacebook] = useState('');
 
   // Owner fields
   const [ownerName, setOwnerName] = useState('');
@@ -40,6 +42,8 @@ export default function StudioSettingsPage() {
       setStudioLogo(studio.logoUrl || '');
       setStudioSubdomain(studio.subdomain || '');
       setStudioWebsite(studio.customDomain || '');
+      setStudioInstagram(studio.instagramUrl || '');
+      setStudioFacebook(studio.facebookUrl || '');
     }
     if (sessionUser) {
       setOwnerName(sessionUser.name || '');
@@ -87,6 +91,8 @@ export default function StudioSettingsPage() {
         logoUrl: studioLogo,
         subdomain: studioSubdomain,
         customDomain: studioWebsite || undefined,
+        instagramUrl: studioInstagram || undefined,
+        facebookUrl: studioFacebook || undefined,
         userName: ownerName,
         userPhone: ownerPhone,
       });
@@ -114,6 +120,8 @@ export default function StudioSettingsPage() {
       setStudioLogo(studio.logoUrl || '');
       setStudioSubdomain(studio.subdomain || '');
       setStudioWebsite(studio.customDomain || '');
+      setStudioInstagram(studio.instagramUrl || '');
+      setStudioFacebook(studio.facebookUrl || '');
     }
     if (sessionUser) {
       setOwnerName(sessionUser.name || '');
@@ -613,6 +621,70 @@ export default function StudioSettingsPage() {
                       className="ss-link"
                     >
                       {studioWebsite} <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  ) : (
+                    <span className="text-sm text-slate-400 font-semibold italic">Not set</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Instagram Link */}
+            <div className="ss-field">
+              <label className="ss-label">
+                Instagram Link <span className="ss-label-hint">(optional)</span>
+              </label>
+              {isEditing ? (
+                <input
+                  type="url"
+                  value={studioInstagram}
+                  onChange={(e) => setStudioInstagram(e.target.value)}
+                  className="ss-input"
+                  placeholder="https://instagram.com/yourstudio"
+                />
+              ) : (
+                <div className="flex items-center gap-2 pt-1">
+                  <Globe className="h-4 w-4 text-slate-300 flex-shrink-0" />
+                  {studioInstagram ? (
+                    <a
+                      href={studioInstagram.startsWith('http') ? studioInstagram : `https://${studioInstagram}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ss-link"
+                    >
+                      {studioInstagram} <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  ) : (
+                    <span className="text-sm text-slate-400 font-semibold italic">Not set</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Facebook Link */}
+            <div className="ss-field">
+              <label className="ss-label">
+                Facebook Link <span className="ss-label-hint">(optional)</span>
+              </label>
+              {isEditing ? (
+                <input
+                  type="url"
+                  value={studioFacebook}
+                  onChange={(e) => setStudioFacebook(e.target.value)}
+                  className="ss-input"
+                  placeholder="https://facebook.com/yourstudio"
+                />
+              ) : (
+                <div className="flex items-center gap-2 pt-1">
+                  <Globe className="h-4 w-4 text-slate-300 flex-shrink-0" />
+                  {studioFacebook ? (
+                    <a
+                      href={studioFacebook.startsWith('http') ? studioFacebook : `https://${studioFacebook}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ss-link"
+                    >
+                      {studioFacebook} <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   ) : (
                     <span className="text-sm text-slate-400 font-semibold italic">Not set</span>

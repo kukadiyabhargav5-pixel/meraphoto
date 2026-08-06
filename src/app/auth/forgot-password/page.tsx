@@ -57,6 +57,56 @@ const GlassInput = ({ id, type, value, onChange, label, required = true, isPassw
   );
 };
 
+// --- Premium OTP Input Component ---
+const OTPInput = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
+  const handleChange = (e: any, index: number) => {
+    const val = e.target.value;
+    if (/[^0-9]/.test(val) && val !== '') return;
+
+    let newOtp = value.split('');
+    if (!newOtp) newOtp = [];
+    newOtp[index] = val.substring(val.length - 1);
+    const finalOtp = newOtp.join('').substring(0, 6);
+    onChange(finalOtp);
+
+    // Auto focus next
+    if (val && index < 5) {
+      const nextInput = document.getElementById(`otp-${index + 1}`);
+      if (nextInput) nextInput.focus();
+    }
+  };
+
+  const handleKeyDown = (e: any, index: number) => {
+    if (e.key === 'Backspace' && !value[index] && index > 0) {
+      const prevInput = document.getElementById(`otp-${index - 1}`);
+      if (prevInput) prevInput.focus();
+    }
+  };
+
+  const otpArray = value.padEnd(6, ' ').split('');
+
+  return (
+    <div className="mb-6 z-10 pt-2">
+      <label className="block text-sm font-bold text-slate-500 mb-3 ml-1">6-Digit Verification Code <span className="text-red-500">*</span></label>
+      <div className="flex justify-between gap-2 sm:gap-3">
+        {[0, 1, 2, 3, 4, 5].map((index) => (
+          <input
+            key={index}
+            id={`otp-${index}`}
+            type="text"
+            inputMode="numeric"
+            maxLength={1}
+            value={otpArray[index] === ' ' ? '' : otpArray[index]}
+            onChange={(e) => handleChange(e, index)}
+            onKeyDown={(e) => handleKeyDown(e, index)}
+            className="w-10 h-12 sm:w-12 sm:h-14 text-center text-xl font-black text-slate-900 bg-white/50 backdrop-blur-sm border-2 border-slate-300 hover:border-slate-400 rounded-xl outline-none focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(37,99,235,0.1)] transition-all duration-300"
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export default function ForgotPasswordPage() {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -201,7 +251,7 @@ export default function ForgotPasswordPage() {
                         <GlassInput id="fEmailDis" type="email" label="Email Address" value={email} disabled={true} />
                       </motion.div>
                       <motion.div variants={itemVars}>
-                        <GlassInput id="fOtp" type="text" label="6-Digit OTP" value={otp} onChange={(e:any)=>setOtp(e.target.value)} />
+                        <OTPInput value={otp} onChange={setOtp} />
                       </motion.div>
                       
                       <motion.button 

@@ -28,6 +28,35 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
   const [mediaItems, setMediaItems] = useState<any[]>([]);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+
+  const toggleSelection = (id: string) => {
+    setSelectedMediaIds(prev => 
+      prev.includes(id) ? prev.filter(mediaId => mediaId !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteMedia = async (ids: string[]) => {
+    if (!confirm(`Are you sure you want to delete ${ids.length} media item(s)?`)) return;
+    setIsDeleting(true);
+    try {
+      if (ids.length === 1) {
+        await apiClient.delete(`/media/${ids[0]}`);
+      } else {
+        await apiClient.delete(`/media/event/${event?._id}/media`, { data: { mediaIds: ids } });
+      }
+      toast.success('Media deleted successfully');
+      setSelectedMediaIds([]);
+      setIsSelectionMode(false);
+      fetchEventDetails();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to delete media');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const fetchEventDetails = async () => {
     try {
@@ -56,21 +85,28 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
     setUploadProgress({ current: 0, total: files.length });
     
     try {
-      const chunkSize = 1;
+      // 1. Get ImageKit Auth parameters for all files
+      const authRes = await apiClient.get(`/media/imagekit-auth?count=${files.length}`);
+      const signatures = authRes.data.signatures || [authRes.data];
+      const IMAGEKIT_PUBLIC_KEY = "public_2AYAbqW1EUFL0ejxVPrCgx06Es0=";
+
+      const imageCompression = (await import('browser-image-compression')).default;
       let uploadedCount = 0;
       let successful = 0;
       let failed = 0;
-      
-      const imageCompression = (await import('browser-image-compression')).default;
+      const mediaList = [];
+      const batchSize = 10;
 
-      for (let i = 0; i < files.length; i += chunkSize) {
-        const chunk = Array.from(files).slice(i, i + chunkSize);
-        const formData = new FormData();
-        
-        for (const file of chunk) {
-          let fileToUpload: File | Blob = file;
+      for (let i = 0; i < files.length; i += batchSize) {
+        const chunk = Array.from(files).slice(i, i + batchSize);
+        const chunkPromises = chunk.map(async (file, idx) => {
+          const globalIdx = i + idx;
+          const authParams = signatures[globalIdx] || signatures[0];
           
-          if (file.type.startsWith('image/')) {
+          let fileToUpload: File | Blob = file;
+          const isVideo = file.type.startsWith('video/');
+          
+          if (!isVideo && file.type.startsWith('image/')) {
             try {
               const options = {
                 maxSizeMB: 2,
@@ -79,28 +115,57 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 alwaysKeepResolution: true
               };
               const compressedBlob = await imageCompression(file, options);
-              // Maintain original filename
               fileToUpload = new File([compressedBlob], file.name, { type: compressedBlob.type });
             } catch (err) {
               console.error('Compression skipped:', err);
             }
           }
 
-          formData.append('files', fileToUpload);
-          formData.append('folderPaths', file.webkitRelativePath || '');
-        }
+          const formData = new FormData();
+          formData.append('file', fileToUpload);
+          formData.append('publicKey', IMAGEKIT_PUBLIC_KEY);
+          formData.append('signature', authParams.signature);
+          formData.append('expire', authParams.expire.toString());
+          formData.append('token', authParams.token);
+          formData.append('fileName', file.name);
+          formData.append('folder', `mara-photo/events/${event._id}/${isVideo ? 'videos' : 'photos'}`);
+          formData.append('useUniqueFileName', 'true');
+
+          try {
+            const response = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+              method: 'POST',
+              body: formData,
+            });
+
+            if (!response.ok) {
+              throw new Error('ImageKit upload failed');
+            }
+            const data = await response.json();
+            return {
+              url: data.url,
+              publicId: data.fileId,
+              type: isVideo ? 'VIDEO' : 'PHOTO',
+              size: fileToUpload.size,
+              folderPath: file.webkitRelativePath || ''
+            };
+          } finally {
+            setUploadProgress(prev => ({ ...prev, current: prev.current + 1 }));
+          }
+        });
+
+        const results = await Promise.allSettled(chunkPromises);
+        const successfulUploads = results
+          .filter(r => r.status === 'fulfilled')
+          .map((r: any) => r.value);
         
-        try {
-          await apiClient.post(`/media/event/${event._id}/upload`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          });
-          successful += chunk.length;
-        } catch (err) {
-          failed += chunk.length;
-        }
-        
-        uploadedCount += chunk.length;
-        setUploadProgress({ current: uploadedCount, total: files.length });
+        mediaList.push(...successfulUploads);
+        successful += successfulUploads.length;
+        failed += chunk.length - successfulUploads.length;
+      }
+
+      // Send the resulting data to the backend
+      if (mediaList.length > 0) {
+        await apiClient.post(`/media/event/${event._id}/bulk-create`, { mediaList });
       }
       
       if (failed > 0) {
@@ -111,11 +176,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
       fetchEventDetails();
     } catch (err: any) {
        console.error('Upload error:', err);
-       if (err.response?.status === 413) {
-         toast.error('Files too large. Please select fewer files.');
-       } else {
-         toast.error(err?.response?.data?.error || 'Upload failed. Please check console for details.');
-       }
+       toast.error(err?.response?.data?.error || err.message || 'Upload failed. Please check console.');
     } finally {
        setUploadingMedia(false);
        if (e.target) e.target.value = '';
@@ -301,36 +362,81 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
           </div>
 
           <div className="mt-8">
-            <div className="flex items-center justify-between mb-4">
-               <h3 className="text-lg font-bold text-slate-900">Media Files ({mediaItems.length})</h3>
-               <button 
-                 onClick={fetchEventDetails}
-                 className="text-xs font-bold text-slate-500 hover:text-[#c5a880] transition-colors"
-               >
-                 Refresh
-               </button>
-            </div>
+             <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <h3 className="text-lg font-bold text-slate-900">Media Files ({mediaItems.length})</h3>
+                  {mediaItems.length > 0 && (
+                    <button 
+                      onClick={() => {
+                        setIsSelectionMode(!isSelectionMode);
+                        setSelectedMediaIds([]);
+                      }}
+                      className={`text-[10px] font-bold px-3 py-1.5 rounded-full transition-colors uppercase tracking-wider ${isSelectionMode ? 'bg-[#c5a880] text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+                    >
+                      {isSelectionMode ? 'Cancel Selection' : 'Select'}
+                    </button>
+                  )}
+                  {isSelectionMode && selectedMediaIds.length > 0 && (
+                    <button 
+                      onClick={() => handleDeleteMedia(selectedMediaIds)}
+                      disabled={isDeleting}
+                      className="text-[10px] font-bold px-3 py-1.5 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors flex items-center gap-1 uppercase tracking-wider"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      {isDeleting ? 'Deleting...' : `Delete (${selectedMediaIds.length})`}
+                    </button>
+                  )}
+                </div>
+                <button 
+                  onClick={fetchEventDetails}
+                  className="text-xs font-bold text-slate-500 hover:text-[#c5a880] transition-colors"
+                >
+                  Refresh
+                </button>
+             </div>
             
             {uploadingMedia && (
-               <div className="mb-6 bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-xl p-4">
-                  <div className="flex justify-between text-xs font-bold text-slate-600 mb-2">
-                     <span>Uploading files to secure cloud storage...</span>
-                     <span>{uploadProgress.current} / {uploadProgress.total}</span>
-                  </div>
-                  <div className="w-full bg-slate-200 rounded-full h-2">
-                     <div className="bg-[#c5a880] h-2 rounded-full transition-all duration-300" style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}></div>
+               <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
+                  <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center border border-white/20">
+                     <div className="w-16 h-16 bg-[#f8f5f0] border border-[#e6d5c0] text-[#c5a880] rounded-full flex items-center justify-center mb-6 shadow-sm">
+                        <Upload className="h-7 w-7 animate-bounce" />
+                     </div>
+                     <h3 className="text-xl font-black text-slate-900 mb-2">Uploading Media</h3>
+                     <p className="text-[11px] font-bold text-slate-500 text-center mb-8 px-2 uppercase tracking-wide">
+                        Optimizing & storing securely.<br/>Please keep this window open.
+                     </p>
+                     
+                     <div className="w-full relative">
+                        <div className="flex w-full justify-between items-end mb-2">
+                           <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Progress</span>
+                           <span className="text-xl font-black text-[#c5a880] leading-none">{Math.round((uploadProgress.current / uploadProgress.total) * 100) || 0}%</span>
+                        </div>
+                        <div className="w-full bg-[#f1f5f9] rounded-full h-3.5 mb-3 overflow-hidden shadow-inner border border-slate-200">
+                           <div 
+                              className="bg-gradient-to-r from-[#b69970] to-[#c5a880] h-full transition-all duration-300 ease-out" 
+                              style={{ width: `${Math.max(2, (uploadProgress.current / uploadProgress.total) * 100)}%` }}
+                           />
+                        </div>
+                        <div className="text-center text-xs font-bold text-slate-700">
+                           {uploadProgress.current} <span className="text-slate-400 mx-1">/</span> {uploadProgress.total} Files Completed
+                        </div>
+                     </div>
                   </div>
                </div>
             )}
 
-            {mediaItems.length === 0 ? (
+             {mediaItems.length === 0 ? (
                <div className="bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-2xl p-12 flex items-center justify-center text-slate-500 text-sm">
                  No media files uploaded yet. Select files to start.
                </div>
             ) : (
-               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-h-[600px] overflow-y-auto pr-2 pb-4">
+               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pb-12">
                  {mediaItems.map((item, idx) => (
-                   <div key={idx} className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 border border-slate-200 group">
+                   <div 
+                     key={idx} 
+                     className={`relative aspect-square rounded-xl overflow-hidden bg-slate-100 border transition-all group cursor-pointer ${selectedMediaIds.includes(item._id) ? 'border-[#c5a880] ring-4 ring-[#c5a880]/30' : 'border-slate-200 hover:border-slate-300'}`}
+                     onClick={() => isSelectionMode && toggleSelection(item._id)}
+                   >
                       {item.type === 'VIDEO' ? (
                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-800">
                             <Video className="h-8 w-8 text-white/50 mb-2" />
@@ -339,8 +445,36 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                       ) : (
                          <img src={item.compressedUrl || item.r2Url} className="w-full h-full object-cover" />
                       )}
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                         <span className="text-[10px] font-bold text-slate-900 px-2 py-1 bg-black/50 rounded uppercase tracking-wider">{item.processedStatus}</span>
+
+                      {/* Completed Green Badge */}
+                      {item.processedStatus === 'COMPLETED' && (
+                         <div className="absolute top-3 right-3 bg-emerald-500 text-white rounded-full p-1.5 shadow-md z-10" title="Processed by AI">
+                            <Check className="h-3.5 w-3.5 stroke-[3]" />
+                         </div>
+                      )}
+
+                      {/* Selection Checkbox */}
+                      {isSelectionMode && (
+                        <div className="absolute top-3 left-3 z-10 bg-white/90 rounded border border-slate-300 p-0.5 shadow-sm">
+                          <input 
+                            type="checkbox" 
+                            checked={selectedMediaIds.includes(item._id)}
+                            onChange={() => toggleSelection(item._id)}
+                            className="w-4 h-4 cursor-pointer accent-[#c5a880]"
+                          />
+                        </div>
+                      )}
+
+                      {/* Hover Overlay */}
+                      <div className={`absolute inset-0 bg-black/40 transition-opacity flex flex-col items-center justify-center gap-3 ${isSelectionMode ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
+                         <span className="text-[10px] font-bold text-white px-3 py-1.5 bg-black/60 rounded-full uppercase tracking-wider">{item.processedStatus}</span>
+                         <button 
+                           onClick={(e) => { e.stopPropagation(); handleDeleteMedia([item._id]); }}
+                           className="bg-red-500 text-white p-3 rounded-full hover:bg-red-600 transition-transform hover:scale-110 shadow-lg"
+                           title="Delete Media"
+                         >
+                           <Trash2 className="h-4 w-4" />
+                         </button>
                       </div>
                    </div>
                  ))}
@@ -603,6 +737,24 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                     onChange={(e) => setFormData({...formData, password: e.target.value})}
                     placeholder="Leave empty to keep current password, or enter a new one"
                   />
+                </div>
+              )}
+
+              {formData.accessType === 'OTP' && (
+                <div>
+                  <label className="edit-label text-[#c5a880]">New 4-Digit Access PIN</label>
+                  <input 
+                    type="text" 
+                    maxLength={4}
+                    className="edit-input border-[#e8e4dd] focus:border-[#c5a880] bg-[#faf9f6] text-center tracking-[1em] font-black text-xl" 
+                    value={formData.password}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setFormData({...formData, password: val});
+                    }}
+                    placeholder="••••"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1 font-medium text-center">Leave empty to keep the current PIN, or enter a new 4-digit code</p>
                 </div>
               )}
 

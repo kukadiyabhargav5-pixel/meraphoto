@@ -139,7 +139,7 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
 
   const handleLogout = async () => {
     await logout();
-    router.push('/login');
+    router.push('/auth/login');
   };
 
   return (

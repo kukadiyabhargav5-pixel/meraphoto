@@ -113,7 +113,7 @@ export default function ChatbotWidget() {
 
       {/* Chat Window */}
       <div 
-        className={`fixed bottom-6 right-6 z-[100] w-[400px] h-[650px] max-h-[85vh] bg-[#fdfcfb] rounded-[32px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-[#e8e4dd] flex flex-col overflow-hidden transition-all duration-400 ease-out origin-bottom-right ${isOpen ? 'scale-100 opacity-100 pointer-events-auto' : 'scale-90 opacity-0 pointer-events-none'}`}
+        className={`fixed bottom-0 right-0 sm:bottom-6 sm:right-6 z-[100] w-full sm:w-[400px] h-[100dvh] sm:h-[650px] sm:max-h-[85vh] bg-[#fdfcfb] sm:rounded-[32px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] sm:border border-[#e8e4dd] flex flex-col overflow-hidden transition-all duration-400 ease-out origin-bottom-right ${isOpen ? 'scale-100 opacity-100 pointer-events-auto' : 'scale-90 opacity-0 pointer-events-none'}`}
       >
         {/* Header - Glassmorphic */}
         <div className="chat-glass-header p-5 flex items-center justify-between shrink-0 sticky top-0 z-10">

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import confetti from 'canvas-confetti';
-import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy, ZoomIn, Play, ShieldCheck, RefreshCw, ScanFace, ChevronRight, ChevronLeft, LayoutGrid, Sliders, X, Download, Loader, Sparkles, CalendarDays, Lock, Key, AlertCircle, Search } from 'lucide-react';
+import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy, ZoomIn, Play, ShieldCheck, RefreshCw, ScanFace, ChevronRight, ChevronLeft, LayoutGrid, Sliders, X, Download, Loader, Sparkles, CalendarDays, Lock, Key, AlertCircle, Search, HelpCircle, Send, CheckCircle } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { MasonryPhotoAlbum, RowsPhotoAlbum } from "react-photo-album";
 import "react-photo-album/masonry.css";
@@ -58,6 +58,7 @@ export default function ClientGallery() {
   const [media, setMedia] = useState<any[]>([]);
   const [isLocked, setIsLocked] = useState(false);
   const [password, setPassword] = useState('');
+  const [otpVals, setOtpVals] = useState(['', '', '', '']);
   const [authError, setAuthError] = useState('');
 
   // Guest Sign-In States
@@ -88,6 +89,36 @@ export default function ClientGallery() {
   const [searchStats, setSearchStats] = useState<{ totalSearched: number; message: string } | null>(null);
 
   const [localUrls, setLocalUrls] = useState<Record<string, string>>({});
+
+  // Ticket / Support State
+  const [ticketModalOpen, setTicketModalOpen] = useState(false);
+  const [ticketForm, setTicketForm] = useState({ name: '', email: '', mobile: '', complaint: '' });
+  const [ticketSubmitting, setTicketSubmitting] = useState(false);
+  const [ticketMessage, setTicketMessage] = useState({ type: '', text: '' });
+
+  const handleTicketSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTicketMessage({ type: '', text: '' });
+    setTicketSubmitting(true);
+    try {
+      await apiClient.post('/client-tickets', {
+        studioId: event.studioId,
+        eventId: event._id,
+        customerName: ticketForm.name,
+        email: ticketForm.email,
+        mobileNumber: ticketForm.mobile,
+        complaint: ticketForm.complaint
+      });
+      setTicketMessage({ type: 'success', text: 'Ticket raised successfully. The studio will get back to you shortly.' });
+      setTicketForm({ name: '', email: '', mobile: '', complaint: '' });
+      setTimeout(() => setTicketModalOpen(false), 3000);
+    } catch (err: any) {
+      setTicketMessage({ type: 'error', text: err.response?.data?.error || 'Failed to raise ticket' });
+    } finally {
+      setTicketSubmitting(false);
+    }
+  };
+
 
   const resolveMediaUrl = (m: any) => {
     if (!m) return '';
@@ -132,7 +163,7 @@ export default function ClientGallery() {
       const res = await apiClient.get(`/event/code/${slug}`);
       setEvent(res.data.event);
       
-      if (res.data.event.accessType === 'PASSWORD') {
+      if (res.data.event.accessType === 'PASSWORD' || res.data.event.accessType === 'OTP') {
         setIsLocked(true);
       } else {
         fetchGalleryMedia(res.data.event._id);
@@ -187,6 +218,23 @@ export default function ClientGallery() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedItem, searchActive, matchedMedia, media]);
 
+  const handleOtpChange = (index: number, val: string) => {
+    if (val.length > 1) val = val[0];
+    const newOtp = [...otpVals];
+    newOtp[index] = val;
+    setOtpVals(newOtp);
+    setPassword(newOtp.join(''));
+    if (val && index < 3) {
+      document.getElementById(`otp-${index + 1}`)?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !otpVals[index] && index > 0) {
+      document.getElementById(`otp-${index - 1}`)?.focus();
+    }
+  };
+
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -195,7 +243,7 @@ export default function ClientGallery() {
       setIsLocked(false);
       fetchGalleryMedia(event._id);
     } catch (err: any) {
-      setAuthError('Incorrect gallery password.');
+      setAuthError('Incorrect access code.');
     }
   };
 
@@ -434,7 +482,7 @@ export default function ClientGallery() {
     return (
       <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col items-center justify-center p-6 relative">
         
-        <div className="w-full max-w-md glass-panel bg-white border-slate-200 p-8 rounded-3xl text-center shadow-lg relative z-10">
+        <div className="w-full max-w-md glass-panel bg-white border-slate-200 p-6 sm:p-8 rounded-3xl text-center shadow-lg relative z-10">
           <div className="w-12 h-12 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center mx-auto mb-6">
             <Lock className="h-5 w-5 text-[#FF6B00]" />
           </div>
@@ -448,15 +496,39 @@ export default function ClientGallery() {
             </div>
           )}
 
-          <form onSubmit={handleUnlock} className="flex flex-col gap-4 mt-6">
-            <div className="relative">
-              <Key className="absolute left-3.5 top-1/2 translate-y-[-50%] h-4.5 w-4.5 text-slate-400" />
-              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password" className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-[#FF6B00] focus:bg-white text-center tracking-wider" />
-            </div>
-            <button type="submit" className="bg-[#FF6B00] hover:bg-[#E05E00] text-white font-bold py-3.5 rounded-xl text-xs transition-all shadow-md shadow-orange-500/20">
-              Unlock Gallery
-            </button>
-          </form>
+          {event?.accessType === 'OTP' ? (
+            <form onSubmit={handleUnlock} className="flex flex-col gap-6 mt-6">
+              <div className="flex justify-center gap-3">
+                {otpVals.map((val, idx) => (
+                  <input
+                    key={idx}
+                    id={`otp-${idx}`}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={val}
+                    onChange={(e) => handleOtpChange(idx, e.target.value.replace(/\\D/g, ''))}
+                    onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                    className="w-14 h-16 bg-slate-50 border border-slate-200 rounded-xl text-center text-2xl font-black text-slate-800 focus:outline-none focus:border-[#FF6B00] focus:ring-2 focus:ring-orange-500/20 transition-all shadow-sm"
+                    required
+                  />
+                ))}
+              </div>
+              <button type="submit" className="bg-[#FF6B00] hover:bg-[#E05E00] text-white font-bold py-3.5 rounded-xl text-xs transition-all shadow-md shadow-orange-500/20 uppercase tracking-widest">
+                Verify PIN
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleUnlock} className="flex flex-col gap-4 mt-6">
+              <div className="relative">
+                <Key className="absolute left-3.5 top-1/2 translate-y-[-50%] h-4.5 w-4.5 text-slate-400" />
+                <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password" className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-[#FF6B00] focus:bg-white text-center tracking-wider" />
+              </div>
+              <button type="submit" className="bg-[#FF6B00] hover:bg-[#E05E00] text-white font-bold py-3.5 rounded-xl text-xs transition-all shadow-md shadow-orange-500/20">
+                Unlock Gallery
+              </button>
+            </form>
+          )}
         </div>
       </div>
     );
@@ -465,8 +537,8 @@ export default function ClientGallery() {
   // 2. Guest Sign-In Page
   if (!isGuest && !isLocked) {
     return (
-      <div className="min-h-screen bg-[#f8f7f4] text-[#0F172A] flex flex-col items-center justify-center p-6 relative">
-        <div className="w-full max-w-md bg-white border border-[#e5e7eb] p-10 rounded-3xl text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10">
+      <div className="min-h-screen bg-[#f8f7f4] text-[#0F172A] flex flex-col items-center justify-center p-4 sm:p-6 relative">
+        <div className="w-full max-w-md bg-white border border-[#e5e7eb] p-6 sm:p-10 rounded-3xl text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10">
           <div className="w-14 h-14 rounded-2xl bg-[#fdfbf9] border border-[#c5a880]/20 flex items-center justify-center mx-auto mb-6">
             <User className="h-6 w-6 text-[#c5a880]" />
           </div>
@@ -541,10 +613,10 @@ export default function ClientGallery() {
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col relative selection:bg-orange-500 selection:text-white">
       {/* Whitelabel Header */}
       <header className="sticky top-0 z-40 glass-panel border-b border-slate-200 bg-white/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {event?.studioId?.logoUrl ? (
-              <img src={event.studioId.logoUrl} alt="Logo" className="h-14 max-w-[250px] object-contain transition-all hover:opacity-90 drop-shadow-sm" />
+              <img src={event.studioId.logoUrl} alt="Logo" className="h-10 sm:h-14 max-w-[140px] sm:max-w-[250px] object-contain transition-all hover:opacity-90 drop-shadow-sm" />
             ) : (
               <span className="font-extrabold text-sm tracking-widest text-[#c5a880] uppercase">
                 {event?.studioId?.name}
@@ -552,8 +624,8 @@ export default function ClientGallery() {
             )}
           </div>
           
-          <div className="flex items-center gap-4 text-xs font-bold text-slate-500">
-            <span>{event?.name}</span>
+          <div className="flex items-center gap-2 sm:gap-4 text-[10px] sm:text-xs font-bold text-slate-500">
+            <span className="truncate max-w-[120px] sm:max-w-none">{event?.name}</span>
             <span className="h-4 w-[1px] bg-slate-200" />
             <span>{new Date(event?.date).toLocaleDateString()}</span>
           </div>
@@ -562,8 +634,8 @@ export default function ClientGallery() {
 
       {/* Top Action Buttons (Replaced Hero Banner) */}
       <div className="w-full bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-end gap-4">
-          <button onClick={() => setSearchModalOpen(true)} className="bg-[#c5a880] hover:bg-[#b09672] text-slate-900 font-extrabold px-6 py-3 rounded-xl shadow-[0_4px_14px_0_rgba(197,168,128,0.39)] flex items-center gap-2 transition-all">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 sm:gap-4">
+          <button onClick={() => setSearchModalOpen(true)} className="bg-[#c5a880] hover:bg-[#b09672] text-slate-900 font-extrabold px-6 py-3 rounded-xl shadow-[0_4px_14px_0_rgba(197,168,128,0.39)] flex justify-center items-center gap-2 transition-all">
             <ScanFace className="h-5 w-5" />
             Find My Face
           </button>
@@ -592,8 +664,8 @@ export default function ClientGallery() {
       </div>
 
       {/* Gallery Controls bar */}
-      <div className="max-w-7xl mx-auto w-full px-6 py-6 flex items-center justify-between border-b border-slate-200">
-        <div className="flex items-center gap-3">
+      <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-4 sm:py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
 
 
           {searchActive && searchStats && (
@@ -603,7 +675,7 @@ export default function ClientGallery() {
           )}
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
           {searchActive && (
             <button onClick={clearSearch} className="text-xs text-rose-600 hover:text-rose-500 font-bold underline flex items-center gap-1">
               <X className="h-3.5 w-3.5" />
@@ -631,7 +703,7 @@ export default function ClientGallery() {
       </div>
 
       {/* Gallery Items Grid */}
-      <div className="flex-1 max-w-7xl mx-auto w-full px-6 py-8">
+      <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
         {galleryMedia.length > 0 ? (
           <div>
             {searchActive && (
@@ -831,7 +903,7 @@ export default function ClientGallery() {
       {/* ── Professional Selfie Search Modal ── */}
       {searchModalOpen && (
         <div className="fixed inset-0 z-50 bg-[#0F172A]/90 backdrop-blur-lg flex items-center justify-center p-6">
-          <div className="w-full max-w-lg bg-white p-0 rounded-3xl relative shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-slate-200">
+          <div className="w-full max-w-lg bg-white p-0 rounded-3xl relative shadow-2xl overflow-y-auto max-h-[90vh] animate-in fade-in zoom-in-95 duration-200 border border-slate-200">
             
             {/* Modal Header */}
             <div className="relative bg-[#f8f7f4] border-b border-[#e5e7eb] p-6 pb-8">
@@ -891,8 +963,8 @@ export default function ClientGallery() {
               {/* Camera View */}
               {searchTab === 'camera' && webcamStream && (
                 <div className="flex flex-col items-center gap-4">
-                  <div className="w-full aspect-[4/3] rounded-2xl border border-slate-200 overflow-hidden bg-black relative shadow-inner">
-                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
+                  <div className="w-full rounded-2xl border border-slate-200 overflow-hidden bg-black relative shadow-inner">
+                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-auto max-h-[60vh] object-contain scale-x-[-1]" />
                     {/* Face guide overlay */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <div className="w-48 h-48 border-2 border-[#c5a880]/60 rounded-full border-dashed" />
@@ -920,8 +992,8 @@ export default function ClientGallery() {
                     <div className="flex flex-col items-center gap-4">
                       {/* Preview */}
                       <div className="relative w-full">
-                        <div className="w-full min-h-[250px] max-h-[350px] rounded-2xl border border-slate-200 overflow-hidden bg-[#f8f7f4] flex items-center justify-center shadow-inner p-2">
-                          <img src={selfiePreview} alt="Selfie Preview" className="max-w-full max-h-full object-contain rounded-xl" />
+                        <div className="w-full rounded-2xl border border-slate-200 overflow-hidden bg-[#f8f7f4] flex items-center justify-center shadow-inner">
+                          <img src={selfiePreview} alt="Selfie Preview" className="w-full h-auto object-contain" />
                         </div>
                         <button 
                           onClick={clearSelfie} 
@@ -1089,6 +1161,116 @@ export default function ClientGallery() {
                 </div>
              </div>
           )}
+        </div>
+      )}
+
+      {/* ── Raise a Ticket Floating Button ── */}
+      {!isLocked && event && (
+        <button
+          onClick={() => setTicketModalOpen(true)}
+          className="fixed bottom-6 right-6 bg-[#c5a880] hover:bg-[#b09672] text-[#09090b] p-4 rounded-full shadow-[0_10px_25px_rgba(197,168,128,0.4)] transition-all z-40 hover:-translate-y-1 flex items-center justify-center group"
+          title="Raise a Ticket / Complaint"
+        >
+          <HelpCircle className="w-6 h-6" />
+          <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 group-hover:max-w-xs group-hover:opacity-100 group-hover:ml-2 font-bold text-sm transition-all duration-300">
+            Raise a Ticket
+          </span>
+        </button>
+      )}
+
+      {/* ── Raise a Ticket Modal ── */}
+      {ticketModalOpen && (
+        <div className="fixed inset-0 z-[60] bg-[#0F172A]/90 backdrop-blur-lg flex items-center justify-center p-4 sm:p-6">
+          <div className="w-full max-w-lg bg-white p-0 rounded-3xl relative shadow-2xl overflow-y-auto max-h-[90vh] animate-in fade-in zoom-in-95 duration-200 border border-slate-200">
+            
+            {/* Modal Header */}
+            <div className="relative bg-[#f8f7f4] border-b border-[#e5e7eb] p-6 pb-8">
+              <button 
+                onClick={() => setTicketModalOpen(false)} 
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-200/50 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-white border border-[#c5a880]/30 shadow-sm flex items-center justify-center">
+                  <HelpCircle className="h-6 w-6 text-[#c5a880]" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-800">Raise a Ticket</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">Submit a complaint or request to the Studio</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-white">
+              {ticketMessage.text && (
+                <div className={`mb-5 p-3.5 rounded-xl text-xs flex items-start gap-2.5 font-semibold shadow-sm ${
+                  ticketMessage.type === 'success' 
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' 
+                    : 'bg-[#fef2f2] border border-[#fecaca] text-[#b91c1c]'
+                }`}>
+                  {ticketMessage.type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />}
+                  <span>{ticketMessage.text}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleTicketSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Full Name *</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={ticketForm.name} 
+                    onChange={e => setTicketForm({...ticketForm, name: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#c5a880]/50" 
+                    placeholder="Enter your name" 
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Mobile Number (Optional)</label>
+                    <input 
+                      type="tel" 
+                      value={ticketForm.mobile} 
+                      onChange={e => setTicketForm({...ticketForm, mobile: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#c5a880]/50" 
+                      placeholder="Your mobile" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Email *</label>
+                    <input 
+                      type="email" 
+                      required 
+                      value={ticketForm.email} 
+                      onChange={e => setTicketForm({...ticketForm, email: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#c5a880]/50" 
+                      placeholder="For updates" 
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Complaint / Message *</label>
+                  <textarea 
+                    required 
+                    value={ticketForm.complaint} 
+                    onChange={e => setTicketForm({...ticketForm, complaint: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm min-h-[100px] resize-none focus:outline-none focus:ring-2 focus:ring-[#c5a880]/50" 
+                    placeholder="Describe your issue or request in detail..." 
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  disabled={ticketSubmitting} 
+                  className="w-full bg-[#09090b] hover:bg-slate-800 text-white font-extrabold py-3.5 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mt-2"
+                >
+                  {ticketSubmitting ? <Loader className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Submit Ticket
+                </button>
+              </form>
+            </div>
+          </div>
         </div>
       )}
     </div>

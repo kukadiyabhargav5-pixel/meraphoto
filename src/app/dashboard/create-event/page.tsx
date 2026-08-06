@@ -253,6 +253,24 @@ export default function CreateEventPage() {
             </div>
           )}
 
+          {accessType === 'OTP' && (
+            <div>
+              <label className="form-label text-[#c5a880]">4-Digit Access PIN</label>
+              <input 
+                type="text" 
+                maxLength={4}
+                className="form-input border-[#e8e4dd] focus:border-[#c5a880] bg-[#faf9f6] text-center tracking-[1em] font-black text-xl" 
+                value={password}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '');
+                  setPassword(val);
+                }}
+                placeholder="••••"
+                required
+              />
+            </div>
+          )}
+
           <div>
             <label className="form-label">Number of Event Days</label>
             <input 
