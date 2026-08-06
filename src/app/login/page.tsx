@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Loader, ArrowRight, Mail, Lock } from 'lucide-react';
 import { useAuth } from '../../lib/AuthContext';
 import PublicWrapper from '../../components/PublicWrapper';
+import toast from 'react-hot-toast';
+import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
 
 export default function LoginPage() {
   const [loginEmail, setLoginEmail] = useState('');
@@ -13,13 +15,22 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const { login, isAuthenticated, loading: authLoading } = useAuth();
+  const { login, googleLogin, isAuthenticated, loading: authLoading } = useAuth();
   const router = useRouter();
 
   // Redirect to dashboard if already logged in
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const userObj = JSON.parse(userStr);
+          if (userObj.role === 'SUPER_ADMIN') {
+            router.replace('/admin');
+            return;
+          }
+        } catch (e) {}
+      }
       router.replace('/dashboard');
     }
   }, [authLoading, isAuthenticated, router]);
@@ -36,10 +47,9 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
 
     if (!loginEmail || !loginPassword) {
-      setError('Please enter both email and password.');
+      toast.error('Please enter both email and password.');
       setLoading(false);
       return;
     }
@@ -54,9 +64,38 @@ export default function LoginPage() {
         localStorage.removeItem('rememberedEmail');
       }
       
+      toast.success('Login successful!');
+      
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const userObj = JSON.parse(userStr);
+        if (userObj.role === 'SUPER_ADMIN') {
+          router.push('/admin');
+          return;
+        }
+      }
+      
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Login failed. Please check your credentials.');
+      toast.error(err?.response?.data?.error || 'Login failed. Please check your credentials.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    if (!credentialResponse.credential) return;
+    try {
+      setLoading(true);
+      if (googleLogin) {
+        await googleLogin(credentialResponse.credential);
+        toast.success('Google login successful!');
+        router.push('/dashboard');
+      } else {
+         toast.error("Google login method not implemented in AuthContext.");
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Google login failed.');
     } finally {
       setLoading(false);
     }
@@ -323,17 +362,34 @@ export default function LoginPage() {
         .login-footer a:hover {
           color: #09090b;
         }
-        .login-error {
-          background: #fef2f2;
-          border: 1px solid #fecaca;
-          color: #dc2626;
-          font-size: 12px;
-          font-weight: 700;
-          padding: 12px 16px;
-          border-radius: 10px;
-          margin-bottom: 20px;
+        .google-auth-wrapper {
+          width: 100%;
+          display: flex;
+          justify-content: center;
+          margin-bottom: 24px;
+        }
+        .auth-divider {
+          display: flex;
+          align-items: center;
           text-align: center;
-          animation: slideUp 0.3s ease;
+          margin-bottom: 24px;
+          color: #94a3b8;
+          font-size: 12px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+        }
+        .auth-divider::before,
+        .auth-divider::after {
+          content: '';
+          flex: 1;
+          border-bottom: 1px solid #e2e8f0;
+        }
+        .auth-divider:not(:empty)::before {
+          margin-right: .5em;
+        }
+        .auth-divider:not(:empty)::after {
+          margin-left: .5em;
         }
         @media (max-width: 480px) {
           .login-card {
@@ -354,8 +410,6 @@ export default function LoginPage() {
           <h1 className="login-title">Welcome Back</h1>
           <p className="login-subtitle">Sign in to your Mara Photo studio</p>
 
-          {error && <div className="login-error">{error}</div>}
-
           <form onSubmit={handleLogin}>
             <div className="login-input-group">
               <label className="login-label">Email Address</label>
@@ -366,7 +420,7 @@ export default function LoginPage() {
                   required
                   value={loginEmail}
                   onChange={(e) => setLoginEmail(e.target.value)}
-                  placeholder="you@yourstudio.com"
+                  
                   className="login-input"
                   autoComplete="email"
                 />
@@ -383,7 +437,7 @@ export default function LoginPage() {
                   required
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="Enter your password"
+                  
                   className="login-input"
                   style={{ paddingRight: '48px' }}
                   autoComplete="current-password"
@@ -413,6 +467,22 @@ export default function LoginPage() {
               {loading ? <Loader className="w-4 h-4 animate-spin" /> : <>Sign In <ArrowRight className="w-4 h-4" /></>}
             </button>
           </form>
+
+          <div className="auth-divider" style={{ marginTop: '24px' }}>or continue with Google</div>
+          
+          <div className="google-auth-wrapper">
+             <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || 'dummy-client-id'}>
+               <GoogleLogin
+                 onSuccess={handleGoogleSuccess}
+                 onError={() => toast.error('Google Sign-In failed')}
+                 theme="outline"
+                 size="large"
+                 text="continue_with"
+                 shape="pill"
+                 width={350}
+               />
+             </GoogleOAuthProvider>
+          </div>
 
           <div className="login-footer">
             Don&apos;t have an account? <Link href="/signup">Create Account</Link>

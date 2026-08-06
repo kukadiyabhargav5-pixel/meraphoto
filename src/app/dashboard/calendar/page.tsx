@@ -2,10 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
 import { apiClient } from '@/lib/api';
-import {
-  ChevronLeft, ChevronRight, Plus, X, Camera, Video, Clock,
-  MapPin, Loader, Calendar as CalendarIcon, Trash2
-} from 'lucide-react';
+import toast from 'react-hot-toast';
+import { Plus, X, Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRight, Edit2, Trash2, Camera, Video } from 'lucide-react';
+import CustomDatePicker from '../../../components/CustomDatePicker';
 
 const EVENT_TYPES = [
   'Wedding', 'Pre-Wedding', 'Reception', 'Engagement', 'Birthday',
@@ -40,6 +39,7 @@ export default function CalendarPage() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [workType, setWorkType] = useState<'Event' | 'Other'>('Event');
+  const [viewingShoot, setViewingShoot] = useState<any>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -50,6 +50,7 @@ export default function CalendarPage() {
     videographersCount: 0,
     photographersNames: [''] as string[],
     videographersNames: [] as string[],
+    location: '',
     notes: ''
   });
 
@@ -105,6 +106,7 @@ export default function CalendarPage() {
         videographersCount: 0,
         photographersNames: [],
         videographersNames: [],
+        location: '',
         notes: ''
       });
       setShowForm(true);
@@ -154,6 +156,7 @@ export default function CalendarPage() {
         videographersCount: workType === 'Other' ? 0 : formData.videographersNames.length,
         photographersNames: formData.photographersNames.filter(n => n.trim()),
         videographersNames: workType === 'Other' ? [] : formData.videographersNames.filter(n => n.trim()),
+        location: formData.location,
         notes: formData.notes
       };
 
@@ -162,7 +165,7 @@ export default function CalendarPage() {
       setShowForm(false);
       // Stay on the selected date to show the updated list
     } catch (err) {
-      alert('Error saving shoot. Please try again.');
+      toast.error('Error saving shoot. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -175,7 +178,7 @@ export default function CalendarPage() {
       await apiClient.delete(`/dashboard/shoots/${shootId}`);
       setShoots(shoots.filter((s: any) => s._id !== shootId));
     } catch (err) {
-      alert('Error deleting shoot.');
+      toast.error('Error deleting shoot.');
     }
   };
 
@@ -212,7 +215,7 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white text-black p-4 md:p-8">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8">
       <style dangerouslySetInnerHTML={{ __html: `
         .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
         .cal-cell {
@@ -328,7 +331,7 @@ export default function CalendarPage() {
           <div className="flex-1">
             <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
               {/* Month Header */}
-              <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-[#f8f7f4] text-slate-900/50">
                 <div className="flex items-center gap-3">
                   <CalendarIcon className="h-5 w-5 text-[#c5a880]" />
                   <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">
@@ -338,7 +341,7 @@ export default function CalendarPage() {
                 <div className="flex items-center gap-1">
                   <button
                     onClick={goToPrevMonth}
-                    className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
+                    className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </button>
@@ -350,43 +353,48 @@ export default function CalendarPage() {
                   </button>
                   <button
                     onClick={goToNextMonth}
-                    className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
+                    className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
                   >
                     <ChevronRight className="h-5 w-5" />
                   </button>
                 </div>
               </div>
 
-              {/* Day Names Header */}
-              <div className="cal-grid border-b border-slate-100">
-                {DAY_NAMES.map(d => (
-                  <div key={d} className="text-center py-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest bg-slate-50/30">
-                    {d}
-                  </div>
-                ))}
-              </div>
-
-              {/* Calendar Grid */}
-              <div className="cal-grid">
-                {calendarCells.map((cell, idx) => (
-                  <div
-                    key={idx}
-                    className={`cal-cell ${!cell.isCurrentMonth ? 'other-month' : ''} ${cell.isCurrentMonth && isToday(cell.day) ? 'today' : ''} ${selectedDate === `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(cell.day).padStart(2, '0')}` && cell.isCurrentMonth ? 'selected' : ''}`}
-                    onClick={() => cell.isCurrentMonth && handleDateClick(cell.day)}
-                  >
-                    <span className="cal-day-num">{cell.day}</span>
-                    {cell.shoots.length > 0 && (
-                      <div className="mt-1 flex flex-col gap-1 w-full overflow-hidden">
-                        {cell.shoots.slice(0, 2).map((s: any, i: number) => (
-                          <span key={i} className="shoot-pill truncate w-full block">{s.eventName || 'Shoot'}</span>
-                        ))}
-                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 bg-[#c5a880]/10 text-[#b59a72] text-[9px] font-extrabold rounded w-full mt-0.5 border border-[#c5a880]/20">
-                          {cell.shoots.length} {cell.shoots.length === 1 ? 'Work' : 'Works'}
-                        </span>
+              {/* Grid Scroll Wrapper */}
+              <div className="overflow-x-auto w-full">
+                <div className="min-w-[600px]">
+                  {/* Day Names Header */}
+                  <div className="cal-grid border-b border-slate-100">
+                    {DAY_NAMES.map(d => (
+                      <div key={d} className="text-center py-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest bg-[#f8f7f4] text-slate-900/30">
+                        {d}
                       </div>
-                    )}
+                    ))}
                   </div>
-                ))}
+
+                  {/* Calendar Grid */}
+                  <div className="cal-grid">
+                    {calendarCells.map((cell, idx) => (
+                      <div
+                        key={idx}
+                        className={`cal-cell ${!cell.isCurrentMonth ? 'other-month' : ''} ${cell.isCurrentMonth && isToday(cell.day) ? 'today' : ''} ${selectedDate === `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(cell.day).padStart(2, '0')}` && cell.isCurrentMonth ? 'selected' : ''}`}
+                        onClick={() => cell.isCurrentMonth && handleDateClick(cell.day)}
+                      >
+                        <span className="cal-day-num">{cell.day}</span>
+                        {cell.shoots.length > 0 && (
+                          <div className="mt-1 flex flex-col gap-1 w-full overflow-hidden">
+                            {cell.shoots.slice(0, 2).map((s: any, i: number) => (
+                              <span key={i} className="shoot-pill truncate w-full block">{s.eventName || 'Shoot'}</span>
+                            ))}
+                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 bg-[#c5a880]/10 text-[#b59a72] text-[9px] font-extrabold rounded w-full mt-0.5 border border-[#c5a880]/20">
+                              {cell.shoots.length} {cell.shoots.length === 1 ? 'Work' : 'Works'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -396,7 +404,7 @@ export default function CalendarPage() {
             {showForm && selectedDate ? (
               <div className="form-panel bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
                 {/* Form Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-[#f8f7f4] text-slate-900/50">
                   <div className="flex flex-col gap-2">
                     <h3 className="text-sm font-extrabold text-slate-900">
                       {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -405,14 +413,14 @@ export default function CalendarPage() {
                       <button 
                         type="button" 
                         onClick={() => setWorkType('Event')}
-                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${workType === 'Event' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${workType === 'Event' ? 'bg-[#f8f7f4] text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-600'}`}
                       >
                         Event Shoot
                       </button>
                       <button 
                         type="button" 
                         onClick={() => setWorkType('Other')}
-                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${workType === 'Other' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${workType === 'Other' ? 'bg-[#f8f7f4] text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-600'}`}
                       >
                         Other Work
                       </button>
@@ -421,7 +429,7 @@ export default function CalendarPage() {
                   <button
                     type="button"
                     onClick={() => { setShowForm(false); setSelectedDate(null); }}
-                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors self-start"
+                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors self-start"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -433,16 +441,16 @@ export default function CalendarPage() {
                     <div className="space-y-4">
                       <div>
                         <label className="form-label">Task Name</label>
-                        <input type="text" className="form-input" placeholder="e.g. Editing, Album Design, Client Meeting" value={formData.eventName} onChange={e => setFormData({ ...formData, eventName: e.target.value })} required />
+                        <input type="text" className="form-input"  value={formData.eventName} onChange={e => setFormData({ ...formData, eventName: e.target.value })} required />
                       </div>
                       <div>
                         <label className="form-label">
                           <Clock className="inline h-3 w-3 mr-1 -mt-0.5" /> Time
                         </label>
-                        <input type="time" className="form-input" value={formData.time} onChange={e => setFormData({ ...formData, time: e.target.value })} required />
+                        <CustomDatePicker type="time" className="form-input" value={formData.time} onChange={val => setFormData({ ...formData, time: val })} required />
                       </div>
-                      <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50">
-                        <label className="form-label mb-3 text-slate-700">Assigned To</label>
+                      <div className="border border-slate-100 rounded-xl p-4 bg-[#f8f7f4] text-slate-900/50">
+                        <label className="form-label mb-3 text-slate-600">Assigned To</label>
                         <div className="flex flex-col gap-2">
                            {formData.photographersNames.map((name, idx) => (
                               <div key={`o-${idx}`} className="flex items-center justify-between bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm text-slate-800 font-medium shadow-sm">
@@ -451,7 +459,7 @@ export default function CalendarPage() {
                               </div>
                            ))}
                            <select 
-                             className="form-input text-sm text-slate-600 bg-white" 
+                             className="form-input text-sm text-slate-400 bg-white" 
                              value=""
                              onChange={(e) => {
                                 if(e.target.value && !formData.photographersNames.includes(e.target.value)) {
@@ -468,8 +476,14 @@ export default function CalendarPage() {
                         </div>
                       </div>
                       <div>
+                        <label className="form-label">
+                          <MapPin className="inline h-3 w-3 mr-1 -mt-0.5" /> Location (Optional)
+                        </label>
+                        <input type="text" className="form-input"  value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} />
+                      </div>
+                      <div>
                         <label className="form-label">Notes (Optional)</label>
-                        <textarea className="form-input" rows={2} placeholder="Any extra details..." value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
+                        <textarea className="form-input" rows={2}  value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
                       </div>
                     </div>
                   ) : (
@@ -479,13 +493,13 @@ export default function CalendarPage() {
                         <label className="form-label">
                           <Clock className="inline h-3 w-3 mr-1 -mt-0.5" /> Shoot Time
                         </label>
-                        <input type="time" className="form-input" value={formData.time} onChange={e => setFormData({ ...formData, time: e.target.value })} required />
+                        <CustomDatePicker type="time" className="form-input" value={formData.time} onChange={val => setFormData({ ...formData, time: val })} required />
                       </div>
 
                       {/* Event Name */}
                       <div>
                         <label className="form-label">Event Name</label>
-                        <input type="text" className="form-input" placeholder="e.g. Sharma Wedding" value={formData.eventName} onChange={e => setFormData({ ...formData, eventName: e.target.value })} required />
+                        <input type="text" className="form-input"  value={formData.eventName} onChange={e => setFormData({ ...formData, eventName: e.target.value })} required />
                       </div>
 
                       {/* Event Type */}
@@ -499,7 +513,7 @@ export default function CalendarPage() {
                       </div>
 
                       {/* Photographers */}
-                      <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50">
+                      <div className="border border-slate-100 rounded-xl p-4 bg-[#f8f7f4] text-slate-900/50">
                         <label className="form-label mb-3 flex items-center gap-1.5">
                           <Camera className="h-3.5 w-3.5 text-[#c5a880]" /> Photographers
                         </label>
@@ -511,7 +525,7 @@ export default function CalendarPage() {
                               </div>
                            ))}
                            <select 
-                             className="form-input text-sm text-slate-600 bg-white" 
+                             className="form-input text-sm text-slate-400 bg-white" 
                              value=""
                              onChange={(e) => {
                                 if(e.target.value && !formData.photographersNames.includes(e.target.value)) {
@@ -529,7 +543,7 @@ export default function CalendarPage() {
                       </div>
 
                       {/* Videographers */}
-                      <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50">
+                      <div className="border border-slate-100 rounded-xl p-4 bg-[#f8f7f4] text-slate-900/50">
                         <label className="form-label mb-3 flex items-center gap-1.5">
                           <Video className="h-3.5 w-3.5 text-[#c5a880]" /> Videographers
                         </label>
@@ -541,7 +555,7 @@ export default function CalendarPage() {
                               </div>
                            ))}
                            <select 
-                             className="form-input text-sm text-slate-600 bg-white" 
+                             className="form-input text-sm text-slate-400 bg-white" 
                              value=""
                              onChange={(e) => {
                                 if(e.target.value && !formData.videographersNames.includes(e.target.value)) {
@@ -558,10 +572,18 @@ export default function CalendarPage() {
                         </div>
                       </div>
 
+                      {/* Location */}
+                      <div>
+                        <label className="form-label">
+                          <MapPin className="inline h-3 w-3 mr-1 -mt-0.5" /> Location (Optional)
+                        </label>
+                        <input type="text" className="form-input"  value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} />
+                      </div>
+
                       {/* Notes */}
                       <div>
                         <label className="form-label">Notes (Optional)</label>
-                        <textarea className="form-input" rows={2} placeholder="Any extra details..." value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
+                        <textarea className="form-input" rows={2}  value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
                       </div>
                     </div>
                   )}
@@ -586,27 +608,28 @@ export default function CalendarPage() {
                   </h3>
                   {upcomingShoots.length === 0 ? (
                     <div className="text-center py-8">
-                      <CalendarIcon className="h-8 w-8 text-slate-200 mx-auto mb-3" />
+                      <CalendarIcon className="h-8 w-8 text-slate-700 mx-auto mb-3" />
                       <p className="text-xs text-slate-400 font-semibold">No upcoming shoots scheduled</p>
-                      <p className="text-[10px] text-slate-300 mt-1">Click on a date to add a new shoot</p>
+                      <p className="text-[10px] text-slate-600 mt-1">Click on a date to add a new shoot</p>
                     </div>
                   ) : (
                     <div className="space-y-3">
                       {upcomingShoots.map((shoot: any) => {
                         const shootDate = new Date(shoot.date);
                         return (
-                          <div key={shoot._id} className="upcoming-card group">
+                          <div key={shoot._id} className="upcoming-card group cursor-pointer" onClick={() => setViewingShoot(shoot)}>
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
                                 <p className="font-bold text-sm text-slate-900">{shoot.eventName}</p>
                                 <p className="text-[10px] text-slate-400 font-mono mt-1">
                                   {shootDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })} • {shoot.time || '09:00'}
+                                  {shoot.location && <span className="ml-2"><MapPin className="inline h-2.5 w-2.5 -mt-0.5" /> {shoot.location}</span>}
                                 </p>
                                 <div className="flex flex-wrap items-center gap-2 mt-2.5">
                                   <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">{shoot.eventType}</span>
                                   
                                   {shoot.photographersNames?.map((name: string, i: number) => (
-                                    <span key={`p-${i}`} className={`text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 border ${shoot.eventType === 'Other Work' ? 'text-slate-600 bg-slate-50 border-slate-200' : 'text-[#c5a880] bg-[#c5a880]/10 border-[#c5a880]/20'}`}>
+                                    <span key={`p-${i}`} className={`text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 border ${shoot.eventType === 'Other Work' ? 'text-slate-400 bg-[#f8f7f4] text-slate-900 border-slate-200' : 'text-[#c5a880] bg-[#c5a880]/10 border-[#c5a880]/20'}`}>
                                       {shoot.eventType !== 'Other Work' && <Camera className="h-2.5 w-2.5" />} {name}
                                     </span>
                                   ))}
@@ -619,8 +642,8 @@ export default function CalendarPage() {
                                 </div>
                               </div>
                               <button
-                                onClick={() => handleDeleteShoot(shoot._id)}
-                                className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 text-slate-300 hover:text-red-500 transition-all"
+                                onClick={(e) => { e.stopPropagation(); handleDeleteShoot(shoot._id); }}
+                                className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 text-slate-600 hover:text-red-500 transition-all"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -634,61 +657,96 @@ export default function CalendarPage() {
 
                 {/* Shoots on Selected Date */}
                 {selectedDate && !showForm && (
-                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm form-panel">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
-                        Shoots on {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
-                      </h3>
-                      <button
-                        onClick={() => setShowForm(true)}
-                        className="text-[10px] font-bold text-[#c5a880] hover:text-[#b59a72] flex items-center gap-1"
-                      >
-                        <Plus className="h-3 w-3" /> Add
-                      </button>
+                  <button
+                    onClick={() => setShowForm(true)}
+                    className="w-full bg-white border-2 border-dashed border-slate-300 hover:border-[#c5a880] hover:bg-[#c5a880]/5 text-slate-500 hover:text-[#c5a880] rounded-2xl p-6 shadow-sm transition-all flex flex-col items-center justify-center gap-3 form-panel group"
+                  >
+                    <div className="h-12 w-12 rounded-full bg-slate-100 group-hover:bg-[#c5a880]/20 flex items-center justify-center transition-colors">
+                      <Plus className="h-6 w-6" />
                     </div>
-                    {getShootsForDate(parseInt(selectedDate.split('-')[2])).length === 0 ? (
-                      <p className="text-xs text-slate-400 py-4 text-center">No shoots on this date</p>
-                    ) : (
-                      <div className="space-y-3 mt-4">
-                        {getShootsForDate(parseInt(selectedDate.split('-')[2])).map((s: any) => (
-                          <div key={s._id} className="flex items-start justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl group hover:border-[#c5a880]/30 transition-all">
-                            <div className="flex-1">
-                              <p className="font-bold text-sm text-slate-900">{s.eventName}</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <p className="text-[10px] text-slate-400 font-mono">{s.time}</p>
-                                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                                <span className="text-[10px] font-bold text-slate-500">{s.eventType}</span>
-                              </div>
-                              
-                              {(s.photographersNames?.length > 0 || s.videographersNames?.length > 0) && (
-                                <div className="flex flex-wrap gap-2 mt-3">
-                                  {s.photographersNames?.map((name: string, i: number) => (
-                                    <span key={`p-${i}`} className={`text-[9px] font-bold px-2 py-1 rounded flex items-center gap-1 shadow-sm ${s.eventType === 'Other Work' ? 'text-slate-600 bg-white border border-slate-200' : 'text-[#c5a880] bg-white border border-[#c5a880]/20'}`}>
-                                      {s.eventType !== 'Other Work' && <Camera className="h-2.5 w-2.5" />} {name}
-                                    </span>
-                                  ))}
-                                  {s.videographersNames?.map((name: string, i: number) => (
-                                    <span key={`v-${i}`} className="text-[9px] font-bold text-indigo-500 bg-white border border-indigo-100 px-2 py-1 rounded flex items-center gap-1 shadow-sm">
-                                      <Video className="h-2.5 w-2.5" /> {name}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                            <button onClick={() => handleDeleteShoot(s._id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1.5 hover:bg-red-50 rounded-lg">
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                    <div className="text-center">
+                      <span className="font-bold text-sm block">Add Shoot for</span>
+                      <span className="text-[11px] font-extrabold uppercase tracking-widest mt-1 opacity-70">
+                        {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-IN', { month: 'long', day: 'numeric', year: 'numeric' })}
+                      </span>
+                    </div>
+                  </button>
                 )}
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Shoot Details Modal */}
+      {viewingShoot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-[#f8f7f4] text-slate-900/50">
+              <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Shoot Details</h2>
+              <button onClick={() => setViewingShoot(null)} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900 mb-1">{viewingShoot.eventName}</h3>
+                <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400 font-medium">
+                  <span>{new Date(viewingShoot.date).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                  <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {viewingShoot.time || '09:00'}</span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <span className="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg border border-slate-200">{viewingShoot.eventType}</span>
+                {viewingShoot.location && (
+                  <span className="px-3 py-1 bg-[#c5a880]/10 text-[#c5a880] text-xs font-bold rounded-lg border border-[#c5a880]/20 flex items-center gap-1">
+                    <MapPin className="h-3.5 w-3.5" /> {viewingShoot.location}
+                  </span>
+                )}
+              </div>
+
+              {(viewingShoot.photographersNames?.length > 0 || viewingShoot.videographersNames?.length > 0) && (
+                <div className="space-y-3 pt-3 border-t border-slate-100">
+                  <h4 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">Assigned Team</h4>
+                  <div className="flex flex-col gap-2">
+                    {viewingShoot.photographersNames?.map((name: string, idx: number) => (
+                      <div key={`p-${idx}`} className={`flex items-center gap-2 p-2 rounded-lg border ${viewingShoot.eventType === 'Other Work' ? 'bg-[#f8f7f4] text-slate-900 border-slate-200 text-slate-600' : 'bg-[#c5a880]/5 border-[#c5a880]/20 text-[#c5a880]'}`}>
+                        {viewingShoot.eventType !== 'Other Work' ? <Camera className="h-4 w-4" /> : <div className="h-4 w-4" />}
+                        <span className="text-sm font-bold">{name}</span>
+                      </div>
+                    ))}
+                    {viewingShoot.videographersNames?.map((name: string, idx: number) => (
+                      <div key={`v-${idx}`} className="flex items-center gap-2 p-2 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600">
+                        <Video className="h-4 w-4" />
+                        <span className="text-sm font-bold">{name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {viewingShoot.notes && (
+                <div className="pt-3 border-t border-slate-100">
+                  <h4 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Notes</h4>
+                  <p className="text-sm text-slate-400 bg-[#f8f7f4] text-slate-900 p-3 rounded-xl border border-slate-100 whitespace-pre-wrap leading-relaxed">
+                    {viewingShoot.notes}
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t border-slate-100 bg-[#f8f7f4] text-slate-900/50 flex justify-end">
+              <button 
+                onClick={() => setViewingShoot(null)} 
+                className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-900 rounded-xl text-sm font-bold shadow-md transition-colors"
+              >
+                Close Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -25,7 +25,7 @@ export default function EventsManagementPage() {
   }, []);
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white text-slate-900 p-4 md:p-8 font-poppins">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8 font-poppins">
       <style dangerouslySetInnerHTML={{__html: `
         .event-card {
           background: #ffffff;
@@ -83,36 +83,51 @@ export default function EventsManagementPage() {
 
           {loading ? (
             <div className="col-span-full py-12 flex justify-center items-center">
-              <Loader2 className="h-8 w-8 text-slate-300 animate-spin" />
+              <Loader2 className="h-8 w-8 text-slate-600 animate-spin" />
             </div>
           ) : (
             events.map((event, idx) => (
               <Link key={event._id || idx} href={`/dashboard/events/${event.code || event.eventCode || event._id}`}>
-                <div className="relative group overflow-hidden rounded-2xl cursor-pointer aspect-video flex flex-col justify-between p-5 border border-slate-200 hover:border-[#c5a880] transition-all shadow-sm hover:shadow-md">
-                  {/* Background Image & Overlay */}
-                  <div className="absolute inset-0 z-0">
+                <div className="group bg-white rounded-2xl overflow-hidden border border-slate-200 hover:border-[#c5a880] transition-all duration-300 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] flex flex-col h-full cursor-pointer">
+                  {/* Image Section */}
+                  <div className="relative h-48 w-full overflow-hidden bg-slate-50">
                     {event.coverImageUrl ? (
-                      <img src={event.coverImageUrl} alt={event.name} className="w-full h-full object-contain bg-slate-900 transition-transform duration-700 group-hover:scale-105" />
+                      <img 
+                        src={event.coverImageUrl} 
+                        alt={event.name} 
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                      />
                     ) : (
-                      <div className="w-full h-full bg-slate-900" />
+                      <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-300">
+                        <ImageIcon className="w-12 h-12 opacity-50" />
+                      </div>
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/40" />
+                    {/* Top Badges */}
+                    <div className="absolute top-4 left-4 flex gap-2">
+                      <span className="px-2.5 py-1 rounded-md bg-black/60 backdrop-blur-md text-[10px] font-bold text-white uppercase tracking-wider">
+                        {event.type || 'EVENT'}
+                      </span>
+                    </div>
+                    <div className="absolute top-4 right-4 flex gap-2">
+                      <span className="px-2.5 py-1 rounded-md bg-emerald-500/90 backdrop-blur-md text-[10px] font-bold text-white uppercase tracking-wider shadow-sm">
+                        PUBLISHED
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Content (z-10 relative) */}
-                  <div className="relative z-10 flex justify-between items-start">
-                    <span className="px-3 py-1 rounded-full bg-black/40 border border-white/10 text-[10px] font-bold text-[#c5a880] uppercase tracking-wider backdrop-blur-md">
-                      {event.type || 'EVENT'}
-                    </span>
-                    <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/20 text-[10px] font-bold text-emerald-400 uppercase tracking-wider backdrop-blur-md">
-                      PUBLISHED
-                    </span>
-                  </div>
-
-                  <div className="relative z-10 mt-auto">
-                    <h3 className="text-xl font-bold text-white mb-4 line-clamp-2 leading-tight">{event.name}</h3>
+                  {/* Content Section */}
+                  <div className="p-5 flex flex-col flex-1">
+                    <h3 className="text-lg font-bold text-slate-900 mb-2 line-clamp-1 group-hover:text-[#c5a880] transition-colors">{event.name}</h3>
                     
-                    <div className="h-[1px] w-full bg-white/20" />
+                    <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-slate-500 text-xs font-medium">
+                        <span>{event.date ? String(event.date).split('T')[0] : 'No date'}</span>
+                      </div>
+                      
+                      <div className="text-[#c5a880] font-semibold text-sm group-hover:translate-x-1 transition-transform">
+                        View &rarr;
+                      </div>
+                    </div>
                   </div>
                 </div>
               </Link>

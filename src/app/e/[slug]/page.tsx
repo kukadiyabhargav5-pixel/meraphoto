@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import confetti from 'canvas-confetti';
-import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy, ZoomIn, Play, ShieldCheck, RefreshCw, ScanFace, ChevronRight, ChevronLeft, LayoutGrid, Sliders, X, Download, Loader, Sparkles, CalendarDays, Lock, Key, AlertCircle, Search } from 'lucide-react';
+import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy, ZoomIn, Play, ShieldCheck, RefreshCw, ScanFace, ChevronRight, ChevronLeft, LayoutGrid, Sliders, X, Download, Loader, Sparkles, CalendarDays, Lock, Key, AlertCircle, Search, HelpCircle, Send, CheckCircle } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { MasonryPhotoAlbum, RowsPhotoAlbum } from "react-photo-album";
 import "react-photo-album/masonry.css";
@@ -58,7 +58,16 @@ export default function ClientGallery() {
   const [media, setMedia] = useState<any[]>([]);
   const [isLocked, setIsLocked] = useState(false);
   const [password, setPassword] = useState('');
+  const [otpVals, setOtpVals] = useState(['', '', '', '']);
   const [authError, setAuthError] = useState('');
+
+  // Guest Sign-In States
+  const [isGuest, setIsGuest] = useState(false);
+  const [guestName, setGuestName] = useState('');
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
+  const [guestError, setGuestError] = useState('');
+  const [guestSubmitting, setGuestSubmitting] = useState(false);
 
   // Gallery view configurations
   const [viewType, setViewType] = useState<'grid' | 'masonry' | 'timeline'>('masonry');
@@ -80,6 +89,36 @@ export default function ClientGallery() {
   const [searchStats, setSearchStats] = useState<{ totalSearched: number; message: string } | null>(null);
 
   const [localUrls, setLocalUrls] = useState<Record<string, string>>({});
+
+  // Ticket / Support State
+  const [ticketModalOpen, setTicketModalOpen] = useState(false);
+  const [ticketForm, setTicketForm] = useState({ name: '', email: '', mobile: '', complaint: '' });
+  const [ticketSubmitting, setTicketSubmitting] = useState(false);
+  const [ticketMessage, setTicketMessage] = useState({ type: '', text: '' });
+
+  const handleTicketSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTicketMessage({ type: '', text: '' });
+    setTicketSubmitting(true);
+    try {
+      await apiClient.post('/client-tickets', {
+        studioId: event.studioId,
+        eventId: event._id,
+        customerName: ticketForm.name,
+        email: ticketForm.email,
+        mobileNumber: ticketForm.mobile,
+        complaint: ticketForm.complaint
+      });
+      setTicketMessage({ type: 'success', text: 'Ticket raised successfully. The studio will get back to you shortly.' });
+      setTicketForm({ name: '', email: '', mobile: '', complaint: '' });
+      setTimeout(() => setTicketModalOpen(false), 3000);
+    } catch (err: any) {
+      setTicketMessage({ type: 'error', text: err.response?.data?.error || 'Failed to raise ticket' });
+    } finally {
+      setTicketSubmitting(false);
+    }
+  };
+
 
   const resolveMediaUrl = (m: any) => {
     if (!m) return '';
@@ -124,7 +163,7 @@ export default function ClientGallery() {
       const res = await apiClient.get(`/event/code/${slug}`);
       setEvent(res.data.event);
       
-      if (res.data.event.accessType === 'PASSWORD') {
+      if (res.data.event.accessType === 'PASSWORD' || res.data.event.accessType === 'OTP') {
         setIsLocked(true);
       } else {
         fetchGalleryMedia(res.data.event._id);
@@ -138,6 +177,12 @@ export default function ClientGallery() {
   };
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const guestStatus = localStorage.getItem(`mara_guest_${slug}`);
+      if (guestStatus === 'true') {
+        setIsGuest(true);
+      }
+    }
     fetchEventData();
   }, [slug]);
 
@@ -173,6 +218,23 @@ export default function ClientGallery() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedItem, searchActive, matchedMedia, media]);
 
+  const handleOtpChange = (index: number, val: string) => {
+    if (val.length > 1) val = val[0];
+    const newOtp = [...otpVals];
+    newOtp[index] = val;
+    setOtpVals(newOtp);
+    setPassword(newOtp.join(''));
+    if (val && index < 3) {
+      document.getElementById(`otp-${index + 1}`)?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !otpVals[index] && index > 0) {
+      document.getElementById(`otp-${index - 1}`)?.focus();
+    }
+  };
+
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -181,7 +243,35 @@ export default function ClientGallery() {
       setIsLocked(false);
       fetchGalleryMedia(event._id);
     } catch (err: any) {
-      setAuthError('Incorrect gallery password.');
+      setAuthError('Incorrect access code.');
+    }
+  };
+
+  const handleGuestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGuestError('');
+    setGuestSubmitting(true);
+    
+    if (!guestName.trim() || !guestPhone.trim()) {
+      setGuestError('Name and Phone are required.');
+      setGuestSubmitting(false);
+      return;
+    }
+
+    try {
+      await apiClient.post(`/visitors/event/code/${slug}`, {
+        name: guestName,
+        phone: guestPhone,
+        email: guestEmail
+      });
+      
+      localStorage.setItem(`mara_guest_${slug}`, 'true');
+      setIsGuest(true);
+    } catch (err: any) {
+      console.error(err);
+      setGuestError(err.response?.data?.error || 'Failed to submit details. Please try again.');
+    } finally {
+      setGuestSubmitting(false);
     }
   };
 
@@ -392,7 +482,7 @@ export default function ClientGallery() {
     return (
       <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col items-center justify-center p-6 relative">
         
-        <div className="w-full max-w-md glass-panel bg-white border-slate-200 p-8 rounded-3xl text-center shadow-lg relative z-10">
+        <div className="w-full max-w-md glass-panel bg-white border-slate-200 p-6 sm:p-8 rounded-3xl text-center shadow-lg relative z-10">
           <div className="w-12 h-12 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center mx-auto mb-6">
             <Lock className="h-5 w-5 text-[#FF6B00]" />
           </div>
@@ -406,13 +496,110 @@ export default function ClientGallery() {
             </div>
           )}
 
-          <form onSubmit={handleUnlock} className="flex flex-col gap-4 mt-6">
-            <div className="relative">
-              <Key className="absolute left-3.5 top-1/2 translate-y-[-50%] h-4.5 w-4.5 text-slate-400" />
-              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password" className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-[#FF6B00] focus:bg-white text-center tracking-wider" />
+          {event?.accessType === 'OTP' ? (
+            <form onSubmit={handleUnlock} className="flex flex-col gap-6 mt-6">
+              <div className="flex justify-center gap-3">
+                {otpVals.map((val, idx) => (
+                  <input
+                    key={idx}
+                    id={`otp-${idx}`}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={val}
+                    onChange={(e) => handleOtpChange(idx, e.target.value.replace(/\\D/g, ''))}
+                    onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                    className="w-14 h-16 bg-slate-50 border border-slate-200 rounded-xl text-center text-2xl font-black text-slate-800 focus:outline-none focus:border-[#FF6B00] focus:ring-2 focus:ring-orange-500/20 transition-all shadow-sm"
+                    required
+                  />
+                ))}
+              </div>
+              <button type="submit" className="bg-[#FF6B00] hover:bg-[#E05E00] text-white font-bold py-3.5 rounded-xl text-xs transition-all shadow-md shadow-orange-500/20 uppercase tracking-widest">
+                Verify PIN
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleUnlock} className="flex flex-col gap-4 mt-6">
+              <div className="relative">
+                <Key className="absolute left-3.5 top-1/2 translate-y-[-50%] h-4.5 w-4.5 text-slate-400" />
+                <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password" className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-[#FF6B00] focus:bg-white text-center tracking-wider" />
+              </div>
+              <button type="submit" className="bg-[#FF6B00] hover:bg-[#E05E00] text-white font-bold py-3.5 rounded-xl text-xs transition-all shadow-md shadow-orange-500/20">
+                Unlock Gallery
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Guest Sign-In Page
+  if (!isGuest && !isLocked) {
+    return (
+      <div className="min-h-screen bg-[#f8f7f4] text-[#0F172A] flex flex-col items-center justify-center p-4 sm:p-6 relative">
+        <div className="w-full max-w-md bg-white border border-[#e5e7eb] p-6 sm:p-10 rounded-3xl text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10">
+          <div className="w-14 h-14 rounded-2xl bg-[#fdfbf9] border border-[#c5a880]/20 flex items-center justify-center mx-auto mb-6">
+            <User className="h-6 w-6 text-[#c5a880]" />
+          </div>
+          <h2 className="text-2xl font-extrabold text-[#111827] tracking-tight">{event?.name || 'Event Gallery'}</h2>
+          <p className="text-xs text-[#6b7280] font-medium mt-2 mb-8">Please enter your details to view the album.</p>
+          
+          <form onSubmit={handleGuestSubmit} className="flex flex-col gap-5 text-left">
+            <div>
+              <label className="text-[11px] font-bold text-[#4b5563] mb-1.5 block uppercase tracking-wider">Full Name *</label>
+              <div className="relative">
+                <input 
+                  type="text" 
+                  required
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  className="w-full bg-[#fcfcfc] border border-[#e5e7eb] rounded-xl px-4 py-3.5 pl-11 text-sm text-[#111827] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] focus:bg-white transition-all shadow-sm"
+                />
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#9ca3af]" />
+              </div>
             </div>
-            <button type="submit" className="bg-[#FF6B00] hover:bg-[#E05E00] text-white font-bold py-3.5 rounded-xl text-xs transition-all shadow-md shadow-orange-500/20">
-              Unlock Gallery
+            
+            <div>
+              <label className="text-[11px] font-bold text-[#4b5563] mb-1.5 block uppercase tracking-wider">Phone Number *</label>
+              <div className="relative">
+                <input 
+                  type="tel" 
+                  required
+                  value={guestPhone}
+                  onChange={(e) => setGuestPhone(e.target.value)}
+                  className="w-full bg-[#fcfcfc] border border-[#e5e7eb] rounded-xl px-4 py-3.5 pl-11 text-sm text-[#111827] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] focus:bg-white transition-all shadow-sm"
+                />
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#9ca3af]" />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-[#4b5563] mb-1.5 block uppercase tracking-wider">Email Address (Optional)</label>
+              <div className="relative">
+                <input 
+                  type="email" 
+                  value={guestEmail}
+                  onChange={(e) => setGuestEmail(e.target.value)}
+                  className="w-full bg-[#fcfcfc] border border-[#e5e7eb] rounded-xl px-4 py-3.5 pl-11 text-sm text-[#111827] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] focus:bg-white transition-all shadow-sm"
+                />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#9ca3af]" />
+              </div>
+            </div>
+
+            {guestError && (
+              <div className="mt-2 bg-[#fef2f2] border border-[#fecaca] text-[#b91c1c] p-3.5 rounded-xl text-xs flex items-center justify-center gap-2 font-semibold shadow-sm">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{guestError}</span>
+              </div>
+            )}
+            
+            <button 
+              type="submit" 
+              disabled={guestSubmitting}
+              className="mt-6 bg-[#c5a880] hover:bg-[#b09672] text-[#09090b] font-extrabold py-4 rounded-xl text-sm transition-all shadow-[0_4px_14px_0_rgba(197,168,128,0.39)] w-full flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {guestSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Enter Gallery'}
             </button>
           </form>
         </div>
@@ -425,49 +612,60 @@ export default function ClientGallery() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col relative selection:bg-orange-500 selection:text-white">
       {/* Whitelabel Header */}
-      <header className="sticky top-0 z-40 glass-panel border-b border-slate-200 bg-white/70 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+      <header className="sticky top-0 z-40 glass-panel border-b border-slate-200 bg-white/80 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {event?.studioId?.logoUrl ? (
-              <img src={event.studioId.logoUrl} alt="Logo" className="h-8 max-w-[120px] object-contain" />
+              <img src={event.studioId.logoUrl} alt="Logo" className="h-10 sm:h-14 max-w-[140px] sm:max-w-[250px] object-contain transition-all hover:opacity-90 drop-shadow-sm" />
             ) : (
-              <span className="font-extrabold text-sm tracking-widest text-[#FF6B00] uppercase">
+              <span className="font-extrabold text-sm tracking-widest text-[#c5a880] uppercase">
                 {event?.studioId?.name}
               </span>
             )}
           </div>
           
-          <div className="flex items-center gap-4 text-xs font-bold text-slate-500">
-            <span>{event?.name}</span>
+          <div className="flex items-center gap-2 sm:gap-4 text-[10px] sm:text-xs font-bold text-slate-500">
+            <span className="truncate max-w-[120px] sm:max-w-none">{event?.name}</span>
             <span className="h-4 w-[1px] bg-slate-200" />
             <span>{new Date(event?.date).toLocaleDateString()}</span>
           </div>
         </div>
       </header>
 
-      {/* Hero Banner Cover */}
-      <div className="h-72 w-full relative overflow-hidden">
-        {event?.coverImageUrl ? (
-          <img src={event.coverImageUrl} alt="Cover" className="w-full h-full object-cover brightness-50" />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-r from-[#000053] via-slate-900 to-slate-950 brightness-75" />
-        )}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#F8FAFC] to-transparent h-48" />
-        <div className="absolute inset-0 flex flex-col justify-end p-8 max-w-7xl mx-auto">
-          <span className="text-[10px] uppercase font-bold tracking-widest bg-[#FF6B00] text-white px-2.5 py-1 rounded-full w-max shadow-md mb-3">
-            {event?.type}
-          </span>
-          <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-slate-800">{event?.name}</h1>
-          <p className="text-xs text-slate-500 font-semibold mt-2 flex items-center gap-1.5">
-            <CalendarDays className="h-4 w-4 text-[#FF6B00]" />
-            {event?.location || 'Studio Photography Session'}
-          </p>
+      {/* Top Action Buttons (Replaced Hero Banner) */}
+      <div className="w-full bg-white border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 sm:gap-4">
+          <button onClick={() => setSearchModalOpen(true)} className="bg-[#c5a880] hover:bg-[#b09672] text-slate-900 font-extrabold px-6 py-3 rounded-xl shadow-[0_4px_14px_0_rgba(197,168,128,0.39)] flex justify-center items-center gap-2 transition-all">
+            <ScanFace className="h-5 w-5" />
+            Find My Face
+          </button>
+          
+          <button 
+            onClick={async () => {
+              try {
+                // If the user hasn't selected any, download ALL by mapping media
+                const idsToDownload = selectedMediaIds.length > 0 ? selectedMediaIds : media.map(m => m._id);
+                if (idsToDownload.length === 0) return;
+                const res = await apiClient.post('/media/download-bulk', { mediaIds: idsToDownload });
+                const downloads = res.data.downloads || [];
+                for (const d of downloads) {
+                  window.open(d.url, '_blank');
+                }
+              } catch (err) {
+                console.error(err);
+              }
+            }} 
+            className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold px-6 py-3 rounded-xl shadow-[0_4px_14px_0_rgba(0,0,0,0.2)] flex items-center gap-2 transition-all"
+          >
+            <Download className="h-5 w-5" />
+            Download All Images
+          </button>
         </div>
       </div>
 
       {/* Gallery Controls bar */}
-      <div className="max-w-7xl mx-auto w-full px-6 py-6 flex items-center justify-between border-b border-slate-200">
-        <div className="flex items-center gap-3">
+      <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-4 sm:py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
 
 
           {searchActive && searchStats && (
@@ -477,7 +675,7 @@ export default function ClientGallery() {
           )}
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
           {searchActive && (
             <button onClick={clearSearch} className="text-xs text-rose-600 hover:text-rose-500 font-bold underline flex items-center gap-1">
               <X className="h-3.5 w-3.5" />
@@ -505,7 +703,7 @@ export default function ClientGallery() {
       </div>
 
       {/* Gallery Items Grid */}
-      <div className="flex-1 max-w-7xl mx-auto w-full px-6 py-8">
+      <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
         {galleryMedia.length > 0 ? (
           <div>
             {searchActive && (
@@ -543,8 +741,8 @@ export default function ClientGallery() {
                      return (
                        <div 
                          {...rest} 
-                         style={{ ...style, overflow: 'hidden', borderRadius: '0.75rem' }} 
-                         className={`group relative transition-all duration-300 bg-slate-100 flex items-center justify-center ${isSelected ? 'border-2 border-[#FF6B00] ring-4 ring-[#FF6B00]/20 shadow-lg scale-95' : 'border border-slate-200/60 shadow-sm hover:shadow-xl hover:-translate-y-1 z-0 hover:z-10 cursor-pointer'}`}
+                         style={{ ...style, overflow: 'hidden', borderRadius: '1rem' }} 
+                         className={`group relative transition-all duration-500 ease-out bg-slate-100 flex items-center justify-center ${isSelected ? 'border-2 border-[#c5a880] ring-4 ring-[#c5a880]/20 shadow-lg scale-95' : 'shadow-sm hover:shadow-2xl z-0 hover:z-10 cursor-pointer'}`}
                        >
                          {children}
                        </div>
@@ -553,8 +751,8 @@ export default function ClientGallery() {
                    image: ({ style, className, ...rest }) => (
                      <img 
                        {...rest} 
-                       style={{ ...style, transition: 'transform 0.5s cubic-bezier(0.4, 0, 0.2, 1)' }} 
-                       className={`${className} group-hover:scale-110 object-cover`} 
+                       style={{ ...style, transition: 'transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)' }} 
+                       className={`${className} group-hover:scale-[1.03] object-cover`} 
                      />
                    ),
                    extras: (_, { photo }) => {
@@ -587,16 +785,12 @@ export default function ClientGallery() {
 
                          {isMultiSelect ? (
                            <div className="absolute inset-0 bg-black/10 flex items-start justify-start p-3 cursor-pointer z-30" onClick={() => toggleSelectMedia(m._id)}>
-                             <div className={`w-5.5 h-5.5 rounded-md border flex items-center justify-center ${isSelected ? 'bg-[#FF6B00] border-[#FF6B00] text-white' : 'border-white/40 bg-black/10'}`}>
+                             <div className={`w-5.5 h-5.5 rounded-md border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#c5a880] border-[#c5a880] text-white shadow-md' : 'border-white/60 bg-black/20 backdrop-blur-sm hover:bg-black/40'}`}>
                                {isSelected && <Check className="h-4.5 w-4.5" />}
                              </div>
                            </div>
                          ) : (
-                           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 cursor-pointer z-30" onClick={() => setSelectedItem(m)}>
-                             <div className="p-2.5 rounded-full bg-white/20 backdrop-blur-md border border-white/30 text-white hover:scale-105 transition-transform">
-                               <ZoomIn className="h-4.5 w-4.5" />
-                             </div>
-                           </div>
+                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-500 cursor-pointer z-30" onClick={() => setSelectedItem(m)} />
                          )}
                        </>
                      );
@@ -621,8 +815,8 @@ export default function ClientGallery() {
                      return (
                        <div 
                          {...rest} 
-                         style={{ ...style, overflow: 'hidden', borderRadius: '0.75rem' }} 
-                         className={`group relative transition-all duration-300 bg-slate-100 flex items-center justify-center ${isSelected ? 'border-2 border-[#FF6B00] ring-4 ring-[#FF6B00]/20 shadow-lg scale-95' : 'border border-slate-200/60 shadow-sm hover:shadow-xl hover:-translate-y-1 z-0 hover:z-10 cursor-pointer'}`}
+                         style={{ ...style, overflow: 'hidden', borderRadius: '1rem' }} 
+                         className={`group relative transition-all duration-500 ease-out bg-slate-100 flex items-center justify-center ${isSelected ? 'border-2 border-[#c5a880] ring-4 ring-[#c5a880]/20 shadow-lg scale-95' : 'shadow-sm hover:shadow-2xl z-0 hover:z-10 cursor-pointer'}`}
                        >
                          {children}
                        </div>
@@ -631,8 +825,8 @@ export default function ClientGallery() {
                    image: ({ style, className, ...rest }) => (
                      <img 
                        {...rest} 
-                       style={{ ...style, transition: 'transform 0.5s cubic-bezier(0.4, 0, 0.2, 1)' }} 
-                       className={`${className} group-hover:scale-110 object-cover`} 
+                       style={{ ...style, transition: 'transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)' }} 
+                       className={`${className} group-hover:scale-[1.03] object-cover`} 
                      />
                    ),
                    extras: (_, { photo }) => {
@@ -665,14 +859,14 @@ export default function ClientGallery() {
 
                          {isMultiSelect ? (
                            <div className="absolute inset-0 bg-black/10 flex items-start justify-start p-3 cursor-pointer z-30" onClick={() => toggleSelectMedia(m._id)}>
-                             <div className={`w-5.5 h-5.5 rounded-md border flex items-center justify-center ${isSelected ? 'bg-[#FF6B00] border-[#FF6B00] text-white' : 'border-white/40 bg-black/10'}`}>
+                             <div className={`w-5.5 h-5.5 rounded-md border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#c5a880] border-[#c5a880] text-white shadow-md' : 'border-white/60 bg-black/20 backdrop-blur-sm hover:bg-black/40'}`}>
                                {isSelected && <Check className="h-4.5 w-4.5" />}
                              </div>
                            </div>
                          ) : (
-                           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 cursor-pointer z-30" onClick={() => setSelectedItem(m)}>
-                             <div className="p-2.5 rounded-full bg-white/20 backdrop-blur-md border border-white/30 text-white hover:scale-105 transition-transform">
-                               <ZoomIn className="h-4.5 w-4.5" />
+                           <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a]/80 via-[#0f172a]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end items-center pb-6 cursor-pointer z-30" onClick={() => setSelectedItem(m)}>
+                             <div className="transform translate-y-4 group-hover:translate-y-0 transition-all duration-500 delay-75 p-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white shadow-xl hover:bg-white/25 hover:scale-110">
+                               <ZoomIn className="h-5 w-5" />
                              </div>
                            </div>
                          )}
@@ -704,55 +898,41 @@ export default function ClientGallery() {
         )}
       </div>
 
-      {/* ── Floating Action Button ── */}
-      <button 
-        onClick={() => setSearchModalOpen(true)} 
-        className="fixed bottom-8 right-8 z-35 group"
-      >
-        <div className="relative">
-          {/* Pulse ring */}
-          <div className="absolute inset-0 bg-orange-500 rounded-2xl animate-ping opacity-20" />
-          <div className="relative bg-gradient-to-r from-[#FF6B00] via-[#FF9100] to-[#FF8000] hover:from-[#E05E00] hover:via-[#FF8000] hover:to-[#FF6B00] text-white font-bold px-6 py-4 rounded-2xl shadow-2xl shadow-orange-500/30 hover:shadow-orange-500/45 transform hover:-translate-y-0.5 transition-all flex items-center gap-2.5">
-            <ScanFace className="h-5 w-5" />
-            <span className="text-sm">Find My Photos</span>
-            <ChevronRight className="h-4 w-4 opacity-60 group-hover:translate-x-0.5 transition-transform" />
-          </div>
-        </div>
-      </button>
+
 
       {/* ── Professional Selfie Search Modal ── */}
       {searchModalOpen && (
         <div className="fixed inset-0 z-50 bg-[#0F172A]/90 backdrop-blur-lg flex items-center justify-center p-6">
-          <div className="w-full max-w-lg bg-white p-0 rounded-3xl relative shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-full max-w-lg bg-white p-0 rounded-3xl relative shadow-2xl overflow-y-auto max-h-[90vh] animate-in fade-in zoom-in-95 duration-200 border border-slate-200">
             
             {/* Modal Header */}
-            <div className="relative bg-gradient-to-r from-[#FF6B00] via-[#FF9100] to-[#FF8000] p-6 pb-8">
+            <div className="relative bg-[#f8f7f4] border-b border-[#e5e7eb] p-6 pb-8">
               <button 
                 onClick={closeSearchModal} 
-                className="absolute top-4 right-4 text-white/60 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-200/50 transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
               
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center">
-                  <ScanFace className="h-6 w-6 text-white" />
+                <div className="w-11 h-11 rounded-xl bg-white border border-[#c5a880]/30 shadow-sm flex items-center justify-center">
+                  <ScanFace className="h-6 w-6 text-[#c5a880]" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-white">Find My Photos</h3>
-                  <p className="text-xs text-orange-100 font-medium mt-0.5">Upload a photo or scan your face to find all photos you appear in</p>
+                  <h3 className="text-lg font-extrabold text-slate-800">Find My Photos</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">Upload a photo or scan your face to find all photos you appear in</p>
                 </div>
               </div>
             </div>
 
-            <div className="p-6 -mt-3">
+            <div className="p-6 -mt-3 bg-white">
               {/* Tab Switcher */}
-              <div className="bg-slate-100 p-1 rounded-xl flex mb-6">
+              <div className="bg-slate-100/70 p-1 rounded-xl flex mb-6 border border-slate-200">
                 <button 
                   onClick={() => { setSearchTab('upload'); stopWebcam(); }}
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
                     searchTab === 'upload' 
-                      ? 'bg-white text-slate-800 shadow-sm' 
+                      ? 'bg-white text-slate-900 shadow-sm border border-slate-200/60' 
                       : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
@@ -763,7 +943,7 @@ export default function ClientGallery() {
                   onClick={startWebcam}
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
                     searchTab === 'camera' 
-                      ? 'bg-white text-slate-800 shadow-sm' 
+                      ? 'bg-white text-slate-900 shadow-sm border border-slate-200/60' 
                       : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
@@ -774,7 +954,7 @@ export default function ClientGallery() {
 
               {/* Error message */}
               {searchError && (
-                <div className="mb-5 bg-rose-50 border border-rose-100 text-rose-700 p-3.5 rounded-xl text-xs flex items-start gap-2.5 font-semibold">
+                <div className="mb-5 bg-[#fef2f2] border border-[#fecaca] text-[#b91c1c] p-3.5 rounded-xl text-xs flex items-start gap-2.5 font-semibold shadow-sm">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                   <span>{searchError}</span>
                 </div>
@@ -783,21 +963,21 @@ export default function ClientGallery() {
               {/* Camera View */}
               {searchTab === 'camera' && webcamStream && (
                 <div className="flex flex-col items-center gap-4">
-                  <div className="w-full aspect-[4/3] rounded-2xl border-2 border-slate-200 overflow-hidden bg-black relative">
-                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
+                  <div className="w-full rounded-2xl border border-slate-200 overflow-hidden bg-black relative shadow-inner">
+                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-auto max-h-[60vh] object-contain scale-x-[-1]" />
                     {/* Face guide overlay */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-48 h-48 border-2 border-white/40 rounded-full" />
+                      <div className="w-48 h-48 border-2 border-[#c5a880]/60 rounded-full border-dashed" />
                     </div>
-                    <div className="absolute bottom-3 left-0 right-0 text-center">
-                      <span className="text-[10px] text-white/70 font-semibold bg-black/40 backdrop-blur-sm px-3 py-1 rounded-full">
+                    <div className="absolute bottom-4 left-0 right-0 text-center">
+                      <span className="text-[10px] text-white font-semibold bg-black/60 backdrop-blur-sm px-4 py-1.5 rounded-full border border-white/10">
                         Position your face in the circle
                       </span>
                     </div>
                   </div>
                   <button 
                     onClick={capturePhoto} 
-                    className="w-full bg-gradient-to-r from-[#FF6B00] to-[#FF9100] hover:from-[#E05E00] hover:to-[#FF8000] text-white font-bold py-3.5 rounded-xl text-sm transition-all shadow-md shadow-orange-500/20 flex items-center justify-center gap-2"
+                    className="w-full bg-[#c5a880] hover:bg-[#b09672] text-[#09090b] font-extrabold py-3.5 rounded-xl text-sm transition-all shadow-[0_4px_14px_0_rgba(197,168,128,0.39)] flex items-center justify-center gap-2"
                   >
                     <Camera className="h-4.5 w-4.5" />
                     Capture Photo
@@ -812,12 +992,12 @@ export default function ClientGallery() {
                     <div className="flex flex-col items-center gap-4">
                       {/* Preview */}
                       <div className="relative w-full">
-                        <div className="w-full aspect-[4/3] rounded-2xl border-2 border-orange-200 overflow-hidden bg-slate-50 flex items-center justify-center">
-                          <img src={selfiePreview} alt="Selfie Preview" className="w-full h-full object-cover" />
+                        <div className="w-full rounded-2xl border border-slate-200 overflow-hidden bg-[#f8f7f4] flex items-center justify-center shadow-inner">
+                          <img src={selfiePreview} alt="Selfie Preview" className="w-full h-auto object-contain" />
                         </div>
                         <button 
                           onClick={clearSelfie} 
-                          className="absolute top-3 right-3 bg-black/60 hover:bg-black/80 p-2 rounded-xl text-white transition-colors"
+                          className="absolute top-4 right-4 bg-white/90 hover:bg-white text-slate-800 p-2 rounded-xl transition-all shadow-md border border-slate-200"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -827,7 +1007,7 @@ export default function ClientGallery() {
                       <div className="w-full space-y-3">
                         <button 
                           onClick={() => fileInputRef.current?.click()} 
-                          className="w-full text-xs text-[#FF6B00] hover:text-[#FF6B00] font-bold py-2 flex items-center justify-center gap-1.5"
+                          className="w-full text-xs text-[#c5a880] hover:text-[#b09672] font-extrabold py-2 flex items-center justify-center gap-1.5 transition-colors"
                         >
                           <RefreshCw className="h-3.5 w-3.5" />
                           Remove & choose another
@@ -837,12 +1017,12 @@ export default function ClientGallery() {
                         <button 
                           onClick={handleAISearch} 
                           disabled={searchLoading} 
-                          className="relative w-full bg-gradient-to-r from-[#FF6B00] to-[#FF9100] hover:from-[#E05E00] hover:to-[#FF8000] disabled:from-orange-300 disabled:to-orange-450 text-white font-bold py-4 rounded-xl text-sm transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2.5 overflow-hidden"
+                          className="relative w-full bg-[#c5a880] hover:bg-[#b09672] disabled:bg-[#d6c3aa] text-[#09090b] font-extrabold py-4 rounded-xl text-sm transition-all shadow-[0_4px_14px_0_rgba(197,168,128,0.39)] disabled:shadow-none disabled:cursor-not-allowed flex items-center justify-center gap-2.5 overflow-hidden"
                         >
                           {/* Progress bar inside button */}
                           {searchLoading && (
                             <div 
-                              className="absolute inset-y-0 left-0 bg-white/15 transition-all duration-300 ease-out"
+                              className="absolute inset-y-0 left-0 bg-white/30 transition-all duration-300 ease-out"
                               style={{ width: `${searchProgress}%` }}
                             />
                           )}
@@ -869,20 +1049,20 @@ export default function ClientGallery() {
                       onDragLeave={() => setIsDragOver(false)}
                       onDrop={handleDrop}
                       onClick={() => fileInputRef.current?.click()}
-                      className={`w-full aspect-[4/3] rounded-2xl border-2 border-dashed cursor-pointer transition-all flex flex-col items-center justify-center gap-3 ${
+                      className={`w-full min-h-[250px] rounded-2xl border-2 border-dashed cursor-pointer transition-all flex flex-col items-center justify-center gap-3 p-6 ${
                         isDragOver 
-                          ? 'border-[#FF6B00] bg-orange-50' 
-                          : 'border-slate-200 bg-slate-50 hover:border-[#FF6B00] hover:bg-orange-50/50'
+                          ? 'border-[#c5a880] bg-[#fdfbf9]' 
+                          : 'border-slate-200 bg-[#f8f7f4] hover:border-[#c5a880] hover:bg-[#fdfbf9]'
                       }`}
                     >
-                      <div className="w-14 h-14 rounded-2xl bg-orange-100 flex items-center justify-center">
-                        <Upload className="h-6 w-6 text-[#FF6B00]" />
+                      <div className="w-14 h-14 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-center">
+                        <Upload className="h-6 w-6 text-[#c5a880]" />
                       </div>
                       <div className="text-center">
-                        <p className="text-sm font-bold text-slate-700">
+                        <p className="text-sm font-extrabold text-slate-800">
                           Drag & drop your photo here
                         </p>
-                        <p className="text-xs text-slate-400 font-medium mt-1">
+                        <p className="text-xs text-slate-500 font-medium mt-1">
                           or click to browse • JPG, PNG supported
                         </p>
                       </div>
@@ -981,6 +1161,116 @@ export default function ClientGallery() {
                 </div>
              </div>
           )}
+        </div>
+      )}
+
+      {/* ── Raise a Ticket Floating Button ── */}
+      {!isLocked && event && (
+        <button
+          onClick={() => setTicketModalOpen(true)}
+          className="fixed bottom-6 right-6 bg-[#c5a880] hover:bg-[#b09672] text-[#09090b] p-4 rounded-full shadow-[0_10px_25px_rgba(197,168,128,0.4)] transition-all z-40 hover:-translate-y-1 flex items-center justify-center group"
+          title="Raise a Ticket / Complaint"
+        >
+          <HelpCircle className="w-6 h-6" />
+          <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 group-hover:max-w-xs group-hover:opacity-100 group-hover:ml-2 font-bold text-sm transition-all duration-300">
+            Raise a Ticket
+          </span>
+        </button>
+      )}
+
+      {/* ── Raise a Ticket Modal ── */}
+      {ticketModalOpen && (
+        <div className="fixed inset-0 z-[60] bg-[#0F172A]/90 backdrop-blur-lg flex items-center justify-center p-4 sm:p-6">
+          <div className="w-full max-w-lg bg-white p-0 rounded-3xl relative shadow-2xl overflow-y-auto max-h-[90vh] animate-in fade-in zoom-in-95 duration-200 border border-slate-200">
+            
+            {/* Modal Header */}
+            <div className="relative bg-[#f8f7f4] border-b border-[#e5e7eb] p-6 pb-8">
+              <button 
+                onClick={() => setTicketModalOpen(false)} 
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-200/50 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-white border border-[#c5a880]/30 shadow-sm flex items-center justify-center">
+                  <HelpCircle className="h-6 w-6 text-[#c5a880]" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-800">Raise a Ticket</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">Submit a complaint or request to the Studio</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-white">
+              {ticketMessage.text && (
+                <div className={`mb-5 p-3.5 rounded-xl text-xs flex items-start gap-2.5 font-semibold shadow-sm ${
+                  ticketMessage.type === 'success' 
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' 
+                    : 'bg-[#fef2f2] border border-[#fecaca] text-[#b91c1c]'
+                }`}>
+                  {ticketMessage.type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />}
+                  <span>{ticketMessage.text}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleTicketSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Full Name *</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={ticketForm.name} 
+                    onChange={e => setTicketForm({...ticketForm, name: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#c5a880]/50" 
+                    placeholder="Enter your name" 
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Mobile Number (Optional)</label>
+                    <input 
+                      type="tel" 
+                      value={ticketForm.mobile} 
+                      onChange={e => setTicketForm({...ticketForm, mobile: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#c5a880]/50" 
+                      placeholder="Your mobile" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Email *</label>
+                    <input 
+                      type="email" 
+                      required 
+                      value={ticketForm.email} 
+                      onChange={e => setTicketForm({...ticketForm, email: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#c5a880]/50" 
+                      placeholder="For updates" 
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Complaint / Message *</label>
+                  <textarea 
+                    required 
+                    value={ticketForm.complaint} 
+                    onChange={e => setTicketForm({...ticketForm, complaint: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm min-h-[100px] resize-none focus:outline-none focus:ring-2 focus:ring-[#c5a880]/50" 
+                    placeholder="Describe your issue or request in detail..." 
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  disabled={ticketSubmitting} 
+                  className="w-full bg-[#09090b] hover:bg-slate-800 text-white font-extrabold py-3.5 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mt-2"
+                >
+                  {ticketSubmitting ? <Loader className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Submit Ticket
+                </button>
+              </form>
+            </div>
+          </div>
         </div>
       )}
     </div>

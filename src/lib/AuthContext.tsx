@@ -7,6 +7,7 @@ interface AuthUser {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   role: string;
 }
 
@@ -14,6 +15,8 @@ interface AuthStudio {
   id: string;
   name: string;
   subdomain: string;
+  instagramUrl?: string;
+  facebookUrl?: string;
 }
 
 interface AuthContextType {
@@ -22,6 +25,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  googleLogin: (credential: string) => Promise<void>;
   register: (data: any) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -94,6 +98,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setStudio(data.studio || null);
   };
 
+  const googleLogin = async (credential: string) => {
+    const res = await apiClient.post('/auth/google', { credential });
+    const data = res.data;
+
+    // Save tokens
+    localStorage.setItem('accessToken', data.accessToken);
+    localStorage.setItem('refreshToken', data.refreshToken);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    if (data.studio) {
+      localStorage.setItem('studio', JSON.stringify(data.studio));
+    }
+
+    setUser(data.user);
+    setStudio(data.studio || null);
+  };
+
   const register = async (formData: any) => {
     const res = await apiClient.post('/auth/register', formData);
     const data = res.data;
@@ -127,7 +147,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, studio, isAuthenticated, loading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, studio, isAuthenticated, loading, login, googleLogin, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -7,21 +7,10 @@ import { Eye, EyeOff, Loader, ArrowRight, Upload, Mail, Lock, User as UserIcon, 
 import { useAuth } from '../../lib/AuthContext';
 import { apiClient } from '../../lib/api';
 import PublicWrapper from '../../components/PublicWrapper';
+import toast from 'react-hot-toast';
+import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
 
-function getPasswordStrength(password: string): { level: number; label: string; color: string } {
-  if (!password) return { level: 0, label: '', color: '#e2e8f0' };
-  let score = 0;
-  if (password.length >= 6) score++;
-  if (password.length >= 8) score++;
-  if (/[A-Z]/.test(password)) score++;
-  if (/[a-z]/.test(password)) score++;
-  if (/\d/.test(password)) score++;
-  if (/[@$!%*?&#]/.test(password)) score++;
-
-  if (score <= 2) return { level: 1, label: 'Weak', color: '#ef4444' };
-  if (score <= 4) return { level: 2, label: 'Medium', color: '#f59e0b' };
-  return { level: 3, label: 'Strong', color: '#22c55e' };
-}
+// getPasswordStrength removed in favor of checklist
 
 export default function SignupPage() {
   const [regName, setRegName] = useState('');
@@ -31,6 +20,8 @@ export default function SignupPage() {
   const [regPhone, setRegPhone] = useState('');
   const [regStudioName, setRegStudioName] = useState('');
   const [regWebsite, setRegWebsite] = useState('');
+  const [regInstagram, setRegInstagram] = useState('');
+  const [regFacebook, setRegFacebook] = useState('');
   const [regLogo, setRegLogo] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -39,10 +30,16 @@ export default function SignupPage() {
   const [emailExists, setEmailExists] = useState(false);
   const [emailChecking, setEmailChecking] = useState(false);
 
-  const { register, isAuthenticated, loading: authLoading } = useAuth();
+  const { register, googleLogin, isAuthenticated, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const passwordStrength = getPasswordStrength(regPassword);
+  const reqList = [
+    { label: 'Starts with a Capital letter', valid: /^[A-Z]/.test(regPassword) },
+    { label: 'Contains a lowercase letter', valid: /[a-z]/.test(regPassword) },
+    { label: 'Contains a number', valid: /\d/.test(regPassword) },
+    { label: 'Contains a special character', valid: /[@$!%*?&#]/.test(regPassword) },
+    { label: 'Minimum 6 characters', valid: regPassword.length >= 6 }
+  ];
   const passwordsMatch = regConfirmPassword ? regPassword === regConfirmPassword : true;
 
   // Redirect if already logged in
@@ -77,35 +74,34 @@ export default function SignupPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
 
     if (!regName || !regEmail || !regPhone || !regStudioName || !regPassword) {
-      setError('All required fields must be filled.');
+      toast.error('All required fields must be filled.');
       setLoading(false);
       return;
     }
 
     if (regPassword !== regConfirmPassword) {
-      setError('Passwords do not match.');
+      toast.error('Passwords do not match.');
       setLoading(false);
       return;
     }
 
     if (!/^[6-9]\d{9}$/.test(regPhone)) {
-      setError('Mobile number must be 10 digits starting with 6-9.');
+      toast.error('Mobile number must be 10 digits starting with 6-9.');
       setLoading(false);
       return;
     }
 
     const passwordRegex = /^[A-Z](?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&#]).{5,}$/;
     if (!passwordRegex.test(regPassword)) {
-      setError('Password must start with a Capital letter, contain at least 1 number, 1 special character, and small letters.');
+      toast.error('Password must start with a Capital letter, contain at least 1 number, 1 special character, and small letters.');
       setLoading(false);
       return;
     }
 
     if (emailExists) {
-      setError('This email is already registered. Please login instead.');
+      toast.error('This email is already registered. Please login instead.');
       setLoading(false);
       return;
     }
@@ -120,11 +116,32 @@ export default function SignupPage() {
         studioName: regStudioName,
         subdomain,
         websiteLink: regWebsite,
+        instagramUrl: regInstagram,
+        facebookUrl: regFacebook,
         logoUrl: regLogo,
       });
+      toast.success('Registration successful!');
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Registration failed.');
+      toast.error(err?.response?.data?.error || 'Registration failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    if (!credentialResponse.credential) return;
+    try {
+      setLoading(true);
+      if (googleLogin) {
+        await googleLogin(credentialResponse.credential);
+        toast.success('Google sign-up successful!');
+        router.push('/dashboard');
+      } else {
+         toast.error("Google login method not implemented in AuthContext.");
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Google sign-up failed.');
     } finally {
       setLoading(false);
     }
@@ -363,17 +380,34 @@ export default function SignupPage() {
           transition: color 0.2s;
         }
         .signup-footer a:hover { color: #09090b; }
-        .signup-error {
-          background: #fef2f2;
-          border: 1px solid #fecaca;
-          color: #dc2626;
-          font-size: 12px;
-          font-weight: 700;
-          padding: 12px 16px;
-          border-radius: 10px;
-          margin-bottom: 16px;
+        .google-auth-wrapper {
+          width: 100%;
+          display: flex;
+          justify-content: center;
+          margin-bottom: 24px;
+        }
+        .auth-divider {
+          display: flex;
+          align-items: center;
           text-align: center;
-          animation: slideUp 0.3s ease;
+          margin-bottom: 24px;
+          color: #94a3b8;
+          font-size: 12px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+        }
+        .auth-divider::before,
+        .auth-divider::after {
+          content: '';
+          flex: 1;
+          border-bottom: 1px solid #e2e8f0;
+        }
+        .auth-divider:not(:empty)::before {
+          margin-right: .5em;
+        }
+        .auth-divider:not(:empty)::after {
+          margin-left: .5em;
         }
         .logo-upload-area {
           display: flex;
@@ -440,13 +474,11 @@ export default function SignupPage() {
           <h1 className="signup-title">Create Your Studio</h1>
           <p className="signup-subtitle">Start delivering photos with AI in minutes</p>
 
-          {error && <div className="signup-error">{error}</div>}
-
           <form onSubmit={handleRegister}>
             <div className="signup-input-group">
               <label className="signup-label">Full Name <span style={{ color: '#dc2626' }}>*</span></label>
               <div className="signup-input-wrap">
-                <input id="signup-name" type="text" required value={regName} onChange={(e) => setRegName(e.target.value)} placeholder="Yashvi Changela" className="signup-input" autoComplete="name" />
+                <input id="signup-name" type="text" required value={regName} onChange={(e) => setRegName(e.target.value)}  className="signup-input" autoComplete="name" />
                 <UserIcon className="signup-input-icon" style={{ width: 16, height: 16 }} />
               </div>
             </div>
@@ -460,7 +492,7 @@ export default function SignupPage() {
                   required
                   value={regEmail}
                   onChange={(e) => setRegEmail(e.target.value)}
-                  placeholder="you@yourstudio.com"
+                  
                   className={`signup-input ${emailExists ? 'input-error' : regEmail && !emailChecking && !emailExists && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail) ? 'input-success' : ''}`}
                   autoComplete="email"
                 />
@@ -482,7 +514,7 @@ export default function SignupPage() {
             <div className="signup-input-group">
               <label className="signup-label">Mobile Number <span style={{ color: '#dc2626' }}>*</span></label>
               <div className="signup-input-wrap">
-                <input id="signup-phone" type="tel" required value={regPhone} onChange={(e) => setRegPhone(e.target.value)} placeholder="9876543210" className="signup-input" autoComplete="tel" />
+                <input id="signup-phone" type="tel" required value={regPhone} onChange={(e) => setRegPhone(e.target.value)}  className="signup-input" autoComplete="tel" />
                 <Phone className="signup-input-icon" style={{ width: 16, height: 16 }} />
               </div>
             </div>
@@ -490,7 +522,7 @@ export default function SignupPage() {
             <div className="signup-input-group">
               <label className="signup-label">Studio Name <span style={{ color: '#dc2626' }}>*</span></label>
               <div className="signup-input-wrap">
-                <input id="signup-studio" type="text" required value={regStudioName} onChange={(e) => setRegStudioName(e.target.value)} placeholder="Mara Photo Studio" className="signup-input" />
+                <input id="signup-studio" type="text" required value={regStudioName} onChange={(e) => setRegStudioName(e.target.value)}  className="signup-input" />
                 <Store className="signup-input-icon" style={{ width: 16, height: 16 }} />
               </div>
             </div>
@@ -503,7 +535,21 @@ export default function SignupPage() {
             <div className="signup-input-group">
               <label className="signup-label">Studio Website Link</label>
               <div className="signup-input-wrap">
-                <input type="url" value={regWebsite} onChange={(e) => setRegWebsite(e.target.value)} placeholder="https://yourstudio.com" className="signup-input" style={{ paddingLeft: '16px' }} />
+                <input type="url" value={regWebsite} onChange={(e) => setRegWebsite(e.target.value)}  className="signup-input" style={{ paddingLeft: '16px' }} />
+              </div>
+            </div>
+
+            <div className="signup-input-group">
+              <label className="signup-label">Instagram Link</label>
+              <div className="signup-input-wrap">
+                <input type="url" value={regInstagram} onChange={(e) => setRegInstagram(e.target.value)} placeholder="https://instagram.com/..." className="signup-input" style={{ paddingLeft: '16px' }} />
+              </div>
+            </div>
+
+            <div className="signup-input-group">
+              <label className="signup-label">Facebook Link</label>
+              <div className="signup-input-wrap">
+                <input type="url" value={regFacebook} onChange={(e) => setRegFacebook(e.target.value)} placeholder="https://facebook.com/..." className="signup-input" style={{ paddingLeft: '16px' }} />
               </div>
             </div>
 
@@ -536,7 +582,7 @@ export default function SignupPage() {
                   required
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
-                  placeholder="Capital + small + number + special"
+                  
                   className="signup-input"
                   style={{ paddingRight: '48px' }}
                   autoComplete="new-password"
@@ -547,16 +593,18 @@ export default function SignupPage() {
                 </button>
               </div>
               {regPassword && (
-                <>
-                  <div className="strength-bar">
-                    {[1, 2, 3].map(i => (
-                      <div key={i} className="strength-segment" style={{ background: i <= passwordStrength.level ? passwordStrength.color : '#e2e8f0' }} />
-                    ))}
-                  </div>
-                  <div className="strength-label" style={{ color: passwordStrength.color }}>
-                    {passwordStrength.label}
-                  </div>
-                </>
+                <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {reqList.map((req, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: req.valid ? '#22c55e' : '#94a3b8', fontWeight: 600, transition: 'color 0.2s' }}>
+                      {req.valid ? (
+                        <Check style={{ width: 14, height: 14 }} />
+                      ) : (
+                        <div style={{ width: 12, height: 12, border: '1.5px solid currentColor', borderRadius: '3px', marginLeft: '1px', marginRight: '1px' }} />
+                      )}
+                      <span>{req.label}</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
@@ -569,7 +617,7 @@ export default function SignupPage() {
                   required
                   value={regConfirmPassword}
                   onChange={(e) => setRegConfirmPassword(e.target.value)}
-                  placeholder="Re-enter your password"
+                  
                   className={`signup-input ${regConfirmPassword ? (passwordsMatch ? 'input-success' : 'input-error') : ''}`}
                   style={{ paddingRight: '48px' }}
                   autoComplete="new-password"
@@ -594,6 +642,22 @@ export default function SignupPage() {
               {loading ? <Loader className="w-4 h-4 animate-spin" /> : <>Create Account <ArrowRight className="w-4 h-4" /></>}
             </button>
           </form>
+
+          <div className="auth-divider" style={{ marginTop: '24px' }}>or continue with Google</div>
+
+          <div className="google-auth-wrapper">
+             <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || 'dummy-client-id'}>
+               <GoogleLogin
+                 onSuccess={handleGoogleSuccess}
+                 onError={() => toast.error('Google Sign-Up failed')}
+                 theme="outline"
+                 size="large"
+                 text="continue_with"
+                 shape="pill"
+                 width={350}
+               />
+             </GoogleOAuthProvider>
+          </div>
 
           <div className="signup-footer">
             Already have an account? <Link href="/login">Sign In</Link>

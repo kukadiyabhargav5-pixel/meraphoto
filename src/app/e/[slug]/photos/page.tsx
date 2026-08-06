@@ -51,6 +51,7 @@ export default function EventPhotosPage() {
   const [fullMedia, setFullMedia] = useState<any[]>([]);
   const [isLocked, setIsLocked] = useState(false);
   const [password, setPassword] = useState('');
+  const [otpVals, setOtpVals] = useState(['', '', '', '']);
   const [authError, setAuthError] = useState('');
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
@@ -114,7 +115,7 @@ export default function EventPhotosPage() {
       const res = await apiClient.get(`/event/code/${slug}`);
       setEvent(res.data.event);
 
-      if (res.data.event.accessType === 'PASSWORD') {
+      if (res.data.event.accessType === 'PASSWORD' || res.data.event.accessType === 'OTP') {
         setIsLocked(true);
       } else {
         fetchPhotos(res.data.event._id);
@@ -131,6 +132,23 @@ export default function EventPhotosPage() {
     fetchEventData();
   }, [slug]);
 
+  const handleOtpChange = (index: number, val: string) => {
+    if (val.length > 1) val = val[0];
+    const newOtp = [...otpVals];
+    newOtp[index] = val;
+    setOtpVals(newOtp);
+    setPassword(newOtp.join(''));
+    if (val && index < 3) {
+      document.getElementById(`otp-${index + 1}`)?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !otpVals[index] && index > 0) {
+      document.getElementById(`otp-${index - 1}`)?.focus();
+    }
+  };
+
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -139,7 +157,7 @@ export default function EventPhotosPage() {
       setIsLocked(false);
       fetchPhotos(event._id);
     } catch (err: any) {
-      setAuthError('Incorrect gallery password.');
+      setAuthError('Incorrect access code.');
     }
   };
 
@@ -384,14 +402,14 @@ export default function EventPhotosPage() {
 
   if (isLocked) {
     return (
-      <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white border border-slate-200 p-8 rounded-3xl text-center shadow-xl">
+      <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col items-center justify-center p-4 sm:p-6">
+        <div className="w-full max-w-md bg-white border border-slate-200 p-6 sm:p-8 rounded-3xl text-center shadow-xl">
           <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center mx-auto mb-6">
             <Lock className="h-6 w-6 text-[#FF6B00]" />
           </div>
           <h2 className="text-xl font-extrabold text-slate-800">{event?.name || 'Private Event'}</h2>
           <p className="text-xs text-slate-500 font-semibold mt-2 leading-relaxed">
-            This gallery is password protected.<br />Enter the password to view the photos.
+            This gallery is {event?.accessType === 'OTP' ? 'OTP' : 'password'} protected.<br />Enter the {event?.accessType === 'OTP' ? 'code' : 'password'} to view the photos.
           </p>
 
           {authError && (
@@ -401,25 +419,49 @@ export default function EventPhotosPage() {
             </div>
           )}
 
-          <form onSubmit={handleUnlock} className="flex flex-col gap-4 mt-6">
-            <div className="relative">
-              <Key className="absolute left-3.5 top-1/2 translate-y-[-50%] h-4.5 w-4.5 text-slate-400" />
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-3.5 text-sm text-slate-800 focus:outline-none focus:border-[#FF6B00] focus:bg-white text-center tracking-wider"
-              />
-            </div>
-            <button
-              type="submit"
-              className="bg-[#FF6B00] hover:bg-[#E05E00] text-white font-bold py-3.5 rounded-xl text-xs transition-all shadow-md shadow-orange-500/20"
-            >
-              Unlock Gallery
-            </button>
-          </form>
+          {event?.accessType === 'OTP' ? (
+            <form onSubmit={handleUnlock} className="flex flex-col gap-6 mt-6">
+              <div className="flex justify-center gap-3">
+                {otpVals.map((val, idx) => (
+                  <input
+                    key={idx}
+                    id={`otp-${idx}`}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={val}
+                    onChange={(e) => handleOtpChange(idx, e.target.value.replace(/\D/g, ''))}
+                    onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                    className="w-14 h-16 bg-slate-50 border border-slate-200 rounded-xl text-center text-2xl font-black text-slate-800 focus:outline-none focus:border-[#FF6B00] focus:ring-2 focus:ring-orange-500/20 transition-all shadow-sm"
+                    required
+                  />
+                ))}
+              </div>
+              <button type="submit" className="bg-[#FF6B00] hover:bg-[#E05E00] text-white font-bold py-3.5 rounded-xl text-xs transition-all shadow-md shadow-orange-500/20 uppercase tracking-widest">
+                Verify PIN
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleUnlock} className="flex flex-col gap-4 mt-6">
+              <div className="relative">
+                <Key className="absolute left-3.5 top-1/2 translate-y-[-50%] h-4.5 w-4.5 text-slate-400" />
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter password"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-3.5 text-sm text-slate-800 focus:outline-none focus:border-[#FF6B00] focus:bg-white text-center tracking-wider"
+                />
+              </div>
+              <button
+                type="submit"
+                className="bg-[#FF6B00] hover:bg-[#E05E00] text-white font-bold py-3.5 rounded-xl text-xs transition-all shadow-md shadow-orange-500/20"
+              >
+                Unlock Gallery
+              </button>
+            </form>
+          )}
         </div>
       </div>
     );
@@ -431,8 +473,8 @@ export default function EventPhotosPage() {
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 pb-24">
       {/* Header */}
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl border-b border-slate-200 shadow-sm">
-        <div className="max-w-[1800px] mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2 sm:gap-3">
             {event?.studioId?.logoUrl ? (
               <img src={event.studioId.logoUrl} alt="Logo" className="h-8 max-w-[120px] object-contain" />
             ) : (
@@ -445,8 +487,8 @@ export default function EventPhotosPage() {
                 </span>
               </div>
             )}
-            <span className="h-4 w-px bg-slate-300" />
-            <h1 className="text-sm font-bold text-slate-800">{event?.name}</h1>
+            <span className="hidden sm:block h-4 w-px bg-slate-300" />
+            <h1 className="text-sm font-bold text-slate-800 truncate max-w-[120px] sm:max-w-none">{event?.name}</h1>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-xs text-slate-500 font-bold">
@@ -490,16 +532,16 @@ export default function EventPhotosPage() {
       )}
 
       {/* Masonry Photo Gallery */}
-      <main className="max-w-[1800px] mx-auto px-6 py-8">
+      <main className="max-w-[1800px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {media.length > 0 ? (
-          <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-6">
+          <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-3 sm:gap-6">
             {media.map((m, index) => {
               const imgSrc = resolveMediaUrl(m);
 
               return (
                 <div
                   key={m._id}
-                  className="break-inside-avoid mb-6 overflow-hidden rounded-xl cursor-pointer group relative bg-white shadow-sm hover:shadow-md transition-all border border-slate-200"
+                  className="break-inside-avoid mb-3 sm:mb-6 overflow-hidden rounded-xl cursor-pointer group relative bg-white shadow-sm hover:shadow-md transition-all border border-slate-200"
                   onClick={() => setLightboxIndex(index)}
                 >
                   <img
@@ -581,7 +623,7 @@ export default function EventPhotosPage() {
       {/* ====== AI FACE SEARCH MODAL ====== */}
       {aiModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative overflow-y-auto max-h-[90vh]">
             <button onClick={closeAiModal} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 transition-colors z-10">
               <X className="h-5 w-5 text-slate-400" />
             </button>
@@ -629,11 +671,11 @@ export default function EventPhotosPage() {
             {/* Upload Tab */}
             {aiTab === 'upload' && (
               <form onSubmit={handleSelfieSubmit} className="flex flex-col gap-4">
-                <label className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-orange-400 hover:bg-orange-50/30 transition-all group overflow-hidden ${
-                  selfiePreview ? 'border-[#FF6B00] bg-orange-50/20' : 'border-slate-200'
+                <label className={`border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-orange-400 hover:bg-orange-50/30 transition-all group overflow-hidden ${
+                  selfiePreview ? 'border-[#FF6B00] bg-[#f8f7f4] shadow-inner' : 'border-slate-200'
                 }`}>
                   {selfiePreview ? (
-                    <img src={selfiePreview} alt="Preview" className="w-32 h-32 rounded-xl object-cover shadow-md" />
+                    <img src={selfiePreview} alt="Preview" className="w-full h-auto max-h-[350px] object-contain rounded-xl" />
                   ) : (
                     <>
                       <UploadCloud className="h-8 w-8 text-slate-400 group-hover:text-[#FF6B00] transition-colors" />
@@ -671,7 +713,7 @@ export default function EventPhotosPage() {
               <div className="flex flex-col gap-4">
                 {/* Camera View */}
                 {cameraActive && !selfiePreview && (
-                  <div className="relative rounded-2xl overflow-hidden bg-black aspect-[4/3]">
+                  <div className="relative rounded-2xl overflow-hidden bg-black">
                     <video
                       ref={(node) => {
                         videoRef.current = node;
@@ -683,7 +725,7 @@ export default function EventPhotosPage() {
                       autoPlay
                       playsInline
                       muted
-                      className="w-full h-full object-cover"
+                      className="w-full h-auto max-h-[60vh] object-contain"
                     />
                     {/* Face guide overlay */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

@@ -1,16 +1,26 @@
 'use client';
 import React, { useState } from 'react';
-import { Plus, Camera, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Eye, EyeOff, Plus, Trash2, Calendar, Clock, MapPin, Loader, Loader2, Upload, AlertCircle, Camera, Image as ImageIcon } from 'lucide-react';
+import CustomDatePicker from '../../../components/CustomDatePicker';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
+import { useDashboard } from '../DashboardContext';
+import toast from 'react-hot-toast';
 
 export default function CreateEventPage() {
+  const context = useDashboard();
   const [eventName, setEventName] = useState('');
   const [clientName, setClientName] = useState('');
   const [clientMobile, setClientMobile] = useState('');
   const [clientEmail, setClientEmail] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [eventType, setEventType] = useState('WEDDING');
+  const [accessType, setAccessType] = useState('PUBLIC');
+  const [password, setPassword] = useState('');
+  const [eventLocation, setEventLocation] = useState('');
+  const [eventTime, setEventTime] = useState('');
+  const [totalDays, setTotalDays] = useState(1);
+  const [eventDays, setEventDays] = useState<{date: string, time: string, location: string}[]>([]);
   const [loading, setLoading] = useState(false);
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
@@ -26,7 +36,7 @@ export default function CreateEventPage() {
   const [watermarkPosition, setWatermarkPosition] = useState('BOTTOM_RIGHT');
   const [watermarkWidth, setWatermarkWidth] = useState(20);
   const [watermarkHeight, setWatermarkHeight] = useState(20);
-  const [watermarkOpacity, setWatermarkOpacity] = useState(0.5);
+  const [watermarkOpacity, setWatermarkOpacity] = useState(50);
 
   const [addToPortfolio, setAddToPortfolio] = useState(false);
   const router = useRouter();
@@ -38,7 +48,7 @@ export default function CreateEventPage() {
   ];
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white text-slate-900 p-4 md:p-8 font-poppins">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8 font-poppins">
       <style dangerouslySetInnerHTML={{__html: `
         .form-input {
           width: 100%;
@@ -92,7 +102,7 @@ export default function CreateEventPage() {
         }
       `}} />
       
-      <div className="max-w-3xl bg-slate-50 border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm">
+      <div className="max-w-3xl bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm">
         <div className="flex items-center gap-3 mb-2">
           <Plus className="text-slate-500 h-6 w-6" />
           <h1 className="text-3xl font-bold text-slate-900">Create New Event Gallery</h1>
@@ -102,7 +112,7 @@ export default function CreateEventPage() {
         <form onSubmit={async (e) => {
           e.preventDefault();
           if (!eventName) {
-            alert('Event name is required');
+            toast.error('Event name is required');
             return;
           }
           try {
@@ -114,6 +124,13 @@ export default function CreateEventPage() {
               clientEmail,
               date: eventDate || new Date().toISOString(),
               type: eventType,
+              location: eventLocation,
+              time: eventTime,
+              accessType,
+              password,
+              isMultiDay: totalDays > 1,
+              totalDays,
+              days: totalDays > 1 ? eventDays : [],
               coverImageUrl: coverImage,
               addToPortfolio,
               watermark: {
@@ -124,13 +141,27 @@ export default function CreateEventPage() {
                 position: watermarkPosition,
                 width: watermarkWidth,
                 height: watermarkHeight,
-                opacity: watermarkOpacity,
+                opacity: watermarkOpacity / 100,
               }
             });
+            
+            if (context && context.customers) {
+              const existingCust = context.customers.find((c: any) => c.phone === clientMobile || c.email === clientEmail);
+              if (!existingCust) {
+                context.setCustomers([{
+                  name: clientName,
+                  email: clientEmail,
+                  phone: clientMobile,
+                  events: 1,
+                  status: 'Active'
+                }, ...context.customers]);
+              }
+            }
+
             router.push('/dashboard/events');
-          } catch (error) {
+          } catch (error: any) {
             console.error('Failed to create event', error);
-            alert('Failed to create event. Please try again.');
+            toast.error(error.response?.data?.error || 'Failed to create event. Please try again.');
           } finally {
             setLoading(false);
           }
@@ -140,33 +171,33 @@ export default function CreateEventPage() {
             <input 
               type="text" 
               className="form-input" 
-              placeholder="e.g. Sharma Wedding" 
+               
               value={eventName}
               onChange={(e) => setEventName(e.target.value)}
+              required
             />
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="form-label">Client Name</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                placeholder="Aarav Sharma"
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="form-label">Client Mobile</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                placeholder="9876543210"
-                value={clientMobile}
-                onChange={(e) => setClientMobile(e.target.value)}
-              />
-            </div>
+          <div>
+            <label className="form-label">Client Name</label>
+            <input 
+              type="text" 
+              className="form-input" 
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="form-label">Client Mobile</label>
+            <input 
+              type="text" 
+              className="form-input" 
+              value={clientMobile}
+              onChange={(e) => setClientMobile(e.target.value)}
+              required
+            />
           </div>
 
           <div>
@@ -174,38 +205,177 @@ export default function CreateEventPage() {
             <input 
               type="email" 
               className="form-input" 
-              placeholder="client@wedding.com"
               value={clientEmail}
               onChange={(e) => setClientEmail(e.target.value)}
+              required
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="form-label">Event Type</label>
+            <select 
+              className="form-input"
+              value={eventType}
+              onChange={(e) => setEventType(e.target.value)}
+            >
+              {EVENT_TYPES.map(type => (
+                <option key={type} value={type} className="bg-[#f8f7f4] text-slate-900">
+                  {type}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="form-label">Access Type</label>
+            <select 
+              className="form-input font-bold tracking-wide"
+              value={accessType}
+              onChange={(e) => setAccessType(e.target.value)}
+            >
+              <option value="PUBLIC">PUBLIC</option>
+              <option value="PASSWORD">PASSWORD PROTECTED</option>
+              <option value="OTP">OTP VERIFICATION</option>
+            </select>
+          </div>
+
+          {accessType === 'PASSWORD' && (
             <div>
-              <label className="form-label">Event Date</label>
+              <label className="form-label text-rose-500">Event Password</label>
               <input 
-                type="date" 
-                className="form-input"
-                style={{ colorScheme: 'light' }}
-                value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
+                type="text" 
+                className="form-input border-rose-200 focus:border-rose-500 bg-rose-50/30" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Set a password for the gallery"
+                required
               />
             </div>
+          )}
+
+          {accessType === 'OTP' && (
             <div>
-              <label className="form-label">Event Type</label>
-              <select 
-                className="form-input"
-                value={eventType}
-                onChange={(e) => setEventType(e.target.value)}
-              >
-                {EVENT_TYPES.map(type => (
-                  <option key={type} value={type} className="bg-white text-slate-900">
-                    {type}
-                  </option>
-                ))}
-              </select>
+              <label className="form-label text-[#c5a880]">4-Digit Access PIN</label>
+              <input 
+                type="text" 
+                maxLength={4}
+                className="form-input border-[#e8e4dd] focus:border-[#c5a880] bg-[#faf9f6] text-center tracking-[1em] font-black text-xl" 
+                value={password}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '');
+                  setPassword(val);
+                }}
+                placeholder="••••"
+                required
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="form-label">Number of Event Days</label>
+            <input 
+              type="number" 
+              className="form-input"
+              min="1"
+              value={totalDays}
+              onChange={(e) => {
+                const num = parseInt(e.target.value) || 1;
+                setTotalDays(num);
+                if (num > 1) {
+                  const newDays = [...eventDays];
+                  while (newDays.length < num - 1) {
+                    newDays.push({ date: '', time: '', location: '' });
+                  }
+                  setEventDays(newDays.slice(0, num - 1));
+                } else {
+                  setEventDays([]);
+                }
+              }}
+              required
+            />
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-xl p-4 md:p-6 space-y-6">
+            <h3 className="text-sm font-bold text-slate-900 mb-2">{totalDays > 1 ? 'Day 1 Schedule' : 'Event Schedule'}</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label className="form-label">Date</label>
+                <CustomDatePicker
+                  type="date"
+                  value={eventDate}
+                  onChange={(val) => setEventDate(val)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="form-label">Time</label>
+                <CustomDatePicker
+                  type="time"
+                  value={eventTime}
+                  onChange={(val) => setEventTime(val)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="form-label">Location</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  value={eventLocation}
+                  onChange={(e) => setEventLocation(e.target.value)}
+                  required
+                />
+              </div>
             </div>
           </div>
+
+          {totalDays > 1 && eventDays.map((day, idx) => (
+            <div key={idx} className="bg-white border border-slate-200 rounded-xl p-4 md:p-6 space-y-6">
+              <h3 className="text-sm font-bold text-slate-900 mb-2">Day {idx + 2} Schedule</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label className="form-label">Date</label>
+                  <CustomDatePicker
+                    type="date"
+                    value={day.date}
+                    onChange={(val) => {
+                      const newDays = [...eventDays];
+                      newDays[idx].date = val;
+                      setEventDays(newDays);
+                    }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Time</label>
+                  <CustomDatePicker
+                    type="time"
+                    value={day.time}
+                    onChange={(val) => {
+                      const newDays = [...eventDays];
+                      newDays[idx].time = val;
+                      setEventDays(newDays);
+                    }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Location</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    value={day.location}
+                    onChange={(e) => {
+                      const newDays = [...eventDays];
+                      newDays[idx].location = e.target.value;
+                      setEventDays(newDays);
+                    }}
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
 
           <div>
             <label className="form-label">Cover Image</label>
@@ -259,7 +429,7 @@ export default function CreateEventPage() {
                     }
                   }}
                 />
-                <div className={`w-full bg-white border border-slate-200 text-sm font-bold rounded-xl py-4 text-center transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-2 ${uploadingImage ? 'text-slate-400' : 'text-slate-700 hover:bg-slate-50'}`}>
+                <div className={`w-full bg-white border border-slate-200 text-sm font-bold rounded-xl py-4 text-center transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-2 ${uploadingImage ? 'text-slate-400' : 'text-slate-600 hover:bg-[#f8f7f4] text-slate-900'}`}>
                   {uploadingImage ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -276,8 +446,8 @@ export default function CreateEventPage() {
           <div className="border-t border-slate-200 pt-6 mt-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-600 font-bold">W</span>
-                <span className="text-xs font-bold text-slate-700 uppercase">Custom Event Watermark</span>
+                <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-400 font-bold">W</span>
+                <span className="text-xs font-bold text-slate-600 uppercase">Custom Event Watermark</span>
               </div>
               <div 
                 className="toggle-switch" 
@@ -306,7 +476,7 @@ export default function CreateEventPage() {
                     <input 
                       type="text" 
                       className="form-input" 
-                      placeholder="e.g. Mara Photo"
+                      
                       value={watermarkText}
                       onChange={(e) => setWatermarkText(e.target.value)}
                     />
@@ -315,11 +485,11 @@ export default function CreateEventPage() {
                   <div>
                     <label className="form-label">Watermark Logo Image</label>
                     <div className="flex gap-4 items-center mt-1">
-                      <div className="w-[60px] h-[60px] rounded border border-dashed border-slate-300 flex items-center justify-center shrink-0 bg-slate-50">
-                          {uploadingWatermark ? <Loader2 className="h-5 w-5 animate-spin text-[#c5a880]" /> : (watermarkLogoUrl ? <img src={watermarkLogoUrl} className="max-w-[40px] max-h-[40px] object-contain" /> : <Camera className="h-5 w-5 text-slate-600" />)}
+                      <div className="w-[60px] h-[60px] rounded border border-dashed border-slate-300 flex items-center justify-center shrink-0 bg-[#f8f7f4] text-slate-900">
+                          {uploadingWatermark ? <Loader2 className="h-5 w-5 animate-spin text-[#c5a880]" /> : (watermarkLogoUrl ? <img src={watermarkLogoUrl} className="max-w-[40px] max-h-[40px] object-contain" /> : <Camera className="h-5 w-5 text-slate-400" />)}
                       </div>
                       <div className="flex-1 flex flex-col">
-                        <label className="w-full text-center border border-slate-200 text-[#b69970] font-bold text-[13px] py-2 rounded-lg bg-white cursor-pointer hover:bg-slate-50 transition-colors shadow-sm">
+                        <label className="w-full text-center border border-slate-200 text-[#b69970] font-bold text-[13px] py-2 rounded-lg bg-white cursor-pointer hover:bg-[#f8f7f4] text-slate-900 transition-colors shadow-sm">
                             Choose File
                             <input 
                               type="file" 
@@ -358,7 +528,7 @@ export default function CreateEventPage() {
                               }} 
                             />
                         </label>
-                        <p className="text-[10px] text-slate-700 font-bold mt-2">PNG with transparent background recommended.</p>
+                        <p className="text-[10px] text-slate-600 font-bold mt-2">PNG with transparent background recommended.</p>
                       </div>
                     </div>
                   </div>
@@ -475,8 +645,8 @@ export default function CreateEventPage() {
 
           <div className="flex items-center justify-between border-t border-slate-200 pt-6 pb-6 mb-6">
             <div className="flex items-center gap-2">
-              <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-600 font-bold">P</span>
-              <span className="text-xs font-bold text-slate-700 uppercase">Add to Portfolio</span>
+              <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-400 font-bold">P</span>
+              <span className="text-xs font-bold text-slate-600 uppercase">Add to Portfolio</span>
             </div>
             <div 
               className="toggle-switch" 
