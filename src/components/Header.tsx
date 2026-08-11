@@ -232,11 +232,11 @@ export default function Header() {
         <div className="flex justify-between h-16 items-center">
 
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2 shrink-0">
             <img
               src="/logo.png"
               alt="Mara Photo Logo"
-              className="h-10 w-auto object-contain"
+              className="max-h-10 h-10 w-auto max-w-[180px] lg:max-w-[220px] object-contain shrink-0"
             />
           </Link>
 

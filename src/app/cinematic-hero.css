@@ -1,0 +1,424 @@
+/* ================================================================
+   CINEMATIC HERO — Scroll-Driven Image Sequence
+   ================================================================ */
+
+/* ── Scroll Container ── */
+.hero-scroll-container {
+  position: relative;
+  width: 100%;
+  /* height set dynamically via inline style based on frame count */
+}
+
+/* ── Sticky Viewport ── */
+.hero-sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh; /* fallback */
+  height: 100svh; /* modern mobile */
+  width: 100%;
+  overflow: hidden;
+  background: #09090b;
+  will-change: transform;
+  z-index: 1;
+}
+
+/* ── Canvas ── */
+.hero-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  max-width: none;
+}
+
+/* ── Cinematic Overlay ── */
+.hero-cinematic-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.12) 0%,
+    rgba(0, 0, 0, 0.05) 40%,
+    rgba(0, 0, 0, 0.08) 60%,
+    rgba(0, 0, 0, 0.35) 100%
+  );
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Subtle vignette for cinematic depth */
+.hero-cinematic-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 50%,
+    rgba(0, 0, 0, 0.2) 100%
+  );
+}
+
+/* ── Intro Text ── */
+.hero-text-intro {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: none;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  padding: 0 24px;
+  text-align: center;
+}
+
+.hero-text-intro.hero-text-hidden {
+  opacity: 0;
+  transform: translateY(-30px);
+}
+
+.hero-intro-headline {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(2.2rem, 6vw, 5rem);
+  font-weight: 300;
+  color: #ffffff;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  margin-bottom: 20px;
+  text-shadow: 0 2px 40px rgba(0, 0, 0, 0.5);
+  animation: heroTextFadeIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+.hero-intro-headline em {
+  font-style: italic;
+  color: #c5a880;
+}
+
+.hero-intro-sub {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: clamp(11px, 1.5vw, 15px);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 36px;
+  text-shadow: 0 1px 20px rgba(0, 0, 0, 0.4);
+  animation: heroTextFadeIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+  opacity: 0;
+}
+
+.hero-intro-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 40px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #09090b;
+  background: #c5a880;
+  border: none;
+  border-radius: 9999px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: all;
+  animation: heroTextFadeIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.5s forwards;
+  opacity: 0;
+  box-shadow: 0 4px 30px rgba(197, 168, 128, 0.3);
+}
+
+.hero-intro-cta:hover {
+  background: #fff;
+  transform: translateY(-3px);
+  box-shadow: 0 12px 40px rgba(197, 168, 128, 0.4);
+}
+
+.hero-intro-cta svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.3s ease;
+}
+
+.hero-intro-cta:hover svg {
+  transform: translateX(4px);
+}
+
+/* ── Final Frame Text ── */
+.hero-text-final {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+  padding: 0 24px;
+  text-align: center;
+}
+
+.hero-text-final.hero-text-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.hero-final-brand {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: clamp(10px, 1.2vw, 13px);
+  font-weight: 900;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: #c5a880;
+  margin-bottom: 16px;
+}
+
+.hero-final-headline {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(2rem, 5vw, 4.5rem);
+  font-weight: 300;
+  color: #ffffff;
+  line-height: 1.12;
+  margin-bottom: 20px;
+  text-shadow: 0 2px 40px rgba(0, 0, 0, 0.5);
+}
+
+.hero-final-headline em {
+  font-style: italic;
+  color: #c5a880;
+}
+
+.hero-final-sub {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: clamp(11px, 1.3vw, 14px);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.65);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 36px;
+}
+
+.hero-final-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 40px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #09090b;
+  background: #c5a880;
+  border: none;
+  border-radius: 9999px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: all;
+  box-shadow: 0 4px 30px rgba(197, 168, 128, 0.3);
+}
+
+.hero-final-cta:hover {
+  background: #fff;
+  transform: translateY(-3px);
+  box-shadow: 0 12px 40px rgba(197, 168, 128, 0.4);
+}
+
+.hero-final-cta svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.3s ease;
+}
+
+.hero-final-cta:hover svg {
+  transform: translateX(4px);
+}
+
+/* ── Scroll Indicator ── */
+.hero-scroll-indicator {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  opacity: 1;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  animation: heroIndicatorFadeIn 1.5s cubic-bezier(0.16, 1, 0.3, 1) 1s forwards;
+  pointer-events: none;
+}
+
+.hero-scroll-indicator.hero-indicator-hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px);
+}
+
+.hero-scroll-indicator-text {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.hero-scroll-indicator-arrow {
+  width: 20px;
+  height: 20px;
+  color: rgba(255, 255, 255, 0.5);
+  animation: scrollBounce 2s ease-in-out infinite;
+}
+
+/* ── Loading Overlay ── */
+.hero-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: #09090b;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  transition: opacity 0.6s ease;
+}
+
+.hero-loading-overlay.hero-loading-done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hero-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 2px solid rgba(197, 168, 128, 0.15);
+  border-top-color: #c5a880;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.hero-loading-text {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ── Frame Counter (subtle) ── */
+.hero-frame-counter {
+  position: absolute;
+  bottom: 20px;
+  right: 24px;
+  z-index: 4;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.2);
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+/* ── Progress Bar ── */
+.hero-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #c5a880, #e3d8c8);
+  z-index: 6;
+  transition: width 0.1s linear;
+  box-shadow: 0 0 8px rgba(197, 168, 128, 0.4);
+}
+
+/* ── Animations ── */
+@keyframes heroTextFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes heroIndicatorFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scrollBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(8px);
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .hero-intro-headline {
+    font-size: clamp(1.8rem, 8vw, 3rem);
+  }
+
+  .hero-intro-cta,
+  .hero-final-cta {
+    padding: 14px 32px;
+    font-size: 11px;
+  }
+
+  .hero-scroll-indicator {
+    bottom: 28px;
+  }
+
+  .hero-frame-counter {
+    display: none;
+  }
+
+  .hero-final-headline {
+    font-size: clamp(1.6rem, 7vw, 3rem);
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-intro-headline {
+    font-size: clamp(1.5rem, 9vw, 2.4rem);
+  }
+
+  .hero-intro-sub {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+  }
+
+  .hero-intro-cta,
+  .hero-final-cta {
+    padding: 12px 28px;
+    font-size: 10px;
+  }
+}
