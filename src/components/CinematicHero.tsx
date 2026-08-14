@@ -5,9 +5,9 @@ import { ChevronDown } from 'lucide-react';
 
 /* ─────────────── CONFIGURATION ─────────────── */
 
-const FRAME_PREFIX = '/frames/ezgif-frame-';
-const FRAME_EXT = '.jpg';
-const TOTAL_FRAMES = 200;
+const FRAME_PREFIX = '/frames/frame_';
+const FRAME_EXT = '.png';
+const TOTAL_FRAMES = 240;
 const PRELOAD_BATCH_INITIAL = 15;
 const PRELOAD_BATCH_SIZE = 25;
 const PRELOAD_BATCH_DELAY = 100; // ms between batches
@@ -18,7 +18,7 @@ const INDICATOR_HIDE_AT = 0.03;
 /* ─────────────── HELPERS ─────────────── */
 
 function getFramePath(index: number): string {
-  const num = String(index + 1).padStart(3, '0');
+  const num = String(index + 1).padStart(6, '0');
   return `${FRAME_PREFIX}${num}${FRAME_EXT}`;
 }
 

@@ -48,6 +48,7 @@ const NAV_ITEMS = [
   {
     category: 'System',
     links: [
+      { href: '/dashboard/queries', label: 'Queries', icon: HelpCircle },
       { href: '/dashboard/studio-settings', label: 'Studio Settings', icon: Settings },
       { href: '/dashboard/studio-branding', label: 'Studio Branding', icon: Settings },
       { href: '/dashboard/plans-billing', label: 'Plans & Billing', icon: CreditCard },

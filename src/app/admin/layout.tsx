@@ -51,8 +51,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     {
       title: 'System',
       links: [
-        { href: '/admin/tickets', icon: <LifeBuoy className="w-5 h-5" />, label: 'Support Tickets' },
-        { href: '/admin/settings', icon: <Settings className="w-5 h-5" />, label: 'Settings' },
+        { href: '/admin/queries', icon: <LifeBuoy className="w-5 h-5" />, label: 'Studio Queries' },
+        { href: '/admin/contacts', icon: <LifeBuoy className="w-5 h-5" />, label: 'Contact Queries' },
       ],
     },
   ];
@@ -89,9 +89,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
           <div>
             <h1 className="text-xl font-black tracking-tight text-white">
-              MARA <span className="text-gradient-gold">ADMIN</span>
+              MARA <span className="text-gradient-gold">PHOTO</span>
             </h1>
-            <div className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mt-0.5">Control Panel</div>
+            <div className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mt-0.5">Admin Panel</div>
           </div>
         </div>
 
@@ -200,34 +200,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <div className="text-[11px] text-slate-400 font-medium flex items-center gap-1.5 mt-0.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 status-pulse-green" />
                 System running • {currentTime}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {/* Notification Bell */}
-            <button className="w-10 h-10 rounded-xl bg-white border border-slate-200/80 flex items-center justify-center text-slate-500 hover:text-[#c5a880] hover:border-[#c5a880]/30 hover:shadow-lg hover:shadow-[#c5a880]/5 transition-all duration-300 relative">
-              <Bell className="w-[18px] h-[18px]" />
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
-                <span className="text-[9px] font-black text-white">3</span>
-              </div>
-            </button>
-
-            <div className="w-[1px] h-8 bg-slate-200" />
-
-            {/* Profile */}
-            <div className="flex items-center gap-3">
-              <div className="text-right hidden sm:block">
-                <div className="text-[13px] font-bold text-slate-800 leading-none">Super Admin</div>
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">Mara Photo System</div>
-              </div>
-              <div className="relative">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shadow-md"
-                  style={{ background: 'linear-gradient(135deg, #0f172a, #1e293b)', color: '#c5a880' }}
-                >
-                  SA
-                </div>
-                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-[#f0f2f5]" />
               </div>
             </div>
           </div>

@@ -164,10 +164,43 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 /* ─────────────── PAGE ─────────────── */
 
 export default function HomePage() {
-  const handleHomeSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleHomeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert('Thank you for contacting Mara Photo! Our team will get back to you within 24 hours.');
-    (e.target as HTMLFormElement).reset();
+    setIsSubmitting(true);
+    
+    const form = e.target as HTMLFormElement;
+    const formData = new FormData(form);
+    
+    const data = {
+      name: formData.get('name'),
+      email: formData.get('email'),
+      phone: formData.get('phone'),
+      message: formData.get('message'),
+    };
+
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      
+      const result = await res.json();
+      
+      if (result.success) {
+        alert('Thank you for contacting Mara Photo! Our team will get back to you within 24 hours.');
+        form.reset();
+      } else {
+        alert(result.message || 'Failed to send message. Please try again.');
+      }
+    } catch (error) {
+      console.error('Submit error:', error);
+      alert('An error occurred. Please try again later.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -1047,8 +1080,10 @@ export default function HomePage() {
                   <label className="contact-label">Message <span style={{ color: '#dc2626' }}>*</span></label>
                   <textarea required rows={4} name="message" className="contact-input" style={{ resize: 'none' }} />
                 </div>
-                <button type="submit" className="contact-submit">
-                  Send Message <Send className="w-3.5 h-3.5" />
+                <button type="submit" className="contact-submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Sending...' : (
+                    <>Send Message <Send className="w-3.5 h-3.5" /></>
+                  )}
                 </button>
               </form>
             </div>

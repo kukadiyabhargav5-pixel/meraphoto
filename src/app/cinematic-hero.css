@@ -12,9 +12,9 @@
 /* ── Sticky Viewport ── */
 .hero-sticky {
   position: sticky;
-  top: 0;
-  height: 100vh; /* fallback */
-  height: 100svh; /* modern mobile */
+  top: 80px; /* match pt-20 */
+  height: calc(100vh - 80px); /* fallback */
+  height: calc(100svh - 80px); /* modern mobile */
   width: 100%;
   overflow: hidden;
   background: #09090b;

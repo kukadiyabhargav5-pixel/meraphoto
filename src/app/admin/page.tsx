@@ -1,11 +1,12 @@
 'use client';
 import React, { useEffect, useState, useRef } from 'react';
-import { Users, Camera, FolderOpen, Image as ImageIcon, Activity, ArrowUpRight, TrendingUp, Zap, Server, Database, Cpu } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Users, Camera, FolderOpen, Image as ImageIcon, Activity, ArrowUpRight, TrendingUp, MessageSquare, HelpCircle, ChevronRight, BarChart3, Clock, Sparkles } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { apiClient } from '@/lib/api';
+import Link from 'next/link';
 
 // ─── Animated Counter Hook ───
-function useCounter(end: number, duration: number = 1200) {
+function useCounter(end: number, duration: number = 1500) {
   const [count, setCount] = useState(0);
   const started = useRef(false);
 
@@ -16,8 +17,8 @@ function useCounter(end: number, duration: number = 1200) {
     const step = (now: number) => {
       const elapsed = now - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      // Ease out cubic
-      const eased = 1 - Math.pow(1 - progress, 3);
+      // Easing function: easeOutExpo
+      const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
       setCount(Math.round(eased * end));
       if (progress < 1) requestAnimationFrame(step);
     };
@@ -26,27 +27,6 @@ function useCounter(end: number, duration: number = 1200) {
 
   return count;
 }
-
-// ─── Animation Variants ───
-const containerVariants = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.1 },
-  },
-};
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } },
-};
-
-// ─── Stat Card Colors ───
-const statStyles = [
-  { gradient: 'linear-gradient(135deg, #3b82f6, #6366f1)', shadow: 'rgba(99,102,241,0.3)', bg: 'rgba(99,102,241,0.06)' },
-  { gradient: 'linear-gradient(135deg, #a855f7, #7c3aed)', shadow: 'rgba(168,85,247,0.3)', bg: 'rgba(168,85,247,0.06)' },
-  { gradient: 'linear-gradient(135deg, #10b981, #059669)', shadow: 'rgba(16,185,129,0.3)', bg: 'rgba(16,185,129,0.06)' },
-  { gradient: 'linear-gradient(135deg, #f59e0b, #d97706)', shadow: 'rgba(245,158,11,0.3)', bg: 'rgba(245,158,11,0.06)' },
-];
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<any>(null);
@@ -66,248 +46,285 @@ export default function AdminDashboard() {
     fetchStats();
   }, []);
 
+  const statCards = [
+    { icon: Users, label: 'Total Users', value: stats?.totalUsers || 0, color: '#3b82f6', glow: 'rgba(59, 130, 246, 0.4)', link: '/admin/users' },
+    { icon: Camera, label: 'Studios', value: stats?.totalStudios || 0, color: '#8b5cf6', glow: 'rgba(139, 92, 246, 0.4)', link: '/admin/studios' },
+    { icon: FolderOpen, label: 'Events', value: stats?.totalEvents || 0, color: '#10b981', glow: 'rgba(16, 185, 129, 0.4)', link: '/admin/events' },
+    { icon: ImageIcon, label: 'Media Files', value: stats?.totalMedia || 0, color: '#f59e0b', glow: 'rgba(245, 158, 11, 0.4)', link: '#' },
+  ];
+
   if (loading) {
     return (
-      <div className="space-y-6">
-        {/* Skeleton Header */}
-        <div className="space-y-3">
-          <div className="skeleton-shimmer h-8 w-64" />
-          <div className="skeleton-shimmer h-4 w-48" />
-        </div>
-        {/* Skeleton Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="p-4 lg:p-8 space-y-8 animate-pulse">
+        <div className="h-24 bg-slate-200/50 rounded-3xl" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="skeleton-shimmer h-40 rounded-2xl" />
+            <div key={i} className="h-40 bg-slate-200/50 rounded-3xl" />
           ))}
         </div>
-        {/* Skeleton Bottom */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 skeleton-shimmer h-64 rounded-2xl" />
-          <div className="skeleton-shimmer h-64 rounded-2xl" />
+          <div className="lg:col-span-2 h-80 bg-slate-200/50 rounded-3xl" />
+          <div className="h-80 bg-slate-200/50 rounded-3xl" />
         </div>
       </div>
     );
   }
 
-  const statCards = [
-    { icon: <Users className="w-6 h-6" />, label: 'Total Users', value: stats?.totalUsers || 0 },
-    { icon: <Camera className="w-6 h-6" />, label: 'Registered Studios', value: stats?.totalStudios || 0 },
-    { icon: <FolderOpen className="w-6 h-6" />, label: 'Total Events', value: stats?.totalEvents || 0 },
-    { icon: <ImageIcon className="w-6 h-6" />, label: 'Media Uploaded', value: stats?.totalMedia || 0 },
-  ];
-
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="show">
-      {/* Header */}
-      <motion.div variants={itemVariants} className="mb-8">
-        <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-          System Overview
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-100">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 status-pulse-green" />
-            Live
-          </span>
-        </h1>
-        <p className="text-sm font-bold text-slate-400 mt-2 uppercase tracking-[0.15em]">Real-time platform statistics</p>
-      </motion.div>
+    <div className="p-4 lg:p-8 max-w-[1600px] mx-auto min-h-screen relative">
+      
+      {/* ═══ Background Abstract Orbs ═══ */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+        <div className="absolute top-[-10%] right-[-5%] w-[40vw] h-[40vw] rounded-full bg-blue-400/5 blur-[120px]" />
+        <div className="absolute bottom-[-10%] left-[-5%] w-[50vw] h-[50vw] rounded-full bg-purple-400/5 blur-[120px]" />
+      </div>
 
-      {/* Stat Cards */}
-      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-        {statCards.map((card, i) => (
-          <StatCard key={card.label} {...card} style={statStyles[i]} index={i} />
-        ))}
-      </motion.div>
-
-      {/* Bottom Section */}
-      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Financial Overview */}
-        <div className="lg:col-span-2 glass-card rounded-2xl p-7 gradient-border-top card-hover-glow">
-          <div className="flex items-center justify-between mb-7">
-            <div>
-              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-[#c5a880]" />
-                Financial Overview
-              </h2>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em] mt-1">Total platform revenue & billing</p>
+      {/* ═══ Header Section ═══ */}
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden rounded-3xl bg-slate-900 p-8 mb-8 text-white shadow-2xl shadow-slate-900/20"
+      >
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay" />
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-bl from-indigo-500/30 to-transparent rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
+        
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <Sparkles className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl lg:text-4xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
+                  Superadmin Portal
+                </h1>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest">System Operational</p>
+                </div>
+              </div>
             </div>
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, rgba(197,168,128,0.12), rgba(197,168,128,0.04))', border: '1px solid rgba(197,168,128,0.15)' }}
+          </div>
+          <div className="flex gap-4">
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex flex-col items-end">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Server Time</span>
+              <span className="text-lg font-mono font-bold text-white">
+                {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ═══ Main Stats Grid ═══ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <AnimatePresence>
+          {statCards.map((card, i) => (
+            <motion.div
+              key={card.label}
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: i * 0.1, type: "spring" }}
             >
-              <Activity className="w-5 h-5 text-[#c5a880]" />
-            </div>
-          </div>
+              <Link href={card.link}>
+                <div className="group relative bg-white/70 backdrop-blur-xl border border-slate-200/60 rounded-3xl p-6 cursor-pointer overflow-hidden transition-all duration-500 hover:shadow-2xl hover:-translate-y-2">
+                  {/* Hover animated background glow */}
+                  <div 
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-2xl"
+                    style={{ background: `radial-gradient(circle at center, ${card.glow} 0%, transparent 70%)` }}
+                  />
+                  
+                  <div className="relative z-10 flex flex-col h-full justify-between">
+                    <div className="flex justify-between items-start mb-6">
+                      <div 
+                        className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3"
+                        style={{ background: card.color, boxShadow: `0 10px 25px -5px ${card.color}` }}
+                      >
+                        <card.icon className="w-6 h-6" />
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-slate-900 group-hover:text-white transition-colors duration-300">
+                        <ArrowUpRight className="w-4 h-4" />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">{card.label}</div>
+                      <div className="text-4xl font-black text-slate-900 tracking-tighter flex items-baseline gap-1">
+                        <AnimatedNumber value={card.value} />
+                        <span className="text-lg text-slate-400 font-bold">+</span>
+                      </div>
+                    </div>
+                  </div>
 
-          <div className="flex items-end gap-3 mb-2">
-            <RevenueCounter value={stats?.totalRevenue || 0} />
-            <span className="text-sm font-bold text-emerald-500 flex items-center mb-1.5 gap-0.5">
-              <ArrowUpRight className="w-4 h-4" /> Lifetime
-            </span>
-          </div>
+                  {/* Funky decorative patterns */}
+                  <div className="absolute -bottom-6 -right-6 w-24 h-24 border-[8px] border-slate-100 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-700 group-hover:scale-150" />
+                  <div className="absolute -bottom-10 -right-10 w-32 h-32 border-[2px] border-slate-200 rounded-full opacity-0 group-hover:opacity-50 transition-all duration-700 delay-75 group-hover:scale-150" />
+                </div>
+              </Link>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
 
-          {/* Mini chart visualization */}
-          <div className="flex items-end gap-1 h-16 mt-6 mb-6 px-1">
-            {[35, 50, 40, 65, 45, 70, 55, 80, 60, 90, 70, 85].map((h, i) => (
-              <motion.div
-                key={i}
-                className="flex-1 rounded-t-sm"
-                style={{ background: `linear-gradient(to top, rgba(197,168,128,0.15), rgba(197,168,128,${0.2 + (h / 200)}))` }}
-                initial={{ height: 0 }}
-                animate={{ height: `${h}%` }}
-                transition={{ duration: 0.6, delay: i * 0.05, ease: [0.4, 0, 0.2, 1] }}
-              />
-            ))}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 pt-6 border-t border-slate-100">
-            <div className="p-4 rounded-xl" style={{ background: 'rgba(197,168,128,0.04)' }}>
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1.5">Total Bookings</div>
-              <div className="text-2xl font-black text-slate-800">
-                <AnimatedNumber value={stats?.totalBookings || 0} />
-              </div>
-            </div>
-            <div className="p-4 rounded-xl" style={{ background: 'rgba(99,102,241,0.04)' }}>
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1.5">Total Quotations</div>
-              <div className="text-2xl font-black text-slate-800">
-                <AnimatedNumber value={stats?.totalQuotations || 0} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* System Status */}
-        <div className="glass-card-dark rounded-2xl p-7 relative overflow-hidden group">
-          {/* Animated gradient overlay */}
-          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700"
-            style={{ background: 'radial-gradient(circle at 50% 0%, rgba(197,168,128,0.08) 0%, transparent 60%)' }}
-          />
-
-          <h2 className="text-lg font-black text-white mb-2 relative z-10 flex items-center gap-2">
-            <Zap className="w-5 h-5 text-[#c5a880]" />
-            System Status
-          </h2>
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.15em] mb-6 relative z-10">Infrastructure health</p>
-
-          <div className="space-y-4 relative z-10">
-            <StatusItem
-              icon={<Server className="w-4 h-4" />}
-              label="API Server"
-              status="online"
-              latency="12ms"
-            />
-            <StatusItem
-              icon={<Database className="w-4 h-4" />}
-              label="Database"
-              status="online"
-              latency="3ms"
-            />
-            <StatusItem
-              icon={<Cpu className="w-4 h-4" />}
-              label="AI Sidecar"
-              status="degraded"
-              latency="340ms"
-            />
-          </div>
-
-          {/* Uptime bar */}
-          <div className="mt-7 pt-5 border-t border-white/[0.06] relative z-10">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em]">Uptime (30d)</span>
-              <span className="text-xs font-black text-emerald-400">99.8%</span>
-            </div>
-            <div className="w-full h-2 rounded-full bg-white/[0.06] overflow-hidden">
-              <motion.div
-                className="h-full rounded-full"
-                style={{ background: 'linear-gradient(90deg, #10b981, #34d399)' }}
-                initial={{ width: '0%' }}
-                animate={{ width: '99.8%' }}
-                transition={{ duration: 1.5, delay: 0.5, ease: [0.4, 0, 0.2, 1] }}
-              />
-            </div>
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
-
-// ─── Sub Components ───
-
-function StatCard({ icon, label, value, style, index }: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  style: { gradient: string; shadow: string; bg: string };
-  index: number;
-}) {
-  const animatedValue = useCounter(value);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: index * 0.1, ease: [0.4, 0, 0.2, 1] }}
-      className="glass-card rounded-2xl p-6 card-hover-glow icon-float cursor-default group"
-    >
-      <div className="flex items-start justify-between mb-5">
-        <div
-          className="stat-icon w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg transition-transform duration-500 group-hover:scale-110"
-          style={{ background: style.gradient, boxShadow: `0 8px 24px ${style.shadow}` }}
+      {/* ═══ Financial & Infrastructure Section ═══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* ─── Financial Overview (Large Card) ─── */}
+        <motion.div 
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="lg:col-span-2 bg-white/80 backdrop-blur-2xl border border-slate-200/80 rounded-3xl p-8 relative overflow-hidden group hover:border-slate-300 transition-colors duration-500"
         >
-          {icon}
-        </div>
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: style.bg }}>
-          <ArrowUpRight className="w-4 h-4" style={{ color: style.shadow.replace(',0.3)', ',1)') }} />
-        </div>
-      </div>
-      <div className="text-3xl font-black text-slate-900 tracking-tight tabular-nums">
-        {animatedValue.toLocaleString('en-IN')}
-      </div>
-      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.12em] mt-1">{label}</div>
-    </motion.div>
-  );
-}
+          {/* Subtle grid pattern background */}
+          <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+          
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                  <div className="p-2.5 bg-emerald-100 text-emerald-600 rounded-xl">
+                    <TrendingUp className="w-6 h-6" />
+                  </div>
+                  Financial Overview
+                </h2>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2">Platform Revenue & Bookings</p>
+              </div>
+              <button className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all hover:shadow-lg hover:shadow-slate-900/20 active:scale-95 flex items-center gap-2">
+                <BarChart3 className="w-4 h-4" /> Full Report
+              </button>
+            </div>
 
-function StatusItem({ icon, label, status, latency }: {
-  icon: React.ReactNode;
-  label: string;
-  status: 'online' | 'degraded' | 'offline';
-  latency: string;
-}) {
-  const isOnline = status === 'online';
-  const isDegraded = status === 'degraded';
+            <div className="flex flex-col md:flex-row gap-8 mb-8">
+              <div className="flex-1">
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Lifetime Revenue</div>
+                <div className="text-5xl lg:text-6xl font-black text-slate-900 tracking-tighter">
+                  <span className="text-slate-300">₹</span>
+                  <AnimatedNumber value={stats?.totalRevenue || 0} />
+                </div>
+              </div>
+              
+              <div className="flex gap-4 flex-1">
+                <div className="flex-1 p-5 rounded-2xl bg-indigo-50 border border-indigo-100 group-hover:bg-indigo-100/50 transition-colors duration-500">
+                  <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">Total Bookings</div>
+                  <div className="text-3xl font-black text-indigo-900">
+                    <AnimatedNumber value={stats?.totalBookings || 0} />
+                  </div>
+                </div>
+                <div className="flex-1 p-5 rounded-2xl bg-emerald-50 border border-emerald-100 group-hover:bg-emerald-100/50 transition-colors duration-500">
+                  <div className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-2">Quotations</div>
+                  <div className="text-3xl font-black text-emerald-900">
+                    <AnimatedNumber value={stats?.totalQuotations || 0} />
+                  </div>
+                </div>
+              </div>
+            </div>
 
-  return (
-    <div className="flex items-center justify-between p-3 rounded-xl transition-colors hover:bg-white/[0.03]">
-      <div className="flex items-center gap-3">
-        <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-400 status-pulse-green' : isDegraded ? 'bg-amber-400 status-pulse-amber' : 'bg-red-400'}`} />
-        <div className="flex items-center gap-2 text-slate-400">
-          {icon}
-          <span className="font-semibold text-sm text-slate-300">{label}</span>
-        </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="text-[10px] font-medium text-slate-500">{latency}</span>
-        <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
-          isOnline ? 'text-emerald-400 bg-emerald-400/10' :
-          isDegraded ? 'text-amber-400 bg-amber-400/10' :
-          'text-red-400 bg-red-400/10'
-        }`}>
-          {status.toUpperCase()}
-        </span>
+            {/* Funky Bar Chart Visualization */}
+            <div className="h-32 flex items-end gap-2 mt-8">
+              {[40, 70, 45, 90, 65, 80, 55, 100, 75, 85, 60, 95].map((h, i) => (
+                <motion.div
+                  key={i}
+                  className="flex-1 rounded-t-lg relative group/bar cursor-crosshair"
+                  style={{ background: `linear-gradient(to top, #e2e8f0, ${i % 2 === 0 ? '#818cf8' : '#34d399'})` }}
+                  initial={{ height: 0 }}
+                  animate={{ height: `${h}%` }}
+                  transition={{ duration: 1, delay: i * 0.05 + 0.5, type: 'spring' }}
+                >
+                  <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                    Data {i+1}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ─── Queries & Support (Dark Tech Card) ─── */}
+        <motion.div 
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+          className="bg-slate-900 rounded-3xl p-8 relative overflow-hidden group shadow-2xl shadow-slate-900/20 flex flex-col"
+        >
+          {/* Cyberpunk grid overlay */}
+          <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+          
+          <div className="absolute top-0 right-0 w-64 h-64 bg-fuchsia-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 group-hover:bg-fuchsia-500/20 transition-colors duration-1000" />
+          
+          <div className="relative z-10 flex flex-col h-full flex-1">
+            <div className="mb-8">
+              <h2 className="text-2xl font-black text-white tracking-tight flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-white/10 text-fuchsia-400 backdrop-blur-md">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                Support Queries
+              </h2>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-3">Platform Helpdesk Overview</p>
+            </div>
+
+            <div className="space-y-4 flex-1">
+              <Link href="/admin/queries">
+                <QueryStatBox 
+                  icon={Camera} 
+                  label="Studio Queries" 
+                  value={stats?.totalSupportTickets || 0} 
+                  colorClass="text-purple-400" 
+                  bgClass="bg-purple-500/20" 
+                />
+              </Link>
+              <Link href="#">
+                <QueryStatBox 
+                  icon={Users} 
+                  label="Customer Queries" 
+                  value={stats?.totalClientTickets || 0} 
+                  colorClass="text-emerald-400" 
+                  bgClass="bg-emerald-500/20" 
+                />
+              </Link>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-white/10 mt-auto">
+               <button className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold transition-all flex items-center justify-center gap-2">
+                 View All Support Tickets <ChevronRight className="w-4 h-4" />
+               </button>
+            </div>
+          </div>
+        </motion.div>
+
       </div>
     </div>
   );
 }
 
-function RevenueCounter({ value }: { value: number }) {
-  const animatedValue = useCounter(value);
-  return (
-    <span className="text-4xl font-black text-slate-900 tracking-tight tabular-nums">
-      ₹{animatedValue.toLocaleString('en-IN')}
-    </span>
-  );
-}
+// ─── Helper Components ───
 
 function AnimatedNumber({ value }: { value: number }) {
   const animatedValue = useCounter(value);
   return <>{animatedValue.toLocaleString('en-IN')}</>;
+}
+
+function QueryStatBox({ icon: Icon, label, value, colorClass, bgClass }: any) {
+  return (
+    <div className="group/item flex items-center justify-between p-5 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all duration-300 cursor-pointer">
+      <div className="flex items-center gap-4">
+        <div className={`relative flex items-center justify-center w-12 h-12 rounded-xl ${bgClass} ${colorClass}`}>
+          <Icon className="w-6 h-6 relative z-10" />
+        </div>
+        <div>
+          <div className="text-sm font-bold text-slate-200 group-hover/item:text-white transition-colors">{label}</div>
+          <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Total Received</div>
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="text-3xl font-black text-white tracking-tighter">
+          <AnimatedNumber value={value} />
+        </div>
+        <ChevronRight className="w-5 h-5 text-slate-500 group-hover/item:text-white group-hover/item:translate-x-1 transition-all" />
+      </div>
+    </div>
+  );
 }
