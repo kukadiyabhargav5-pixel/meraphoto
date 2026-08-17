@@ -68,18 +68,6 @@ export default function GlobalLoader() {
   const [domLoaded, setDomLoaded] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
 
-  // Check completion: both DOM assets + API data must be loaded
-  const checkComplete = useCallback(() => {
-    if (domLoaded && dataLoaded) {
-      setProgress(100);
-      setTimeout(() => setPhase('exploding'), 250);
-    }
-  }, [domLoaded, dataLoaded]);
-
-  useEffect(() => {
-    checkComplete();
-  }, [checkComplete]);
-
   useEffect(() => {
     if (phase !== 'counting') return;
 
@@ -108,32 +96,45 @@ export default function GlobalLoader() {
       setDataLoaded(true);
     }, 4000);
 
-    // ─── Progress animation: smooth count up to 90% while waiting ───
+    // ─── Progress animation: smooth count up to 100% while waiting ───
     let animFrame: number;
     let current = 0;
     const startTime = Date.now();
+    let isCompleting = false;
 
     const tick = () => {
       const elapsed = Date.now() - startTime;
       
-      // Calculate target based on milestones
-      let target = 20; // Base: script is running
+      let target = 20;
       
-      // DOM loaded contributes up to 50%
-      if (domLoaded) target += 30;
-      else target += Math.min(25, elapsed / 100); // Slowly approach 45%
-      
-      // Data loaded contributes up to 90%  
-      if (dataLoaded) target = 95;
-      else target += Math.min(20, elapsed / 200); // Slowly approach ~65%
+      if (domLoaded && dataLoaded) {
+        // Both loaded: rush to 100%
+        target = 100;
+      } else {
+        if (domLoaded) target += 30;
+        else target += Math.min(25, elapsed / 100);
+        
+        if (dataLoaded) target = 95;
+        else target += Math.min(20, elapsed / 200);
+      }
 
       // Ease towards target
-      current += (target - current) * 0.08;
-      if (current > 95) current = 95; // Never reach 100 until both are truly done
+      // If rushing to 100, go much faster
+      const speed = target === 100 ? 0.25 : 0.08;
+      current += (target - current) * speed;
+      
+      if (target !== 100 && current > 95) current = 95; 
       
       setProgress(Math.floor(current));
       
-      if (phase === 'counting') {
+      if (target === 100 && current >= 99.5 && !isCompleting) {
+        isCompleting = true;
+        setProgress(100);
+        setTimeout(() => setPhase('exploding'), 400); // Wait 400ms at 100% so user can see it
+        return; // Stop animation loop
+      }
+      
+      if (phase === 'counting' && !isCompleting) {
         animFrame = requestAnimationFrame(tick);
       }
     };
