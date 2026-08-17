@@ -17,6 +17,7 @@ export const DashboardProvider = ({ children }: { children: React.ReactNode }) =
     subscriptionPlan: 'Professional', 
     branding: { color: '#c5a880', watermarkEnabled: false } 
   });
+  const [credits, setCredits] = useState<any>(null);
   const [sessionUser, setSessionUser] = useState<any>(user || { name: 'Admin', role: 'STUDIO_OWNER' });
   const [tickets, setTickets] = useState([]);
   const [shoots, setShoots] = useState([]);
@@ -34,18 +35,64 @@ export const DashboardProvider = ({ children }: { children: React.ReactNode }) =
 
   useEffect(() => {
     if (authStudio) {
-      setStudio(authStudio);
+      setStudio((prev: any) => ({
+        ...prev,
+        ...authStudio,
+        subscriptionPlan: authStudio.subscriptionPlan || prev?.subscriptionPlan || 'PREMIUM'
+      }));
     }
   }, [authStudio]);
+
+  const refreshCredits = async () => {
+    try {
+      const res = await apiClient.get('/studio/credits');
+      if (res.data && res.data.credits) {
+        setCredits(res.data.credits);
+      }
+      if (res.data && res.data.studio) {
+        setStudio((prev: any) => ({
+          ...prev,
+          subscriptionPlan: res.data.studio.subscriptionPlan,
+          name: res.data.studio.name || prev?.name
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to refresh credits:', err);
+    }
+  };
+
+  // Instant Live Sync across tabs and pages for Plan changes
+  useEffect(() => {
+    const handlePlanUpdated = () => {
+      refreshCredits();
+      apiClient.get('/studio/me').then(res => {
+        if (res.data?.studio) setStudio(res.data.studio);
+        if (res.data?.credits) setCredits(res.data.credits);
+      }).catch(console.error);
+    };
+
+    window.addEventListener('studio_plan_updated', handlePlanUpdated);
+    window.addEventListener('storage', handlePlanUpdated);
+    window.addEventListener('focus', handlePlanUpdated);
+
+    return () => {
+      window.removeEventListener('studio_plan_updated', handlePlanUpdated);
+      window.removeEventListener('storage', handlePlanUpdated);
+      window.removeEventListener('focus', handlePlanUpdated);
+    };
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Fetch Studio Details
+        // Fetch Studio Details & Credits
         try {
           const studioRes = await apiClient.get('/studio/me');
           if (studioRes.data && studioRes.data.studio) {
             setStudio(studioRes.data.studio);
+            if (studioRes.data.credits) {
+              setCredits(studioRes.data.credits);
+            }
           }
         } catch (studioErr) {
           // Use auth studio as fallback
@@ -111,6 +158,7 @@ export const DashboardProvider = ({ children }: { children: React.ReactNode }) =
       quotations, setQuotations,
       bills, setBills,
       studio, setStudio,
+      credits, setCredits, refreshCredits,
       sessionUser, setSessionUser,
       tickets, setTickets,
       shoots, setShoots,

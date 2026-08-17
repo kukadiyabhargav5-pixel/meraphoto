@@ -46,7 +46,7 @@ const features = [
   { icon: ScanFace, title: 'Instant Face Recognition',  desc: 'Eliminate manual photo searching. Guests upload a selfie and view their personalized, matched photos in under 2 seconds.' },
   { icon: QrCode,   title: 'Elegant QR Branding',       desc: 'Generate custom branded QR codes showing your studio logo. Print or display them at event tables and entries.' },
   { icon: Zap,      title: 'Real-time Live Delivery',    desc: 'Photos stream live to guests as you shoot and upload. Drive organic social shares while the event is still happening.' },
-  { icon: Globe,    title: 'Fully White-Labeled',        desc: 'Use your own custom subdomain, branding colors, and logo. Deliver a luxury, high-end gallery experience to premium clients.' },
+  { icon: Globe,    title: 'Fully White-Labeled',        desc: 'Use your own custom branding colors, logo, and optional custom domain. Deliver a luxury, high-end gallery experience to premium clients.' },
   { icon: Shield,   title: 'End-to-End Privacy',         desc: 'Encrypt and protect your client\'s personal photos. Only authorized guests with the unique event QR code can view.' },
   { icon: Users,    title: 'Unlimited Guest Delivery',   desc: 'Deliver photos to thousands of guests simultaneously with zero lag, zero performance drops, and zero limits.' },
 ];

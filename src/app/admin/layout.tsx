@@ -10,10 +10,22 @@ import './admin.css';
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout } = useAuth();
+  const { user, isAuthenticated, loading: authLoading, logout } = useAuth();
   const [currentTime, setCurrentTime] = useState('');
   const [greeting, setGreeting] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.email?.toLowerCase() === 'maraphoto303@gmail.com';
+
+  useEffect(() => {
+    if (!authLoading) {
+      if (!isAuthenticated) {
+        router.replace('/login');
+      } else if (!isSuperAdmin) {
+        router.replace('/dashboard');
+      }
+    }
+  }, [authLoading, isAuthenticated, isSuperAdmin, router]);
 
   useEffect(() => {
     const updateTime = () => {
@@ -32,6 +44,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const interval = setInterval(updateTime, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  if (authLoading || !isAuthenticated || !isSuperAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#faf9f6] text-slate-800 font-poppins">
+        <div className="w-10 h-10 border-3 border-[#c5a880]/30 border-t-[#c5a880] rounded-full animate-spin mb-4" />
+        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Checking Administrator Privileges...</p>
+      </div>
+    );
+  }
 
   const navSections = [
     {
@@ -156,14 +177,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
             <div className="text-[10px] text-slate-500 mt-1 relative z-10">Full admin access enabled</div>
           </div>
-
-          <button onClick={async () => {
-            await logout();
-            router.push('/auth/login');
-          }} className="flex items-center gap-3 px-3 py-2.5 bg-red-500 text-white hover:bg-red-600 shadow-md shadow-red-500/20 rounded-xl transition-all group border-none">
-            <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-            <span className="font-semibold text-[13px]">Logout</span>
-          </button>
+          {/* User Profile & Logout */}
+          <div className="flex items-center justify-between bg-white/[0.04] p-2 rounded-2xl border border-white/[0.05] hover:bg-white/[0.08] transition-all duration-300 group">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-black text-sm shrink-0 shadow-lg" style={{ background: 'linear-gradient(135deg, #6366f1, #3b82f6)' }}>
+                {user?.name?.charAt(0).toUpperCase() || 'A'}
+              </div>
+              <div className="flex flex-col min-w-0 mr-2">
+                <span className="text-sm font-bold text-slate-200 truncate">{user?.name || 'Admin'}</span>
+                <span className="text-[9px] text-[#c5a880] font-black uppercase tracking-widest truncate mt-0.5">{user?.role?.replace('_', ' ') || 'SUPER ADMIN'}</span>
+              </div>
+            </div>
+            
+            <button onClick={async () => {
+              await logout();
+              router.push('/auth/login');
+            }} className="w-10 h-10 flex items-center justify-center rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-all duration-300 hover:shadow-lg hover:shadow-red-500/20 group/btn shrink-0" title="Logout">
+              <LogOut className="w-4.5 h-4.5 group-hover/btn:-translate-x-0.5 transition-transform" />
+            </button>
+          </div>
         </div>
       </aside>
 

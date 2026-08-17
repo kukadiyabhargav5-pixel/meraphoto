@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Pure CSS Aperture Animation Component
@@ -63,29 +63,99 @@ export default function GlobalLoader() {
   const [progress, setProgress] = useState(0);
   // phases: 'counting' -> 'exploding' -> 'flashing' -> 'revealing' -> 'done'
   const [phase, setPhase] = useState<'counting' | 'exploding' | 'flashing' | 'revealing' | 'done'>('counting');
+  
+  // Track two independent loading milestones
+  const [domLoaded, setDomLoaded] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
+
+  // Check completion: both DOM assets + API data must be loaded
+  const checkComplete = useCallback(() => {
+    if (domLoaded && dataLoaded) {
+      setProgress(100);
+      setTimeout(() => setPhase('exploding'), 250);
+    }
+  }, [domLoaded, dataLoaded]);
+
+  useEffect(() => {
+    checkComplete();
+  }, [checkComplete]);
 
   useEffect(() => {
     if (phase !== 'counting') return;
 
+    // ─── Milestone 1: DOM + all assets (images, fonts, scripts) ───
+    const handleDomLoad = () => {
+      setDomLoaded(true);
+    };
+
+    if (document.readyState === 'complete') {
+      setDomLoaded(true);
+    } else {
+      window.addEventListener('load', handleDomLoad);
+    }
+
+    // ─── Milestone 2: All API/dashboard data loaded ───
+    // The DashboardContext dispatches 'dashboard-loaded' when all API calls finish.
+    // For public pages (login/signup) that don't use DashboardContext,
+    // we set a fallback timeout so they aren't blocked.
+    const handleDataLoad = () => {
+      setDataLoaded(true);
+    };
+
+    window.addEventListener('dashboard-loaded', handleDataLoad);
+
+    // For pages without dashboard context (login, signup, public pages):
+    // Detect if we're on a public page and auto-complete data milestone fast
+    const isPublicPage = typeof window !== 'undefined' && 
+      (window.location.pathname.startsWith('/login') || 
+       window.location.pathname.startsWith('/signup') || 
+       window.location.pathname.startsWith('/auth') ||
+       window.location.pathname === '/' ||
+       window.location.pathname.startsWith('/e/'));
+
+    const fallbackTimer = setTimeout(() => {
+      setDataLoaded(prev => prev ? prev : true);
+    }, isPublicPage ? 500 : 4000);
+
+    // ─── Progress animation: smooth count up to 90% while waiting ───
+    let animFrame: number;
     let current = 0;
-    const duration = 2200; // 2.2 seconds total for counting
-    const intervalTime = 30; // update every 30ms for smooth counting
-    const steps = duration / intervalTime;
-    const increment = 100 / steps;
+    const startTime = Date.now();
 
-    const timer = setInterval(() => {
-      current += increment;
-      if (current >= 100) {
-        current = 100;
-        clearInterval(timer);
-        // At 100%, trigger the 'explode' phase where the aperture grows before the flash
-        setTimeout(() => setPhase('exploding'), 100);
-      }
+    const tick = () => {
+      const elapsed = Date.now() - startTime;
+      
+      // Calculate target based on milestones
+      let target = 20; // Base: script is running
+      
+      // DOM loaded contributes up to 50%
+      if (domLoaded) target += 30;
+      else target += Math.min(25, elapsed / 100); // Slowly approach 45%
+      
+      // Data loaded contributes up to 90%  
+      if (dataLoaded) target = 95;
+      else target += Math.min(20, elapsed / 200); // Slowly approach ~65%
+
+      // Ease towards target
+      current += (target - current) * 0.08;
+      if (current > 95) current = 95; // Never reach 100 until both are truly done
+      
       setProgress(Math.floor(current));
-    }, intervalTime);
+      
+      if (phase === 'counting') {
+        animFrame = requestAnimationFrame(tick);
+      }
+    };
+    
+    animFrame = requestAnimationFrame(tick);
 
-    return () => clearInterval(timer);
-  }, [phase]);
+    return () => {
+      window.removeEventListener('load', handleDomLoad);
+      window.removeEventListener('dashboard-loaded', handleDataLoad);
+      clearTimeout(fallbackTimer);
+      cancelAnimationFrame(animFrame);
+    };
+  }, [phase, domLoaded, dataLoaded]);
 
   if (phase === 'done') return null;
 
@@ -133,7 +203,7 @@ export default function GlobalLoader() {
                 className="w-full h-1 bg-[#222] rounded-full overflow-hidden relative mb-6 shadow-inner"
               >
                 <motion.div 
-                  className="absolute top-0 left-0 h-full bg-gradient-to-r from-[#8c7454] via-[#c5a880] to-[#e8d5b5]"
+                  className="absolute top-0 left-0 h-full bg-gradient-to-r from-[#8c7454] via-[#c5a880] to-[#e8d5b5] transition-all duration-200 ease-out"
                   style={{ width: `${progress}%` }}
                 />
               </motion.div>
@@ -145,7 +215,8 @@ export default function GlobalLoader() {
                 transition={{ delay: 0.1 }}
                 className="text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] text-[#c5a880]/80"
               >
-                Initializing <span className="font-mono ml-2 text-[#c5a880] text-sm">{progress.toString().padStart(2, '0')}%</span>
+                {progress < 50 ? 'Loading Assets' : progress < 90 ? 'Preparing Studio' : 'Almost Ready'}{' '}
+                <span className="font-mono ml-2 text-[#c5a880] text-sm">{progress.toString().padStart(2, '0')}%</span>
               </motion.div>
 
             </div>

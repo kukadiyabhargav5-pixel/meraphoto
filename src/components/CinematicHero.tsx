@@ -8,7 +8,7 @@ import { ChevronDown } from 'lucide-react';
 const FRAME_PREFIX = '/frames/frame_';
 const FRAME_EXT = '.png';
 const TOTAL_FRAMES = 240;
-const PRELOAD_BATCH_INITIAL = 15;
+const PRELOAD_BATCH_INITIAL = 240; // Preload all frames for 100% completion before hiding loader
 const PRELOAD_BATCH_SIZE = 25;
 const PRELOAD_BATCH_DELAY = 100; // ms between batches
 
@@ -57,6 +57,7 @@ export default function CinematicHero() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [scrollHeightPx, setScrollHeightPx] = useState(8000); // Default fallback
+  const [loadingProgress, setLoadingProgress] = useState(0);
 
   // Preload images
   const loadImage = useCallback((index: number): Promise<void> => {
@@ -85,8 +86,16 @@ export default function CinematicHero() {
     async function preloadAll() {
       // Batch 1: Load first N frames immediately
       const initialPromises: Promise<void>[] = [];
-      for (let i = 0; i < Math.min(PRELOAD_BATCH_INITIAL, TOTAL_FRAMES); i++) {
-        initialPromises.push(loadImage(i));
+      const initialBatchSize = Math.min(PRELOAD_BATCH_INITIAL, TOTAL_FRAMES);
+      let initialLoadedCount = 0;
+      
+      for (let i = 0; i < initialBatchSize; i++) {
+        initialPromises.push(
+          loadImage(i).then(() => {
+            initialLoadedCount++;
+            setLoadingProgress(Math.floor((initialLoadedCount / initialBatchSize) * 100));
+          })
+        );
       }
       await Promise.all(initialPromises);
 
@@ -251,7 +260,7 @@ export default function CinematicHero() {
         {/* Loading Overlay */}
         <div className={`hero-loading-overlay ${isLoaded ? 'hero-loading-done' : ''}`}>
           <div className="hero-loading-spinner" />
-          <span className="hero-loading-text">Loading Experience</span>
+          <span className="hero-loading-text">Loading Experience... {loadingProgress}%</span>
         </div>
 
 
@@ -262,10 +271,7 @@ export default function CinematicHero() {
           <ChevronDown className="hero-scroll-indicator-arrow" />
         </div>
 
-        {/* Frame Counter */}
-        <div className="hero-frame-counter">
-          {String(currentFrameRef.current + 1).padStart(3, '0')} / {TOTAL_FRAMES}
-        </div>
+
 
         {/* Progress Bar */}
         <div

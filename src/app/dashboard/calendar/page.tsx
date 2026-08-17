@@ -432,7 +432,7 @@ export default function CalendarPage() {
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-[#f8f7f4] text-slate-900/50">
                   <div className="flex flex-col gap-2">
                     <h3 className="text-sm font-extrabold text-slate-900">
-                      {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                      {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-GB')}
                     </h3>
                     <div className="flex bg-slate-200/60 rounded-lg p-1 w-fit">
                       <button 
@@ -701,7 +701,7 @@ export default function CalendarPage() {
                               <div className="flex-1">
                                 <p className="font-bold text-sm text-slate-900">{shoot.eventName}</p>
                                 <p className="text-[10px] text-slate-400 font-mono mt-1">
-                                  {shootDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })} • {shoot.time || '09:00'}
+                                  {shootDate.toLocaleDateString('en-GB')} • {shoot.time || '09:00'}
                                   {shoot.location && <span className="ml-2"><MapPin className="inline h-2.5 w-2.5 -mt-0.5" /> {shoot.location}</span>}
                                 </p>
                                 <div className="flex flex-wrap items-center gap-2 mt-2.5">
@@ -746,7 +746,7 @@ export default function CalendarPage() {
                     <div className="text-center">
                       <span className="font-bold text-sm block">Add Shoot for</span>
                       <span className="text-[11px] font-extrabold uppercase tracking-widest mt-1 opacity-70">
-                        {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-IN', { month: 'long', day: 'numeric', year: 'numeric' })}
+                        {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-GB')}
                       </span>
                     </div>
                   </button>
@@ -771,7 +771,7 @@ export default function CalendarPage() {
               <div>
                 <h3 className="text-xl font-bold text-slate-900 mb-1">{viewingShoot.eventName}</h3>
                 <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400 font-medium">
-                  <span>{new Date(viewingShoot.date).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                  <span>{new Date(viewingShoot.date).toLocaleDateString('en-GB')}</span>
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
                   <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {viewingShoot.time || '09:00'}</span>
                 </div>
@@ -851,7 +851,7 @@ export default function CalendarPage() {
                         <h4 className="font-bold text-sm text-slate-900">{shoot.eventName}</h4>
                         <p className="text-[10px] text-slate-500 font-medium mt-1 flex items-center gap-1">
                           <CalendarIcon className="w-3 h-3" />
-                          {shootDate.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })}
+                          {shootDate.toLocaleDateString('en-GB')}
                           <span className="mx-1">•</span>
                           <Clock className="w-3 h-3" /> {shoot.time}
                         </p>

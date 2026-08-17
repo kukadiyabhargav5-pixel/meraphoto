@@ -186,7 +186,7 @@ export default function CustomDatePicker({
       <DatePicker
         selected={parsedDate}
         onChange={handleChange}
-        dateFormat="yyyy-MM-dd"
+        dateFormat="dd/MM/yyyy"
         className={`${className} !pl-10 cursor-pointer transition-all duration-300
           group-hover:border-[#c5a880] group-hover:shadow-[0_0_0_3px_rgba(197,168,128,0.15)]`}
         required={required}

@@ -114,7 +114,6 @@ export default function EventDetailsPage() {
               </h3>
               <div className="space-y-4">
                 <DetailRow icon={<FolderOpen />} label="Studio Name" value={event.studioId?.name || 'Unknown'} />
-                <DetailRow icon={<Globe />} label="Subdomain" value={event.studioId?.subdomain ? `${event.studioId.subdomain}.maraphoto.com` : 'N/A'} />
               </div>
             </motion.div>
           </div>
@@ -127,7 +126,7 @@ export default function EventDetailsPage() {
                 <MapPin className="w-4 h-4 text-emerald-500" /> Event Information
               </h3>
               <div className="space-y-4">
-                <DetailRow icon={<Calendar />} label="Event Date" value={event.date ? new Date(event.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'} />
+                <DetailRow icon={<Calendar />} label="Event Date" value={event.date ? new Date(event.date).toLocaleDateString('en-GB') : 'N/A'} />
                 <DetailRow icon={<Clock />} label="Event Time" value={event.time || 'N/A'} />
                 <DetailRow icon={<MapPin />} label="Location" value={event.location || 'N/A'} />
               </div>

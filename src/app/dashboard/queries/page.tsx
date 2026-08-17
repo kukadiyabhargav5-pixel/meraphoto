@@ -387,7 +387,7 @@ export default function StudioQueriesPage() {
                           <StatusBadge status={picked.status} />
                           <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
                             <Clock className="w-3 h-3" />
-                            {new Date(picked.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            {new Date(picked.createdAt).toLocaleDateString('en-GB')}
                           </span>
                         </div>
 
@@ -487,7 +487,7 @@ export default function StudioQueriesPage() {
                             <div className="flex items-center justify-between mb-2">
                               <StatusBadge status={t.status} />
                               <span className="text-[10px] font-bold text-slate-400">
-                                {new Date(t.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                {new Date(t.createdAt).toLocaleDateString('en-GB')}
                               </span>
                             </div>
                             <h4 className="font-bold text-slate-800 text-sm mb-1 group-hover:text-[#c5a880] transition-colors leading-snug">

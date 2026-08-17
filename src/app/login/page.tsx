@@ -26,7 +26,7 @@ export default function LoginPage() {
         try {
           const userObj = JSON.parse(userStr);
           if (userObj.role === 'SUPER_ADMIN') {
-            router.replace('/admin');
+            router.replace('/admin-choice');
             return;
           }
         } catch (e) {}
@@ -70,7 +70,7 @@ export default function LoginPage() {
       if (userStr) {
         const userObj = JSON.parse(userStr);
         if (userObj.role === 'SUPER_ADMIN') {
-          router.push('/admin');
+          router.push('/admin-choice');
           return;
         }
       }
@@ -104,9 +104,8 @@ export default function LoginPage() {
   // Don't render login page if already authenticated
   if (authLoading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#faf9f6' }}>
-        <Loader style={{ width: 32, height: 32, color: '#c5a880', animation: 'spin 1s linear infinite' }} />
-        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <div className="flex items-center justify-center h-screen bg-[#faf9f6]">
+        <Loader className="w-8 h-8 text-[#c5a880] animate-spin" />
       </div>
     );
   }
@@ -115,362 +114,81 @@ export default function LoginPage() {
 
   return (
     <PublicWrapper>
-      <style dangerouslySetInnerHTML={{__html: `
-        .login-page {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          min-height: calc(100vh - 80px);
-          padding: 40px 16px;
-          background: linear-gradient(135deg, #faf9f6 0%, #f5f2eb 50%, #faf9f6 100%);
-          position: relative;
-          overflow: hidden;
-        }
-        .login-page::before {
-          content: '';
-          position: absolute;
-          top: -200px;
-          right: -200px;
-          width: 600px;
-          height: 600px;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(197,168,128,0.15) 0%, transparent 70%);
-          pointer-events: none;
-          animation: floatOrb 8s ease-in-out infinite;
-        }
-        .login-page::after {
-          content: '';
-          position: absolute;
-          bottom: -150px;
-          left: -150px;
-          width: 400px;
-          height: 400px;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(197,168,128,0.1) 0%, transparent 70%);
-          pointer-events: none;
-          animation: floatOrb 10s ease-in-out infinite reverse;
-        }
-        @keyframes floatOrb {
-          0%, 100% { transform: translate(0, 0); }
-          50% { transform: translate(20px, -20px); }
-        }
-        @keyframes slideUp {
-          from { opacity: 0; transform: translateY(30px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
-        }
-        .login-card {
-          position: relative;
-          z-index: 10;
-          width: 100%;
-          max-width: 440px;
-          background: rgba(255, 255, 255, 0.85);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-          border-radius: 24px;
-          border: 1px solid rgba(227,216,200,0.4);
-          box-shadow: 0 20px 60px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.6);
-          padding: 48px 40px;
-          animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        .login-logo {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          margin-bottom: 8px;
-        }
-        .login-logo img {
-          height: 40px;
-          width: auto;
-          object-fit: contain;
-        }
-        .login-title {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: 28px;
-          font-weight: 300;
-          color: #09090b;
-          text-align: center;
-          margin-bottom: 4px;
-        }
-        .login-subtitle {
-          text-align: center;
-          font-size: 13px;
-          color: #94a3b8;
-          font-weight: 600;
-          margin-bottom: 32px;
-        }
-        .login-input-group {
-          margin-bottom: 20px;
-        }
-        .login-label {
-          display: block;
-          font-size: 10px;
-          font-weight: 800;
-          color: #64748b;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          margin-bottom: 8px;
-        }
-        .login-input-wrap {
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
-        .login-input-icon {
-          position: absolute;
-          left: 14px;
-          color: #94a3b8;
-          pointer-events: none;
-          transition: color 0.3s;
-        }
-        .login-input {
-          width: 100%;
-          padding: 14px 16px 14px 44px;
-          font-size: 14px;
-          font-weight: 600;
-          color: #09090b;
-          background: rgba(250, 249, 246, 0.8);
-          border: 1.5px solid #e3d8c8;
-          border-radius: 12px;
-          outline: none;
-          transition: all 0.3s ease;
-        }
-        .login-input:focus {
-          border-color: #c5a880;
-          box-shadow: 0 0 0 3px rgba(197,168,128,0.15);
-          background: #fff;
-        }
-        .login-input:focus + .login-input-icon,
-        .login-input:focus ~ .login-input-icon {
-          color: #c5a880;
-        }
-        .login-input::placeholder {
-          color: #cbd5e1;
-          font-weight: 500;
-        }
-        .pw-toggle {
-          position: absolute;
-          right: 14px;
-          background: none;
-          border: none;
-          color: #94a3b8;
-          cursor: pointer;
-          padding: 4px;
-          transition: color 0.2s;
-        }
-        .pw-toggle:hover {
-          color: #09090b;
-        }
-        .login-options {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 8px;
-        }
-        .remember-me {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          cursor: pointer;
-        }
-        .remember-me input[type="checkbox"] {
-          width: 16px;
-          height: 16px;
-          accent-color: #c5a880;
-          cursor: pointer;
-        }
-        .remember-me span {
-          font-size: 12px;
-          font-weight: 600;
-          color: #64748b;
-        }
-        .login-forgot a {
-          font-size: 12px;
-          color: #c5a880;
-          font-weight: 700;
-          text-decoration: none;
-          transition: color 0.2s;
-        }
-        .login-forgot a:hover {
-          color: #09090b;
-        }
-        .login-btn {
-          width: 100%;
-          padding: 16px;
-          font-size: 13px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          color: #fff;
-          background: #09090b;
-          border: none;
-          border-radius: 12px;
-          cursor: pointer;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          margin-top: 8px;
-          position: relative;
-          overflow: hidden;
-        }
-        .login-btn::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(90deg, transparent 0%, rgba(197,168,128,0.2) 50%, transparent 100%);
-          background-size: 200% 100%;
-          opacity: 0;
-          transition: opacity 0.3s;
-        }
-        .login-btn:hover::before {
-          opacity: 1;
-          animation: shimmer 1.5s infinite;
-        }
-        .login-btn:hover {
-          background: #c5a880;
-          color: #09090b;
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(197,168,128,0.3);
-        }
-        .login-btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-          transform: none;
-        }
-        .login-btn:disabled:hover::before {
-          opacity: 0;
-        }
-        .login-footer {
-          text-align: center;
-          margin-top: 28px;
-          font-size: 13px;
-          color: #94a3b8;
-          font-weight: 600;
-        }
-        .login-footer a {
-          color: #c5a880;
-          font-weight: 800;
-          text-decoration: none;
-          transition: color 0.2s;
-        }
-        .login-footer a:hover {
-          color: #09090b;
-        }
-        .google-auth-wrapper {
-          width: 100%;
-          display: flex;
-          justify-content: center;
-          margin-bottom: 24px;
-        }
-        .auth-divider {
-          display: flex;
-          align-items: center;
-          text-align: center;
-          margin-bottom: 24px;
-          color: #94a3b8;
-          font-size: 12px;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-        }
-        .auth-divider::before,
-        .auth-divider::after {
-          content: '';
-          flex: 1;
-          border-bottom: 1px solid #e2e8f0;
-        }
-        .auth-divider:not(:empty)::before {
-          margin-right: .5em;
-        }
-        .auth-divider:not(:empty)::after {
-          margin-left: .5em;
-        }
-        @media (max-width: 480px) {
-          .login-card {
-            padding: 32px 24px;
-            border-radius: 20px;
-          }
-          .login-title {
-            font-size: 24px;
-          }
-        }
-      `}} />
-
-      <div className="login-page font-poppins">
-        <div className="login-card">
-          <div className="login-logo">
-            <img src="/logo.png" alt="Mara Photo" />
+      <div className="min-h-[calc(100vh-80px)] flex items-center justify-center p-4 bg-gradient-to-br from-[#faf9f6] via-[#f5f2eb] to-[#faf9f6] relative overflow-hidden font-poppins">
+        {/* Decorative Orbs */}
+        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-gradient-to-r from-[#c5a880]/15 to-transparent rounded-full blur-[100px] animate-pulse pointer-events-none" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] bg-gradient-to-t from-[#c5a880]/10 to-transparent rounded-full blur-[80px] pointer-events-none" />
+        
+        {/* Login Card */}
+        <div className="w-full max-w-[440px] bg-white/80 backdrop-blur-xl rounded-[24px] border border-white/40 shadow-2xl p-8 sm:p-10 relative z-10 animate-fade-in-up">
+          
+          <div className="flex justify-center mb-2">
+            <img src="/logo.png" alt="Mara Photo" className="h-10 object-contain" />
           </div>
-          <h1 className="login-title">Welcome Back</h1>
-          <p className="login-subtitle">Sign in to your Mara Photo studio</p>
+          
+          <h1 className="text-[28px] font-light text-slate-900 text-center font-serif-luxury mb-1">
+            Welcome Back
+          </h1>
+          <p className="text-[13px] font-semibold text-slate-400 text-center mb-8">
+            Sign in to your Mara Photo studio
+          </p>
 
-          <form onSubmit={handleLogin}>
-            <div className="login-input-group">
-              <label className="login-label">Email Address</label>
-              <div className="login-input-wrap">
-                <input
-                  id="login-email"
-                  type="email"
-                  required
-                  value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
-                  
-                  className="login-input"
-                  autoComplete="email"
-                />
-                <Mail className="login-input-icon" style={{ width: 16, height: 16 }} />
+          <form onSubmit={handleLogin} className="space-y-5">
+            
+            <div className="relative group">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-4 h-4 pointer-events-none text-slate-400 peer-focus:text-[#c5a880] transition-colors z-10">
+                <Mail className="w-4 h-4" />
               </div>
-            </div>
-
-            <div className="login-input-group">
-              <label className="login-label">Password</label>
-              <div className="login-input-wrap">
-                <input
-                  id="login-password"
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  
-                  className="login-input"
-                  style={{ paddingRight: '48px' }}
-                  autoComplete="current-password"
-                />
-                <Lock className="login-input-icon" style={{ width: 16, height: 16 }} />
-                <button type="button" className="pw-toggle" onClick={() => setShowPassword(!showPassword)}>
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div className="login-options">
-              <label className="remember-me">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                />
-                <span>Remember Me</span>
+              <input 
+                type="email" id="loginEmail" required placeholder="Email Address"
+                className="peer w-full bg-slate-50/80 border border-slate-200 rounded-xl pl-11 pr-4 pt-6 pb-2 text-sm font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#c5a880]/20 focus:border-[#c5a880] transition-all outline-none shadow-sm placeholder-transparent" 
+                value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} autoComplete="email"
+              />
+              <label htmlFor="loginEmail" className="absolute left-11 top-[6px] text-[9px] font-bold text-slate-400 uppercase tracking-widest transition-all peer-placeholder-shown:top-[15px] peer-placeholder-shown:text-[13px] peer-placeholder-shown:normal-case peer-focus:top-[6px] peer-focus:text-[9px] peer-focus:uppercase peer-focus:text-[#c5a880]">
+                Email Address
               </label>
-              <div className="login-forgot">
-                <Link href="/auth/forgot-password">Forgot Password?</Link>
-              </div>
             </div>
 
-            <button id="login-submit" type="submit" disabled={loading} className="login-btn">
-              {loading ? <Loader className="w-4 h-4 animate-spin" /> : <>Sign In <ArrowRight className="w-4 h-4" /></>}
+            <div className="relative group">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-4 h-4 pointer-events-none text-slate-400 peer-focus:text-[#c5a880] transition-colors z-10">
+                <Lock className="w-4 h-4" />
+              </div>
+              <input 
+                type="password" id="loginPassword" required placeholder="Password"
+                className="peer w-full bg-slate-50/80 border border-slate-200 rounded-xl pl-11 pr-12 pt-6 pb-2 text-sm font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#c5a880]/20 focus:border-[#c5a880] transition-all outline-none shadow-sm placeholder-transparent" 
+                value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} autoComplete="current-password"
+                type={showPassword ? 'text' : 'password'}
+              />
+              <label htmlFor="loginPassword" className="absolute left-11 top-[6px] text-[9px] font-bold text-slate-400 uppercase tracking-widest transition-all peer-placeholder-shown:top-[15px] peer-placeholder-shown:text-[13px] peer-placeholder-shown:normal-case peer-focus:top-[6px] peer-focus:text-[9px] peer-focus:uppercase peer-focus:text-[#c5a880]">
+                Password
+              </label>
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-900 transition-colors bg-white/50 hover:bg-slate-100 rounded-lg">
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-[#c5a880] focus:ring-[#c5a880] transition-colors" />
+                <span className="text-xs font-semibold text-slate-500 group-hover:text-slate-700 transition-colors">Remember Me</span>
+              </label>
+              <Link href="/auth/forgot-password" className="text-xs font-bold text-[#c5a880] hover:text-slate-900 transition-colors">
+                Forgot Password?
+              </Link>
+            </div>
+
+            <button type="submit" disabled={loading} className="w-full bg-slate-900 hover:bg-[#c5a880] text-white py-4 rounded-xl text-[13px] font-black uppercase tracking-widest shadow-xl shadow-slate-900/10 hover:shadow-[#c5a880]/30 transition-all duration-300 flex items-center justify-center gap-2 mt-2 group disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:bg-slate-900">
+              {loading ? <Loader className="w-4 h-4 animate-spin" /> : <>Sign In <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></>}
             </button>
           </form>
 
-          <div className="auth-divider" style={{ marginTop: '24px' }}>or continue with Google</div>
+          <div className="flex items-center gap-4 my-6">
+            <div className="flex-1 h-px bg-slate-200"></div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Or continue with</span>
+            <div className="flex-1 h-px bg-slate-200"></div>
+          </div>
           
-          <div className="google-auth-wrapper">
+          <div className="flex justify-center w-full">
              <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || 'dummy-client-id'}>
                <GoogleLogin
                  onSuccess={handleGoogleSuccess}
@@ -479,14 +197,15 @@ export default function LoginPage() {
                  size="large"
                  text="continue_with"
                  shape="pill"
-                 width={350}
+                 width={250}
                />
              </GoogleOAuthProvider>
           </div>
 
-          <div className="login-footer">
-            Don&apos;t have an account? <Link href="/signup">Create Account</Link>
+          <div className="mt-8 text-center text-[13px] font-semibold text-slate-500">
+            Don&apos;t have an account? <Link href="/signup" className="text-[#c5a880] hover:text-slate-900 font-bold ml-1 transition-colors">Create Account</Link>
           </div>
+
         </div>
       </div>
     </PublicWrapper>
