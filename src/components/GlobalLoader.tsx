@@ -95,27 +95,18 @@ export default function GlobalLoader() {
     }
 
     // ─── Milestone 2: All API/dashboard data loaded ───
-    // The DashboardContext dispatches 'dashboard-loaded' when all API calls finish.
-    // For public pages (login/signup) that don't use DashboardContext,
-    // we set a fallback timeout so they aren't blocked.
-    const handleDataLoad = () => {
-      setDataLoaded(true);
-    };
+    // We listen to all Axios requests globally. If no requests are made, it defaults to true.
+    const handleApiActive = () => setDataLoaded(false);
+    const handleApiIdle = () => setDataLoaded(true);
 
-    window.addEventListener('dashboard-loaded', handleDataLoad);
+    window.addEventListener('api-active', handleApiActive);
+    window.addEventListener('api-idle', handleApiIdle);
 
-    // For pages without dashboard context (login, signup, public pages):
-    // Detect if we're on a public page and auto-complete data milestone fast
-    const isPublicPage = typeof window !== 'undefined' && 
-      (window.location.pathname.startsWith('/login') || 
-       window.location.pathname.startsWith('/signup') || 
-       window.location.pathname.startsWith('/auth') ||
-       window.location.pathname === '/' ||
-       window.location.pathname.startsWith('/e/'));
-
+    // Fallback: if 'api-active' is never fired (e.g. static page with no API calls)
+    // Or just a general fallback timeout in case something hangs
     const fallbackTimer = setTimeout(() => {
-      setDataLoaded(prev => prev ? prev : true);
-    }, isPublicPage ? 500 : 4000);
+      setDataLoaded(true);
+    }, 4000);
 
     // ─── Progress animation: smooth count up to 90% while waiting ───
     let animFrame: number;
@@ -151,7 +142,8 @@ export default function GlobalLoader() {
 
     return () => {
       window.removeEventListener('load', handleDomLoad);
-      window.removeEventListener('dashboard-loaded', handleDataLoad);
+      window.removeEventListener('api-active', handleApiActive);
+      window.removeEventListener('api-idle', handleApiIdle);
       clearTimeout(fallbackTimer);
       cancelAnimationFrame(animFrame);
     };

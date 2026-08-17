@@ -19,9 +19,34 @@ export const apiClient = axios.create({
   },
 });
 
+let activeRequests = 0;
+let idleTimer: any = null;
+
+const incrementActiveRequests = () => {
+  activeRequests++;
+  if (typeof window !== 'undefined') {
+    if (idleTimer) clearTimeout(idleTimer);
+    window.dispatchEvent(new Event('api-active'));
+  }
+};
+
+const decrementActiveRequests = () => {
+  activeRequests--;
+  if (activeRequests <= 0) {
+    activeRequests = 0;
+    if (typeof window !== 'undefined') {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        window.dispatchEvent(new Event('api-idle'));
+      }, 500); // Wait 500ms before declaring idle, in case another request is queued immediately
+    }
+  }
+};
+
 // Request interceptor to attach JWT
 apiClient.interceptors.request.use(
   (config) => {
+    incrementActiveRequests();
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('accessToken');
       if (token && config.headers) {
@@ -30,13 +55,20 @@ apiClient.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    decrementActiveRequests();
+    return Promise.reject(error);
+  }
 );
 
 // Response interceptor to handle token refresh
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    decrementActiveRequests();
+    return response;
+  },
   async (error) => {
+    decrementActiveRequests();
     const originalRequest = error.config;
 
     // If we get a 401 and haven't already tried to refresh
