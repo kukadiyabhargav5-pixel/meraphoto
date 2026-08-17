@@ -24,7 +24,6 @@ export interface IPaymentDetails {
 export interface IStudio extends Document {
   name: string;
   logoUrl?: string;
-  subdomain: string; // unique subdomain, e.g. "dreamstudio"
   customDomain?: string; // e.g. "gallery.dreamstudio.com"
   instagramUrl?: string;
   facebookUrl?: string;
@@ -32,8 +31,11 @@ export interface IStudio extends Document {
   watermark: IWatermarkSettings;
   subscriptionPlan: 'BASIC' | 'STANDARD' | 'ESSENTIAL' | 'PREMIUM' | 'STARTER' | 'PROFESSIONAL' | 'BUSINESS' | 'ENTERPRISE';
   subscriptionStatus: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'TRIALING' | 'FREE';
+  subscriptionStartDate?: Date;
+  subscriptionExpiresAt?: Date;
   razorpaySubscriptionId?: string;
   paymentDetails?: IPaymentDetails;
+  branding?: any;
   usage: IUsageLimit;
   createdAt: Date;
   updatedAt: Date;
@@ -42,7 +44,7 @@ export interface IStudio extends Document {
 const StudioSchema = new Schema<IStudio>({
   name: { type: String, required: true },
   logoUrl: { type: String },
-  subdomain: { type: String, required: true, unique: true, index: true, lowercase: true, trim: true },
+  branding: { type: Schema.Types.Mixed },
   customDomain: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
   instagramUrl: { type: String },
   facebookUrl: { type: String },
@@ -69,6 +71,8 @@ const StudioSchema = new Schema<IStudio>({
     enum: ['ACTIVE', 'PAST_DUE', 'CANCELLED', 'TRIALING', 'FREE'], 
     default: 'ACTIVE' 
   },
+  subscriptionStartDate: { type: Date },
+  subscriptionExpiresAt: { type: Date },
   razorpaySubscriptionId: { type: String },
   paymentDetails: {
     upiId: { type: String },

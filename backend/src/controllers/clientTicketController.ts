@@ -24,21 +24,25 @@ export const createTicket = async (req: Request, res: Response): Promise<void> =
 
     await newTicket.save();
 
-    // Fetch studio to get their email address
+    // Fetch studio to get their email address from the owner
     const studio = await Studio.findById(studioId);
-    if (studio && studio.email) {
-      const emailContent = `
-        <h2>New Customer Ticket Received</h2>
-        <p><strong>Customer Name:</strong> ${customerName}</p>
-        <p><strong>Mobile:</strong> ${mobileNumber}</p>
-        <p><strong>Email:</strong> ${email || 'Not provided'}</p>
-        <p><strong>Complaint:</strong></p>
-        <blockquote style="background: #f9f9f9; border-left: 5px solid #ccc; margin: 1.5em 10px; padding: 0.5em 10px;">
-          ${complaint}
-        </blockquote>
-        <p>You can reply to this ticket from your Studio Help Desk dashboard.</p>
-      `;
-      await sendEmail(studio.email, `New Ticket from ${customerName}`, emailContent);
+    if (studio) {
+      const User = require('../models/User').default || require('../models/User');
+      const owner = await User.findById(studio.ownerId);
+      if (owner && owner.email) {
+        const emailContent = `
+          <h2>New Customer Ticket Received</h2>
+          <p><strong>Customer Name:</strong> ${customerName}</p>
+          <p><strong>Mobile:</strong> ${mobileNumber}</p>
+          <p><strong>Email:</strong> ${email || 'Not provided'}</p>
+          <p><strong>Complaint:</strong></p>
+          <blockquote style="background: #f9f9f9; border-left: 5px solid #ccc; margin: 1.5em 10px; padding: 0.5em 10px;">
+            ${complaint}
+          </blockquote>
+          <p>You can reply to this ticket from your Studio Help Desk dashboard.</p>
+        `;
+        await sendEmail(owner.email, `New Ticket from ${customerName}`, emailContent);
+      }
     }
 
     res.status(201).json({ message: 'Ticket created successfully', ticket: newTicket });

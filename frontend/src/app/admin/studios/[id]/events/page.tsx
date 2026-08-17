@@ -100,7 +100,7 @@ export default function StudioEventsPage() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-2 text-[11px] text-slate-600 font-medium">
-                        <div className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-slate-400" /><span>{new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</span></div>
+                        <div className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-slate-400" /><span>{new Date(event.date).toLocaleDateString('en-GB')}</span></div>
                         {event.location && <div className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-slate-400" /><span className="truncate max-w-[200px]">{event.location}</span></div>}
                       </div>
                     </td>

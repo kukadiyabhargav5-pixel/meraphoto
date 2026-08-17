@@ -73,13 +73,16 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
+import { initializeQdrant } from './services/qdrantService';
+
 // Connect to MongoDB & Start Server
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/maraphoto';
 console.log('Connecting to database...');
 mongoose
   .connect(MONGO_URI)
-  .then(() => {
+  .then(async () => {
     console.log('Connected to MongoDB Database successfully.');
+    await initializeQdrant();
     app.listen(PORT, () => {
       console.log(`Backend server running on port ${PORT}`);
     });

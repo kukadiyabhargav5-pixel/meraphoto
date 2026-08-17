@@ -1,10 +1,28 @@
 import { Router } from 'express';
-import { createBillingSession, cancelMySubscription, handleRazorpayWebhook, getPaymentConfig } from '../controllers/paymentController';
+import { 
+  getPaymentConfig,
+  createOrderSession,
+  verifyPayment,
+  getOrderById,
+  getUserOrders,
+  createBillingSession, 
+  cancelMySubscription, 
+  handleRazorpayWebhook 
+} from '../controllers/paymentController';
 import { authenticateJWT } from '../middlewares/auth';
 
 const router = Router();
 
-router.get('/config', authenticateJWT, getPaymentConfig);
+// Public / Auth Payment Config
+router.get('/config', getPaymentConfig);
+
+// E-Commerce & Plan Payment Flow
+router.post('/create-order', createOrderSession);
+router.post('/verify', verifyPayment);
+router.get('/order/:id', getOrderById);
+router.get('/my-orders', authenticateJWT, getUserOrders);
+
+// Legacy studio plan checkout endpoints
 router.post('/checkout', authenticateJWT, createBillingSession);
 router.post('/cancel', authenticateJWT, cancelMySubscription);
 

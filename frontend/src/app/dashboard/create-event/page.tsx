@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { Eye, EyeOff, Plus, Trash2, Calendar, Clock, MapPin, Loader, Loader2, Upload, AlertCircle, Camera, Image as ImageIcon } from 'lucide-react';
+import { Eye, EyeOff, Plus, Trash2, Calendar, Clock, MapPin, Loader2, Upload, AlertCircle, Camera, Image as ImageIcon, ArrowRight, ArrowLeft, Check, Lock, User as UserIcon, Phone, Mail, Sparkles } from 'lucide-react';
 import CustomDatePicker from '../../../components/CustomDatePicker';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
@@ -9,24 +9,35 @@ import toast from 'react-hot-toast';
 
 export default function CreateEventPage() {
   const context = useDashboard();
+  const [currentStep, setCurrentStep] = useState(1);
+  const [direction, setDirection] = useState<'next' | 'prev'>('next');
+
+  // Step 1: Client Details
   const [eventName, setEventName] = useState('');
   const [clientName, setClientName] = useState('');
   const [clientMobile, setClientMobile] = useState('');
   const [clientEmail, setClientEmail] = useState('');
-  const [eventDate, setEventDate] = useState('');
+
+  // Step 2: Event Type & Access
   const [eventType, setEventType] = useState('WEDDING');
+  const [customEventType, setCustomEventType] = useState('');
+  const [showCustomType, setShowCustomType] = useState(false);
   const [accessType, setAccessType] = useState('PUBLIC');
   const [password, setPassword] = useState('');
-  const [eventLocation, setEventLocation] = useState('');
+
+  // Step 3: Schedule
+  const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
+  const [eventLocation, setEventLocation] = useState('');
   const [totalDays, setTotalDays] = useState(1);
   const [eventDays, setEventDays] = useState<{date: string, time: string, location: string}[]>([]);
-  const [loading, setLoading] = useState(false);
+
+  // Step 4: Cover Image
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
-  
-  // Watermark States
+
+  // Step 5: Watermark & Portfolio
   const [customWatermark, setCustomWatermark] = useState(false);
   const [watermarkType, setWatermarkType] = useState('LOGO');
   const [watermarkText, setWatermarkText] = useState('');
@@ -34,11 +45,12 @@ export default function CreateEventPage() {
   const [watermarkLogoName, setWatermarkLogoName] = useState<string | null>(null);
   const [uploadingWatermark, setUploadingWatermark] = useState(false);
   const [watermarkPosition, setWatermarkPosition] = useState('BOTTOM_RIGHT');
-  const [watermarkWidth, setWatermarkWidth] = useState(20);
-  const [watermarkHeight, setWatermarkHeight] = useState(20);
+  const [watermarkWidth, setWatermarkWidth] = useState(15);
+  const [watermarkHeight, setWatermarkHeight] = useState(15);
   const [watermarkOpacity, setWatermarkOpacity] = useState(50);
-
   const [addToPortfolio, setAddToPortfolio] = useState(false);
+
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
   
   const EVENT_TYPES = [
@@ -47,618 +59,974 @@ export default function CreateEventPage() {
     'BABY SHOWER', 'PANCHMASI'
   ];
 
+  const stepLabels = ['Client Info', 'Event Type', 'Schedule', 'Cover Image', 'Watermark'];
+
+  const goToStep = (step: number) => {
+    setDirection(step > currentStep ? 'next' : 'prev');
+    setCurrentStep(step);
+  };
+
+  const canProceedStep1 = () => {
+    return eventName.trim().length > 0 && clientName.trim().length > 0 && clientMobile.trim().length > 0 && clientEmail.trim().length > 0;
+  };
+  const canProceedStep2 = () => {
+    const selectedType = showCustomType ? customEventType.trim() : eventType;
+    if (!selectedType) return false;
+    if (accessType === 'PASSWORD' && !password) return false;
+    if (accessType === 'OTP' && password.length !== 4) return false;
+    return true;
+  };
+  const canProceedStep3 = () => {
+    return eventDate && eventTime && eventLocation.trim().length > 0;
+  };
+  const canProceedStep4 = () => {
+    return !!coverImage;
+  };
+
+  const handleNext = () => {
+    if (currentStep === 1 && !canProceedStep1()) { toast.error('Please fill all required fields'); return; }
+    if (currentStep === 2 && !canProceedStep2()) { toast.error('Please complete event type and access details'); return; }
+    if (currentStep === 3 && !canProceedStep3()) { toast.error('Please fill date, time and location'); return; }
+    if (currentStep === 4 && !canProceedStep4()) { toast.error('Cover image is required'); return; }
+    if (currentStep < 5) goToStep(currentStep + 1);
+  };
+
+  const handleBack = () => {
+    if (currentStep > 1) goToStep(currentStep - 1);
+  };
+
+  const getEffectiveEventType = () => showCustomType ? customEventType : eventType;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (currentStep !== 5) return;
+    if (!eventName) { toast.error('Event name is required'); return; }
+    if (!coverImage) { toast.error('Cover image is required'); return; }
+    try {
+      setLoading(true);
+      await apiClient.post('/event', {
+        name: eventName,
+        clientName,
+        clientMobile,
+        clientEmail,
+        date: eventDate || new Date().toISOString(),
+        type: getEffectiveEventType(),
+        location: eventLocation,
+        time: eventTime,
+        accessType,
+        password,
+        isMultiDay: totalDays > 1,
+        totalDays,
+        days: totalDays > 1 ? eventDays : [],
+        coverImageUrl: coverImage,
+        addToPortfolio,
+        watermark: {
+          isActive: customWatermark,
+          type: watermarkType,
+          text: watermarkText,
+          logoUrl: watermarkLogoUrl,
+          position: watermarkPosition,
+          width: watermarkWidth,
+          height: watermarkHeight,
+          opacity: watermarkOpacity / 100,
+        }
+      });
+      
+      if (context && context.customers) {
+        const existingCust = context.customers.find((c: any) => c.phone === clientMobile || c.email === clientEmail);
+        if (!existingCust) {
+          context.setCustomers([{
+            name: clientName,
+            email: clientEmail,
+            phone: clientMobile,
+            events: 1,
+            status: 'Active'
+          }, ...context.customers]);
+        }
+      }
+
+      toast.success('Event created successfully!');
+      router.push('/dashboard/events');
+    } catch (error: any) {
+      console.error('Failed to create event', error);
+      toast.error(error.response?.data?.error || 'Failed to create event.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8 font-poppins">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 font-poppins">
       <style dangerouslySetInnerHTML={{__html: `
-        .form-input {
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .ce-wrapper {
+          display: flex;
+          justify-content: center;
+          align-items: flex-start;
+          min-height: calc(100vh - 80px);
+          padding: 28px 16px 60px;
+        }
+        .ce-card {
           width: 100%;
+          max-width: 600px;
           background: #ffffff;
-          border: 1px solid #cbd5e1;
-          color: #0f172a;
-          padding: 12px 16px;
-          border-radius: 8px;
-          font-size: 14px;
-          outline: none;
-          transition: border-color 0.2s;
-        }
-        .form-input:focus {
-          border-color: #c5a880;
-        }
-        .form-label {
-          display: block;
-          font-size: 11px;
-          color: #475569;
-          font-weight: 800;
-          margin-bottom: 8px;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        .toggle-switch {
-          position: relative;
-          display: inline-block;
-          width: 36px;
-          height: 20px;
-          background-color: #cbd5e1;
           border-radius: 20px;
-          cursor: pointer;
-          transition: background-color 0.2s;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 4px 30px rgba(0,0,0,0.04);
         }
-        .toggle-switch[data-active="true"] {
-          background-color: #c5a880;
+
+        /* Header */
+        .ce-header { padding: 28px 32px 0; }
+        .ce-title { font-size: 22px; font-weight: 800; color: #0f172a; margin: 0 0 4px; }
+        .ce-subtitle { font-size: 12px; font-weight: 500; color: #94a3b8; margin: 0; }
+
+        /* Tabs */
+        .ce-tabs {
+          display: flex;
+          border-bottom: 1.5px solid #e2e8f0;
+          padding: 0 32px;
+          margin-top: 20px;
+          overflow-x: auto;
+          -ms-overflow-style: none;
+          scrollbar-width: none;
         }
-        .toggle-switch::after {
+        .ce-tabs::-webkit-scrollbar { display: none; }
+        .ce-tab {
+          flex-shrink: 0;
+          padding: 10px 0;
+          margin-right: 20px;
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: #94a3b8;
+          cursor: default;
+          position: relative;
+          transition: color 0.3s;
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          white-space: nowrap;
+        }
+        .ce-tab:last-child { margin-right: 0; }
+        .ce-tab.active { color: #0f172a; }
+        .ce-tab.completed { color: #c5a880; }
+        .ce-tab::after {
           content: '';
           position: absolute;
-          top: 2px;
-          left: 2px;
-          width: 16px;
-          height: 16px;
-          background-color: white;
+          bottom: -1.5px;
+          left: 0; right: 0;
+          height: 2.5px;
+          background: transparent;
+          border-radius: 2px 2px 0 0;
+          transition: background 0.3s;
+        }
+        .ce-tab.active::after { background: #c5a880; }
+        .ce-tab.completed::after { background: rgba(197,168,128,0.3); }
+        .ce-tab-num {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 18px; height: 18px;
+          border-radius: 50%;
+          font-size: 9px; font-weight: 800;
+          transition: all 0.3s;
+        }
+        .ce-tab.active .ce-tab-num { background: #c5a880; color: #fff; }
+        .ce-tab.completed .ce-tab-num { background: rgba(197,168,128,0.15); color: #c5a880; }
+        .ce-tab.upcoming .ce-tab-num { background: #f1f5f9; color: #94a3b8; }
+
+        /* Body */
+        .ce-body { padding: 24px 32px 32px; }
+
+        /* Animations */
+        @keyframes ce-slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes ce-slideInR { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+        .ce-step { animation: ce-slideIn 0.3s ease forwards; }
+        .ce-step.reverse { animation: ce-slideInR 0.3s ease forwards; }
+
+        /* Form Fields */
+        .ce-field { margin-bottom: 16px; }
+        .ce-label {
+          display: block;
+          font-size: 10px; font-weight: 800;
+          color: #475569;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          margin-bottom: 6px;
+        }
+        .ce-req { color: #dc2626; margin-left: 2px; }
+        .ce-opt { color: #94a3b8; font-weight: 600; text-transform: none; letter-spacing: normal; font-size: 9px; margin-left: 4px; }
+        .ce-input {
+          width: 100%;
+          background: #fff;
+          border: 1.5px solid #e2e8f0;
+          color: #0f172a;
+          padding: 11px 14px;
+          border-radius: 10px;
+          font-size: 13px;
+          font-weight: 500;
+          outline: none;
+          transition: all 0.2s;
+        }
+        .ce-input:hover { border-color: #c5a880; }
+        .ce-input:focus { border-color: #c5a880; box-shadow: 0 0 0 3px rgba(197,168,128,0.1); }
+        .ce-select {
+          width: 100%;
+          background: #fff;
+          border: 1.5px solid #e2e8f0;
+          color: #0f172a;
+          padding: 11px 14px;
+          border-radius: 10px;
+          font-size: 13px;
+          font-weight: 600;
+          outline: none;
+          cursor: pointer;
+          transition: all 0.2s;
+          appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 12px center;
+          padding-right: 36px;
+        }
+        .ce-select:hover { border-color: #c5a880; }
+        .ce-select:focus { border-color: #c5a880; box-shadow: 0 0 0 3px rgba(197,168,128,0.1); }
+
+        /* Grids */
+        .ce-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .ce-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+        /* Type Chips */
+        .ce-type-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .ce-type-chip {
+          padding: 9px 16px;
+          border-radius: 8px;
+          font-size: 11px; font-weight: 700;
+          border: 1.5px solid #e2e8f0;
+          background: #fff;
+          color: #64748b;
+          cursor: pointer;
+          transition: all 0.2s;
+          text-transform: uppercase;
+          letter-spacing: 0.02em;
+        }
+        .ce-type-chip:hover { border-color: #c5a880; color: #0f172a; }
+        .ce-type-chip.selected { background: #0f172a; border-color: #0f172a; color: #c5a880; }
+        .ce-type-chip.other { border-style: dashed; }
+        .ce-type-chip.other.selected { background: #c5a880; border-color: #c5a880; color: #0f172a; border-style: solid; }
+
+        /* Access Chips */
+        .ce-access-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+        .ce-access-chip {
+          padding: 9px 16px;
+          border-radius: 8px;
+          font-size: 11px; font-weight: 700;
+          border: 1.5px solid #e2e8f0;
+          background: #fff;
+          color: #64748b;
+          cursor: pointer;
+          transition: all 0.2s;
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+        }
+        .ce-access-chip:hover { border-color: #c5a880; color: #0f172a; }
+        .ce-access-chip.selected { background: #c5a880; border-color: #c5a880; color: #0f172a; }
+
+        /* Password box */
+        .ce-pw-box {
+          margin-top: 12px;
+          padding: 14px;
+          background: #fffbf5;
+          border: 1px solid #f0e6d6;
+          border-radius: 10px;
+        }
+        .ce-pin-input { text-align: center; letter-spacing: 0.8em; font-weight: 900; font-size: 18px; }
+
+        /* Custom type input */
+        .ce-custom-type {
+          margin-top: 10px;
+          padding: 12px 14px;
+          background: #fafafa;
+          border: 1px solid #f1f5f9;
+          border-radius: 10px;
+        }
+
+        /* Day Card */
+        .ce-day-card {
+          background: #fafafa;
+          border: 1px solid #f1f5f9;
+          border-radius: 12px;
+          padding: 16px;
+          margin-bottom: 12px;
+        }
+        .ce-day-title { font-size: 12px; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
+
+        /* Cover Upload */
+        .ce-cover-area {
+          border: 2px dashed #e2e8f0;
+          border-radius: 14px;
+          cursor: pointer;
+          transition: all 0.3s;
+          position: relative;
+          overflow: hidden;
+          background: #fafafa;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          min-height: 180px;
+        }
+        .ce-cover-area:hover { border-color: #c5a880; background: #fdf9f4; }
+        .ce-cover-area.has-img { border-style: solid; padding: 0; min-height: auto; }
+        .ce-cover-area.has-img:hover { border-color: #c5a880; }
+        .ce-cover-area .ce-cover-img {
+          display: block;
+          width: 100%;
+          height: auto;
+          max-height: 400px;
+          object-fit: contain;
+          background: #f1f1f1;
+        }
+        .ce-cover-hover {
+          position: absolute;
+          inset: 0;
+          background: rgba(0,0,0,0.45);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          opacity: 0;
+          transition: opacity 0.3s;
+        }
+        .ce-cover-area:hover .ce-cover-hover { opacity: 1; }
+        .ce-upload-icon-box {
+          width: 44px; height: 44px;
+          border-radius: 50%;
+          background: rgba(197,168,128,0.15);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #c5a880;
+          margin-bottom: 6px;
+        }
+        .ce-upload-text { font-size: 13px; font-weight: 600; color: #64748b; }
+        .ce-upload-hint { font-size: 10px; color: #94a3b8; font-weight: 500; }
+
+        /* Toggle */
+        .ce-toggle-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 16px;
+          background: #fafafa;
+          border: 1px solid #f1f5f9;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.2s;
+          margin-bottom: 14px;
+        }
+        .ce-toggle-row:hover { border-color: #e2e8f0; background: #f8f7f4; }
+        .ce-toggle-left { display: flex; align-items: center; gap: 10px; }
+        .ce-toggle-badge {
+          width: 26px; height: 26px;
+          border-radius: 7px;
+          background: #e2e8f0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 11px; font-weight: 800; color: #64748b;
+        }
+        .ce-toggle-txt { font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; }
+        .ce-sw {
+          position: relative;
+          width: 38px; height: 20px;
+          background: #cbd5e1;
+          border-radius: 20px;
+          cursor: pointer;
+          transition: background 0.2s;
+          flex-shrink: 0;
+        }
+        .ce-sw[data-on="true"] { background: #c5a880; }
+        .ce-sw::after {
+          content: '';
+          position: absolute;
+          top: 2px; left: 2px;
+          width: 16px; height: 16px;
+          background: #fff;
           border-radius: 50%;
           transition: transform 0.2s;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
-        .toggle-switch[data-active="true"]::after {
-          transform: translateX(16px);
+        .ce-sw[data-on="true"]::after { transform: translateX(18px); }
+
+        /* Watermark Panel */
+        .ce-wm-panel {
+          background: #fafafa;
+          border: 1px solid #f1f5f9;
+          border-radius: 12px;
+          padding: 18px;
+          margin-bottom: 14px;
+        }
+        .ce-wm-upload { display: flex; align-items: center; gap: 12px; }
+        .ce-wm-thumb {
+          width: 50px; height: 50px;
+          border-radius: 8px;
+          border: 1.5px dashed #e2e8f0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #fff;
+          flex-shrink: 0;
+          overflow: hidden;
+        }
+        .ce-wm-thumb img { max-width: 36px; max-height: 36px; object-fit: contain; }
+        .ce-wm-btn {
+          display: inline-block;
+          padding: 7px 14px;
+          font-size: 11px; font-weight: 700;
+          color: #c5a880;
+          border: 1.5px solid #e2e8f0;
+          border-radius: 8px;
+          background: #fff;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .ce-wm-btn:hover { border-color: #c5a880; background: #fdf9f4; }
+
+        /* Slider */
+        .ce-slider {
+          -webkit-appearance: none;
+          width: 100%;
+          height: 5px;
+          border-radius: 3px;
+          background: linear-gradient(to right, #c5a880 var(--val, 50%), #e2e8f0 var(--val, 50%));
+          outline: none;
+          margin-top: 6px;
+        }
+        .ce-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          width: 14px; height: 14px;
+          border-radius: 50%;
+          background: #c5a880;
+          cursor: pointer;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+        }
+
+        /* Preview */
+        .ce-preview-box {
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          overflow: hidden;
+          margin-top: 14px;
+        }
+        .ce-preview-hdr {
+          background: #f1f5f9;
+          padding: 7px 14px;
+          font-size: 9px; font-weight: 800;
+          color: #64748b;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+        .ce-preview-body {
+          position: relative;
+          width: 100%;
+          aspect-ratio: 3/2;
+          background: #e2e8f0;
+          overflow: hidden;
+        }
+        .ce-preview-body > img:first-child { width: 100%; height: 100%; object-fit: cover; }
+
+        /* Buttons */
+        .ce-btn-row { display: flex; gap: 10px; margin-top: 24px; }
+        .ce-btn {
+          flex: 1;
+          padding: 13px 18px;
+          font-size: 12px; font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          border: none;
+          border-radius: 10px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          transition: all 0.25s;
+        }
+        .ce-btn-go { background: #c5a880; color: #0f172a; }
+        .ce-btn-go:hover { background: #0f172a; color: #c5a880; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(15,23,42,0.12); }
+        .ce-btn-go:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+        .ce-btn-go:disabled:hover { background: #c5a880; color: #0f172a; }
+        .ce-btn-bk {
+          background: transparent;
+          color: #64748b;
+          border: 1.5px solid #e2e8f0;
+          flex: 0 0 auto;
+          padding: 13px 16px;
+        }
+        .ce-btn-bk:hover { background: #f8f7f4; color: #0f172a; border-color: #c5a880; }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+          .ce-header { padding: 20px 18px 0; }
+          .ce-tabs { padding: 0 18px; }
+          .ce-tab { font-size: 9px; margin-right: 12px; }
+          .ce-body { padding: 18px 18px 24px; }
+          .ce-row-2, .ce-row-3 { grid-template-columns: 1fr; }
+          .ce-btn-row { flex-direction: column-reverse; }
+          .ce-btn-bk { flex: 1; }
         }
       `}} />
-      
-      <div className="max-w-3xl bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm">
-        <div className="flex items-center gap-3 mb-2">
-          <Plus className="text-slate-500 h-6 w-6" />
-          <h1 className="text-3xl font-bold text-slate-900">Create New Event Gallery</h1>
-        </div>
-        <p className="text-slate-500 text-sm font-medium mb-8">Setup a new QR-based photo retrieval gallery for your clients.</p>
 
-        <form onSubmit={async (e) => {
-          e.preventDefault();
-          if (!eventName) {
-            toast.error('Event name is required');
-            return;
-          }
-          try {
-            setLoading(true);
-            await apiClient.post('/event', {
-              name: eventName,
-              clientName,
-              clientMobile,
-              clientEmail,
-              date: eventDate || new Date().toISOString(),
-              type: eventType,
-              location: eventLocation,
-              time: eventTime,
-              accessType,
-              password,
-              isMultiDay: totalDays > 1,
-              totalDays,
-              days: totalDays > 1 ? eventDays : [],
-              coverImageUrl: coverImage,
-              addToPortfolio,
-              watermark: {
-                isActive: customWatermark,
-                type: watermarkType,
-                text: watermarkText,
-                logoUrl: watermarkLogoUrl,
-                position: watermarkPosition,
-                width: watermarkWidth,
-                height: watermarkHeight,
-                opacity: watermarkOpacity / 100,
-              }
-            });
-            
-            if (context && context.customers) {
-              const existingCust = context.customers.find((c: any) => c.phone === clientMobile || c.email === clientEmail);
-              if (!existingCust) {
-                context.setCustomers([{
-                  name: clientName,
-                  email: clientEmail,
-                  phone: clientMobile,
-                  events: 1,
-                  status: 'Active'
-                }, ...context.customers]);
-              }
-            }
-
-            router.push('/dashboard/events');
-          } catch (error: any) {
-            console.error('Failed to create event', error);
-            toast.error(error.response?.data?.error || 'Failed to create event. Please try again.');
-          } finally {
-            setLoading(false);
-          }
-        }} className="space-y-6">
-          <div>
-            <label className="form-label">Event Name</label>
-            <input 
-              type="text" 
-              className="form-input" 
-               
-              value={eventName}
-              onChange={(e) => setEventName(e.target.value)}
-              required
-            />
-          </div>
-          
-          <div>
-            <label className="form-label">Client Name</label>
-            <input 
-              type="text" 
-              className="form-input" 
-              value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
-              required
-            />
+      <div className="ce-wrapper">
+        <div className="ce-card">
+          {/* Header */}
+          <div className="ce-header">
+            <h1 className="ce-title">Create New Event</h1>
+            <p className="ce-subtitle">Setup a new QR-based photo gallery for your clients</p>
           </div>
 
-          <div>
-            <label className="form-label">Client Mobile</label>
-            <input 
-              type="text" 
-              className="form-input" 
-              value={clientMobile}
-              onChange={(e) => setClientMobile(e.target.value)}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="form-label">Client Email</label>
-            <input 
-              type="email" 
-              className="form-input" 
-              value={clientEmail}
-              onChange={(e) => setClientEmail(e.target.value)}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="form-label">Event Type</label>
-            <select 
-              className="form-input"
-              value={eventType}
-              onChange={(e) => setEventType(e.target.value)}
-            >
-              {EVENT_TYPES.map(type => (
-                <option key={type} value={type} className="bg-[#f8f7f4] text-slate-900">
-                  {type}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="form-label">Access Type</label>
-            <select 
-              className="form-input font-bold tracking-wide"
-              value={accessType}
-              onChange={(e) => setAccessType(e.target.value)}
-            >
-              <option value="PUBLIC">PUBLIC</option>
-              <option value="PASSWORD">PASSWORD PROTECTED</option>
-              <option value="OTP">OTP VERIFICATION</option>
-            </select>
-          </div>
-
-          {accessType === 'PASSWORD' && (
-            <div>
-              <label className="form-label text-rose-500">Event Password</label>
-              <input 
-                type="text" 
-                className="form-input border-rose-200 focus:border-rose-500 bg-rose-50/30" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Set a password for the gallery"
-                required
-              />
-            </div>
-          )}
-
-          {accessType === 'OTP' && (
-            <div>
-              <label className="form-label text-[#c5a880]">4-Digit Access PIN</label>
-              <input 
-                type="text" 
-                maxLength={4}
-                className="form-input border-[#e8e4dd] focus:border-[#c5a880] bg-[#faf9f6] text-center tracking-[1em] font-black text-xl" 
-                value={password}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, '');
-                  setPassword(val);
-                }}
-                placeholder="••••"
-                required
-              />
-            </div>
-          )}
-
-          <div>
-            <label className="form-label">Number of Event Days</label>
-            <input 
-              type="number" 
-              className="form-input"
-              min="1"
-              value={totalDays}
-              onChange={(e) => {
-                const num = parseInt(e.target.value) || 1;
-                setTotalDays(num);
-                if (num > 1) {
-                  const newDays = [...eventDays];
-                  while (newDays.length < num - 1) {
-                    newDays.push({ date: '', time: '', location: '' });
-                  }
-                  setEventDays(newDays.slice(0, num - 1));
-                } else {
-                  setEventDays([]);
-                }
-              }}
-              required
-            />
-          </div>
-
-          <div className="bg-white border border-slate-200 rounded-xl p-4 md:p-6 space-y-6">
-            <h3 className="text-sm font-bold text-slate-900 mb-2">{totalDays > 1 ? 'Day 1 Schedule' : 'Event Schedule'}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <label className="form-label">Date</label>
-                <CustomDatePicker
-                  type="date"
-                  value={eventDate}
-                  onChange={(val) => setEventDate(val)}
-                  required
-                />
-              </div>
-              <div>
-                <label className="form-label">Time</label>
-                <CustomDatePicker
-                  type="time"
-                  value={eventTime}
-                  onChange={(val) => setEventTime(val)}
-                  required
-                />
-              </div>
-              <div>
-                <label className="form-label">Location</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  value={eventLocation}
-                  onChange={(e) => setEventLocation(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-          </div>
-
-          {totalDays > 1 && eventDays.map((day, idx) => (
-            <div key={idx} className="bg-white border border-slate-200 rounded-xl p-4 md:p-6 space-y-6">
-              <h3 className="text-sm font-bold text-slate-900 mb-2">Day {idx + 2} Schedule</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <label className="form-label">Date</label>
-                  <CustomDatePicker
-                    type="date"
-                    value={day.date}
-                    onChange={(val) => {
-                      const newDays = [...eventDays];
-                      newDays[idx].date = val;
-                      setEventDays(newDays);
-                    }}
-                    required
-                  />
+          {/* Tabs */}
+          <div className="ce-tabs">
+            {stepLabels.map((label, i) => {
+              const step = i + 1;
+              const status = currentStep > step ? 'completed' : currentStep === step ? 'active' : 'upcoming';
+              return (
+                <div key={step} className={`ce-tab ${status}`}>
+                  <span className="ce-tab-num">
+                    {currentStep > step ? <Check style={{ width: 11, height: 11 }} /> : step}
+                  </span>
+                  {label}
                 </div>
-                <div>
-                  <label className="form-label">Time</label>
-                  <CustomDatePicker
-                    type="time"
-                    value={day.time}
-                    onChange={(val) => {
-                      const newDays = [...eventDays];
-                      newDays[idx].time = val;
-                      setEventDays(newDays);
-                    }}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Location</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    value={day.location}
-                    onChange={(e) => {
-                      const newDays = [...eventDays];
-                      newDays[idx].location = e.target.value;
-                      setEventDays(newDays);
-                    }}
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
+              );
+            })}
+          </div>
 
-          <div>
-            <label className="form-label">Cover Image</label>
-            <div className="flex items-center gap-4">
-              <div className="w-40 aspect-video rounded-xl border border-dashed border-slate-300 bg-slate-100 flex items-center justify-center shrink-0 overflow-hidden relative">
-                {coverImage ? (
-                  <img src={coverImage} alt="Cover" className="w-full h-full object-cover" />
-                ) : (
-                  <Camera className="h-6 w-6 text-slate-400" />
-                )}
-                {uploadingImage && (
-                  <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
-                    <Loader2 className="h-5 w-5 text-[#c5a880] animate-spin" />
+          {/* Body */}
+          <div className="ce-body">
+            <form onSubmit={handleSubmit}>
+
+              {/* ===== STEP 1: Client Info ===== */}
+              {currentStep === 1 && (
+                <div className={`ce-step ${direction === 'prev' ? 'reverse' : ''}`} key="s1">
+                  <div className="ce-field">
+                    <label className="ce-label">Event Name <span className="ce-req">*</span></label>
+                    <input type="text" className="ce-input" value={eventName} onChange={(e) => setEventName(e.target.value)} required />
                   </div>
-                )}
-              </div>
-              <div className="flex-1 relative">
-                <input 
-                  type="file" 
-                  accept="image/*"
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    e.target.value = ''; 
+                  <div className="ce-field">
+                    <label className="ce-label">Client Name <span className="ce-req">*</span></label>
+                    <input type="text" className="ce-input" value={clientName} onChange={(e) => setClientName(e.target.value)} required />
+                  </div>
+                  <div className="ce-field">
+                    <label className="ce-label">Client Mobile <span className="ce-req">*</span></label>
+                    <input type="tel" className="ce-input" value={clientMobile} onChange={(e) => setClientMobile(e.target.value)} required />
+                  </div>
+                  <div className="ce-field">
+                    <label className="ce-label">Client Email <span className="ce-req">*</span></label>
+                    <input type="email" className="ce-input" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} required />
+                  </div>
+                  <div className="ce-btn-row">
+                    <button type="button" className="ce-btn ce-btn-go" disabled={!canProceedStep1()} onClick={handleNext}>
+                      Continue <ArrowRight style={{ width: 15, height: 15 }} />
+                    </button>
+                  </div>
+                </div>
+              )}
 
-                    setImageName(file.name);
-                    setUploadingImage(true);
+              {/* ===== STEP 2: Event Type & Access ===== */}
+              {currentStep === 2 && (
+                <div className={`ce-step ${direction === 'prev' ? 'reverse' : ''}`} key="s2">
+                  <div className="ce-field">
+                    <label className="ce-label">Event Type <span className="ce-req">*</span></label>
+                    <div className="ce-type-grid">
+                      {EVENT_TYPES.map(type => (
+                        <div
+                          key={type}
+                          className={`ce-type-chip ${!showCustomType && eventType === type ? 'selected' : ''}`}
+                          onClick={() => { setEventType(type); setShowCustomType(false); }}
+                        >
+                          {type}
+                        </div>
+                      ))}
+                      <div
+                        className={`ce-type-chip other ${showCustomType ? 'selected' : ''}`}
+                        onClick={() => { setShowCustomType(true); setEventType(''); }}
+                      >
+                        + Other
+                      </div>
+                    </div>
+                    {showCustomType && (
+                      <div className="ce-custom-type">
+                        <label className="ce-label">Custom Event Type <span className="ce-req">*</span></label>
+                        <input
+                          type="text"
+                          className="ce-input"
+                          value={customEventType}
+                          onChange={(e) => setCustomEventType(e.target.value)}
+                          autoFocus
+                          required
+                        />
+                      </div>
+                    )}
+                  </div>
 
-                    try {
-                      const reader = new FileReader();
-                      reader.onload = (e) => setCoverImage(e.target?.result as string);
-                      reader.readAsDataURL(file);
+                  <div className="ce-field" style={{ marginTop: 20 }}>
+                    <label className="ce-label">Access Type <span className="ce-req">*</span></label>
+                    <div className="ce-access-chips">
+                      {[
+                        { value: 'PUBLIC', label: 'Public' },
+                        { value: 'PASSWORD', label: 'Password Protected' },
+                        { value: 'OTP', label: 'OTP Verification' },
+                      ].map(opt => (
+                        <div
+                          key={opt.value}
+                          className={`ce-access-chip ${accessType === opt.value ? 'selected' : ''}`}
+                          onClick={() => { setAccessType(opt.value); setPassword(''); }}
+                        >
+                          {opt.label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
-                      const formData = new FormData();
-                      formData.append('file', file);
-                      
-                      const res = await apiClient.post('/media/upload-asset', formData, {
-                        headers: {
-                          'Content-Type': 'multipart/form-data',
-                        }
-                      });
-                      
-                      if (res.data && res.data.url) {
-                        setCoverImage(res.data.url);
-                      }
-                    } catch (err) {
-                      console.error('Failed to upload image', err);
-                    } finally {
-                      setUploadingImage(false);
-                    }
-                  }}
-                />
-                <div className={`w-full bg-white border border-slate-200 text-sm font-bold rounded-xl py-4 text-center transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-2 ${uploadingImage ? 'text-slate-400' : 'text-slate-600 hover:bg-[#f8f7f4] text-slate-900'}`}>
-                  {uploadingImage ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Uploading...
-                    </>
-                  ) : (
-                    imageName || 'Choose File'
+                  {accessType === 'PASSWORD' && (
+                    <div className="ce-pw-box">
+                      <label className="ce-label" style={{ color: '#c5a880' }}>Event Password <span className="ce-req">*</span></label>
+                      <input type="text" className="ce-input" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Set a password for the gallery" required />
+                    </div>
                   )}
-                </div>
-              </div>
-            </div>
-          </div>
+                  {accessType === 'OTP' && (
+                    <div className="ce-pw-box">
+                      <label className="ce-label" style={{ color: '#c5a880' }}>4-Digit Access PIN <span className="ce-req">*</span></label>
+                      <input type="text" maxLength={4} className="ce-input ce-pin-input" value={password} onChange={(e) => setPassword(e.target.value.replace(/\D/g, ''))} placeholder="••••" required />
+                    </div>
+                  )}
 
-          <div className="border-t border-slate-200 pt-6 mt-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-400 font-bold">W</span>
-                <span className="text-xs font-bold text-slate-600 uppercase">Custom Event Watermark</span>
-              </div>
-              <div 
-                className="toggle-switch" 
-                data-active={customWatermark}
-                onClick={() => setCustomWatermark(!customWatermark)}
-              />
-            </div>
-            
-            {customWatermark && (
-              <div className="bg-white border border-slate-200 rounded-xl p-4 md:p-6 space-y-6">
-                <div>
-                  <label className="form-label">Watermark Type</label>
-                  <select 
-                    className="form-input font-bold tracking-wide"
-                    value={watermarkType}
-                    onChange={(e) => setWatermarkType(e.target.value)}
-                  >
-                    <option value="LOGO">LOGO WATERMARK</option>
-                    <option value="TEXT">TEXT WATERMARK</option>
-                  </select>
+                  <div className="ce-btn-row">
+                    <button type="button" className="ce-btn ce-btn-bk" onClick={handleBack}><ArrowLeft style={{ width: 15, height: 15 }} /></button>
+                    <button type="button" className="ce-btn ce-btn-go" disabled={!canProceedStep2()} onClick={handleNext}>
+                      Continue <ArrowRight style={{ width: 15, height: 15 }} />
+                    </button>
+                  </div>
                 </div>
+              )}
 
-                {watermarkType === 'TEXT' ? (
-                  <div>
-                    <label className="form-label">Watermark Text</label>
-                    <input 
-                      type="text" 
-                      className="form-input" 
-                      
-                      value={watermarkText}
-                      onChange={(e) => setWatermarkText(e.target.value)}
+              {/* ===== STEP 3: Schedule ===== */}
+              {currentStep === 3 && (
+                <div className={`ce-step ${direction === 'prev' ? 'reverse' : ''}`} key="s3">
+                  <div className="ce-field">
+                    <label className="ce-label">Number of Event Days <span className="ce-req">*</span></label>
+                    <input
+                      type="number" className="ce-input" min="1"
+                      value={totalDays}
+                      onChange={(e) => {
+                        const num = parseInt(e.target.value) || 1;
+                        setTotalDays(num);
+                        if (num > 1) {
+                          const nd = [...eventDays];
+                          while (nd.length < num - 1) nd.push({ date: '', time: '', location: '' });
+                          setEventDays(nd.slice(0, num - 1));
+                        } else {
+                          setEventDays([]);
+                        }
+                      }}
+                      required
                     />
                   </div>
-                ) : (
-                  <div>
-                    <label className="form-label">Watermark Logo Image</label>
-                    <div className="flex gap-4 items-center mt-1">
-                      <div className="w-[60px] h-[60px] rounded border border-dashed border-slate-300 flex items-center justify-center shrink-0 bg-[#f8f7f4] text-slate-900">
-                          {uploadingWatermark ? <Loader2 className="h-5 w-5 animate-spin text-[#c5a880]" /> : (watermarkLogoUrl ? <img src={watermarkLogoUrl} className="max-w-[40px] max-h-[40px] object-contain" /> : <Camera className="h-5 w-5 text-slate-400" />)}
+
+                  <div className="ce-day-card">
+                    <div className="ce-day-title">{totalDays > 1 ? 'Day 1 Schedule' : 'Event Schedule'}</div>
+                    <div className="ce-row-2">
+                      <div className="ce-field">
+                        <label className="ce-label">Date <span className="ce-req">*</span></label>
+                        <CustomDatePicker type="date" value={eventDate} onChange={(v) => setEventDate(v)} required />
                       </div>
-                      <div className="flex-1 flex flex-col">
-                        <label className="w-full text-center border border-slate-200 text-[#b69970] font-bold text-[13px] py-2 rounded-lg bg-white cursor-pointer hover:bg-[#f8f7f4] text-slate-900 transition-colors shadow-sm">
-                            Choose File
-                            <input 
-                              type="file" 
-                              accept="image/png,image/jpeg" 
-                              className="hidden" 
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (!file) return;
-                                e.target.value = ''; 
-    
-                                setWatermarkLogoName(file.name);
-                                setUploadingWatermark(true);
-    
-                                try {
-                                  const reader = new FileReader();
-                                  reader.onload = (e) => setWatermarkLogoUrl(e.target?.result as string);
-                                  reader.readAsDataURL(file);
-    
-                                  const formData = new FormData();
-                                  formData.append('file', file);
-                                  
-                                  const res = await apiClient.post('/media/upload-asset', formData, {
-                                    headers: {
-                                      'Content-Type': 'multipart/form-data',
-                                    }
-                                  });
-                                  
-                                  if (res.data && res.data.url) {
-                                    setWatermarkLogoUrl(res.data.url);
-                                  }
-                                } catch (err) {
-                                  console.error('Failed to upload logo', err);
-                                } finally {
-                                  setUploadingWatermark(false);
-                                }
-                              }} 
-                            />
-                        </label>
-                        <p className="text-[10px] text-slate-600 font-bold mt-2">PNG with transparent background recommended.</p>
+                      <div className="ce-field">
+                        <label className="ce-label">Time <span className="ce-req">*</span></label>
+                        <CustomDatePicker type="time" value={eventTime} onChange={(v) => setEventTime(v)} required />
                       </div>
                     </div>
+                    <div className="ce-field" style={{ marginTop: '4px' }}>
+                      <label className="ce-label">Location <span className="ce-req">*</span></label>
+                      <input type="text" className="ce-input" value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} required />
+                    </div>
                   </div>
-                )}
 
-                <style dangerouslySetInnerHTML={{__html: `
-                  .custom-slider {
-                    -webkit-appearance: none;
-                    height: 6px;
-                    border-radius: 3px;
-                    background: linear-gradient(to right, #c5a880 var(--val, 50%), #475569 var(--val, 50%));
-                    outline: none;
-                  }
-                  .custom-slider::-webkit-slider-thumb {
-                    -webkit-appearance: none;
-                    appearance: none;
-                    width: 14px;
-                    height: 14px;
-                    border-radius: 50%;
-                    background: #c5a880;
-                    cursor: pointer;
-                  }
-                `}} />
+                  {totalDays > 1 && eventDays.map((day, idx) => (
+                    <div key={idx} className="ce-day-card">
+                      <div className="ce-day-title">Day {idx + 2} Schedule</div>
+                      <div className="ce-row-2">
+                        <div className="ce-field">
+                          <label className="ce-label">Date <span className="ce-req">*</span></label>
+                          <CustomDatePicker type="date" value={day.date} onChange={(v) => { const d = [...eventDays]; d[idx].date = v; setEventDays(d); }} required />
+                        </div>
+                        <div className="ce-field">
+                          <label className="ce-label">Time <span className="ce-req">*</span></label>
+                          <CustomDatePicker type="time" value={day.time} onChange={(v) => { const d = [...eventDays]; d[idx].time = v; setEventDays(d); }} required />
+                        </div>
+                      </div>
+                      <div className="ce-field" style={{ marginTop: '4px' }}>
+                        <label className="ce-label">Location <span className="ce-req">*</span></label>
+                        <input type="text" className="ce-input" value={day.location} onChange={(e) => { const d = [...eventDays]; d[idx].location = e.target.value; setEventDays(d); }} required />
+                      </div>
+                    </div>
+                  ))}
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="col-span-1">
-                    <label className="form-label">Watermark Position</label>
-                    <select 
-                      className="form-input font-bold tracking-wide mt-1"
-                      value={watermarkPosition}
-                      onChange={e => setWatermarkPosition(e.target.value)}
-                    >
-                      <option value="BOTTOM_RIGHT">BOTTOM RIGHT</option>
-                      <option value="BOTTOM_LEFT">BOTTOM LEFT</option>
-                      <option value="TOP_RIGHT">TOP RIGHT</option>
-                      <option value="TOP_LEFT">TOP LEFT</option>
-                      <option value="CENTER">CENTER</option>
-                    </select>
-                  </div>
-                  <div className="col-span-1 flex flex-col justify-center">
-                    <label className="form-label">Size ({watermarkWidth}%)</label>
-                    <input 
-                      type="range" 
-                      min="5" max="100" 
-                      className="w-full custom-slider mt-2"
-                      value={watermarkWidth}
-                      onChange={e => setWatermarkWidth(Number(e.target.value))}
-                      style={{'--val': `${watermarkWidth}%`} as any}
-                    />
-                  </div>
-                  <div className="col-span-1 flex flex-col justify-center">
-                    <label className="form-label">Opacity ({watermarkOpacity}%)</label>
-                    <input 
-                      type="range" 
-                      min="10" max="100" 
-                      className="w-full custom-slider mt-2"
-                      value={watermarkOpacity}
-                      onChange={e => setWatermarkOpacity(Number(e.target.value))}
-                      style={{'--val': `${watermarkOpacity}%`} as any}
-                    />
+                  <div className="ce-btn-row">
+                    <button type="button" className="ce-btn ce-btn-bk" onClick={handleBack}><ArrowLeft style={{ width: 15, height: 15 }} /></button>
+                    <button type="button" className="ce-btn ce-btn-go" disabled={!canProceedStep3()} onClick={handleNext}>
+                      Continue <ArrowRight style={{ width: 15, height: 15 }} />
+                    </button>
                   </div>
                 </div>
+              )}
 
-                <div className="mt-8 border border-slate-200 rounded-xl overflow-hidden bg-white">
-                    <div className="bg-[#e8ebf0] text-[#64748b] text-[11px] font-bold px-4 py-2.5">
-                      LIVE PREVIEW
-                    </div>
-                    <div className="relative w-full aspect-[3/2] bg-slate-200 flex items-center justify-center">
-                      <img src="/wedding.jpg" className="absolute inset-0 w-full h-full object-cover" alt="Preview Background" />
-                      {watermarkType === 'LOGO' && watermarkLogoUrl && (
-                          <img 
-                            src={watermarkLogoUrl} 
-                            className="absolute pointer-events-none object-contain"
-                            style={{
-                              opacity: watermarkOpacity / 100,
-                              width: `${watermarkWidth}%`,
-                              ...(() => {
-                                switch (watermarkPosition) {
-                                  case 'TOP_LEFT': return { top: '4%', left: '4%' };
-                                  case 'TOP_RIGHT': return { top: '4%', right: '4%' };
-                                  case 'BOTTOM_LEFT': return { bottom: '4%', left: '4%' };
-                                  case 'CENTER': return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
-                                  case 'BOTTOM_RIGHT': default: return { bottom: '4%', right: '4%' };
-                                }
-                              })()
-                            }}
-                          />
-                      )}
-                      {watermarkType === 'TEXT' && watermarkText && (
-                          <div 
-                            className="absolute pointer-events-none text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] font-bold whitespace-nowrap"
-                            style={{
-                              opacity: watermarkOpacity / 100,
-                              fontSize: `${watermarkWidth * 0.3}px`, 
-                              ...(() => {
-                                switch (watermarkPosition) {
-                                  case 'TOP_LEFT': return { top: '4%', left: '4%' };
-                                  case 'TOP_RIGHT': return { top: '4%', right: '4%' };
-                                  case 'BOTTOM_LEFT': return { bottom: '4%', left: '4%' };
-                                  case 'CENTER': return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
-                                  case 'BOTTOM_RIGHT': default: return { bottom: '4%', right: '4%' };
-                                }
-                              })()
-                            }}
-                          >
-                            {watermarkText}
+              {/* ===== STEP 4: Cover Image ===== */}
+              {currentStep === 4 && (
+                <div className={`ce-step ${direction === 'prev' ? 'reverse' : ''}`} key="s4">
+                  <div className="ce-field">
+                    <label className="ce-label">Cover Image <span className="ce-req">*</span></label>
+                    <label className={`ce-cover-area ${coverImage ? 'has-img' : ''}`}>
+                      {coverImage ? (
+                        <>
+                          <img src={coverImage} alt="Cover" className="ce-cover-img" />
+                          <div className="ce-cover-hover">
+                            {uploadingImage ? (
+                              <Loader2 style={{ width: 24, height: 24, color: '#fff', animation: 'spin 1s linear infinite' }} />
+                            ) : (
+                              <>
+                                <Camera style={{ width: 22, height: 22, color: '#fff' }} />
+                                <span style={{ color: '#fff', fontSize: 12, fontWeight: 600 }}>Change Image</span>
+                              </>
+                            )}
                           </div>
+                        </>
+                      ) : (
+                        <>
+                          {uploadingImage ? (
+                            <Loader2 style={{ width: 28, height: 28, color: '#c5a880', animation: 'spin 1s linear infinite' }} />
+                          ) : (
+                            <>
+                              <div className="ce-upload-icon-box"><Upload style={{ width: 20, height: 20 }} /></div>
+                              <span className="ce-upload-text">Click to upload cover image</span>
+                              <span className="ce-upload-hint">JPG, PNG — required</span>
+                            </>
+                          )}
+                        </>
                       )}
-                    </div>
+                      <input
+                        type="file" accept="image/*" style={{ display: 'none' }}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          e.target.value = '';
+                          setImageName(file.name);
+                          setUploadingImage(true);
+                          try {
+                            const reader = new FileReader();
+                            reader.onload = (ev) => setCoverImage(ev.target?.result as string);
+                            reader.readAsDataURL(file);
+                            const fd = new FormData();
+                            fd.append('file', file);
+                            const res = await apiClient.post('/media/upload-asset', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                            if (res.data?.url) setCoverImage(res.data.url);
+                          } catch (err) {
+                            console.error('Upload failed', err);
+                            toast.error('Failed to upload image');
+                          } finally {
+                            setUploadingImage(false);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <div className="ce-btn-row">
+                    <button type="button" className="ce-btn ce-btn-bk" onClick={handleBack}><ArrowLeft style={{ width: 15, height: 15 }} /></button>
+                    <button type="button" className="ce-btn ce-btn-go" disabled={!canProceedStep4()} onClick={handleNext}>
+                      Continue <ArrowRight style={{ width: 15, height: 15 }} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
 
-          <div className="flex items-center justify-between border-t border-slate-200 pt-6 pb-6 mb-6">
-            <div className="flex items-center gap-2">
-              <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-400 font-bold">P</span>
-              <span className="text-xs font-bold text-slate-600 uppercase">Add to Portfolio</span>
-            </div>
-            <div 
-              className="toggle-switch" 
-              data-active={addToPortfolio}
-              onClick={() => setAddToPortfolio(!addToPortfolio)}
-            />
-          </div>
+              {/* ===== STEP 5: Watermark & Portfolio ===== */}
+              {currentStep === 5 && (
+                <div className={`ce-step ${direction === 'prev' ? 'reverse' : ''}`} key="s5">
+                  {/* Watermark Toggle */}
+                  <div className="ce-toggle-row" onClick={() => setCustomWatermark(!customWatermark)}>
+                    <div className="ce-toggle-left">
+                      <div className="ce-toggle-badge">W</div>
+                      <span className="ce-toggle-txt">Custom Event Watermark</span>
+                    </div>
+                    <div className="ce-sw" data-on={customWatermark} />
+                  </div>
 
-          <button type="submit" disabled={loading} className="flex justify-center items-center gap-2 w-full bg-[#c5a880] hover:bg-white text-[#09090b] shadow-md border border-transparent hover:border-[#c5a880] font-bold py-4 rounded-xl text-sm transition-colors mt-8 disabled:opacity-50">
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Create Event Gallery'}
-          </button>
-        </form>
+                  {customWatermark && (
+                    <div className="ce-wm-panel">
+                      <div className="ce-field">
+                        <label className="ce-label">Watermark Type</label>
+                        <div className="ce-access-chips">
+                          <div className={`ce-access-chip ${watermarkType === 'LOGO' ? 'selected' : ''}`} onClick={() => setWatermarkType('LOGO')}>Logo</div>
+                          <div className={`ce-access-chip ${watermarkType === 'TEXT' ? 'selected' : ''}`} onClick={() => setWatermarkType('TEXT')}>Text</div>
+                        </div>
+                      </div>
+
+                      {watermarkType === 'TEXT' ? (
+                        <div className="ce-field">
+                          <label className="ce-label">Watermark Text</label>
+                          <input type="text" className="ce-input" value={watermarkText} onChange={(e) => setWatermarkText(e.target.value)} />
+                        </div>
+                      ) : (
+                        <div className="ce-field">
+                          <label className="ce-label">Watermark Logo</label>
+                          <div className="ce-wm-upload">
+                            <div className="ce-wm-thumb">
+                              {uploadingWatermark ? (
+                                <Loader2 style={{ width: 18, height: 18, color: '#c5a880', animation: 'spin 1s linear infinite' }} />
+                              ) : watermarkLogoUrl ? (
+                                <img src={watermarkLogoUrl} alt="WM" />
+                              ) : (
+                                <Camera style={{ width: 18, height: 18, color: '#94a3b8' }} />
+                              )}
+                            </div>
+                            <div>
+                              <label className="ce-wm-btn">
+                                Choose File
+                                <input type="file" accept="image/png,image/jpeg" style={{ display: 'none' }}
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    e.target.value = '';
+                                    setWatermarkLogoName(file.name);
+                                    setUploadingWatermark(true);
+                                    try {
+                                      const reader = new FileReader();
+                                      reader.onload = (ev) => setWatermarkLogoUrl(ev.target?.result as string);
+                                      reader.readAsDataURL(file);
+                                      const fd = new FormData();
+                                      fd.append('file', file);
+                                      const res = await apiClient.post('/media/upload-asset', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                                      if (res.data?.url) setWatermarkLogoUrl(res.data.url);
+                                    } catch (err) {
+                                      console.error('Upload failed', err);
+                                    } finally {
+                                      setUploadingWatermark(false);
+                                    }
+                                  }}
+                                />
+                              </label>
+                              <p style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, marginTop: 5 }}>PNG with transparent background</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="ce-row-3" style={{ marginTop: 2 }}>
+                        <div className="ce-field">
+                          <label className="ce-label">Position</label>
+                          <select className="ce-select" value={watermarkPosition} onChange={e => setWatermarkPosition(e.target.value)}>
+                            <option value="BOTTOM_RIGHT">Bottom Right</option>
+                            <option value="BOTTOM_LEFT">Bottom Left</option>
+                            <option value="TOP_RIGHT">Top Right</option>
+                            <option value="TOP_LEFT">Top Left</option>
+                            <option value="CENTER">Center</option>
+                          </select>
+                        </div>
+                        <div className="ce-field">
+                          <label className="ce-label">Size ({watermarkWidth}%)</label>
+                          <input type="range" min="5" max="50" className="ce-slider" value={watermarkWidth} onChange={e => setWatermarkWidth(Number(e.target.value))} style={{'--val': `${(watermarkWidth / 50) * 100}%`} as any} />
+                        </div>
+                        <div className="ce-field">
+                          <label className="ce-label">Opacity ({watermarkOpacity}%)</label>
+                          <input type="range" min="10" max="100" className="ce-slider" value={watermarkOpacity} onChange={e => setWatermarkOpacity(Number(e.target.value))} style={{'--val': `${watermarkOpacity}%`} as any} />
+                        </div>
+                      </div>
+
+                      {/* Live Preview */}
+                      <div className="ce-preview-box">
+                        <div className="ce-preview-hdr">Live Preview</div>
+                        <div className="ce-preview-body">
+                          <img src="/wedding.jpg" alt="Preview" />
+                          {watermarkType === 'LOGO' && watermarkLogoUrl && (
+                            <img
+                              src={watermarkLogoUrl}
+                              style={{
+                                position: 'absolute',
+                                pointerEvents: 'none',
+                                objectFit: 'contain',
+                                opacity: watermarkOpacity / 100,
+                                width: `${watermarkWidth}%`,
+                                ...(() => {
+                                  switch (watermarkPosition) {
+                                    case 'TOP_LEFT': return { top: '3%', left: '3%' };
+                                    case 'TOP_RIGHT': return { top: '3%', right: '3%' };
+                                    case 'BOTTOM_LEFT': return { bottom: '3%', left: '3%' };
+                                    case 'CENTER': return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
+                                    case 'BOTTOM_RIGHT': default: return { bottom: '3%', right: '3%' };
+                                  }
+                                })()
+                              }}
+                              alt="watermark"
+                            />
+                          )}
+                          {watermarkType === 'TEXT' && watermarkText && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                pointerEvents: 'none',
+                                color: '#fff',
+                                fontWeight: 700,
+                                whiteSpace: 'nowrap',
+                                textShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                                opacity: watermarkOpacity / 100,
+                                fontSize: `${Math.max(10, watermarkWidth * 0.4)}px`,
+                                ...(() => {
+                                  switch (watermarkPosition) {
+                                    case 'TOP_LEFT': return { top: '3%', left: '3%' };
+                                    case 'TOP_RIGHT': return { top: '3%', right: '3%' };
+                                    case 'BOTTOM_LEFT': return { bottom: '3%', left: '3%' };
+                                    case 'CENTER': return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
+                                    case 'BOTTOM_RIGHT': default: return { bottom: '3%', right: '3%' };
+                                  }
+                                })()
+                              }}
+                            >
+                              {watermarkText}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Portfolio Toggle */}
+                  <div className="ce-toggle-row" onClick={() => setAddToPortfolio(!addToPortfolio)}>
+                    <div className="ce-toggle-left">
+                      <div className="ce-toggle-badge">P</div>
+                      <span className="ce-toggle-txt">Add to Portfolio</span>
+                    </div>
+                    <div className="ce-sw" data-on={addToPortfolio} />
+                  </div>
+
+                  {/* Submit */}
+                  <div className="ce-btn-row">
+                    <button type="button" className="ce-btn ce-btn-bk" onClick={handleBack}><ArrowLeft style={{ width: 15, height: 15 }} /></button>
+                    <button type="submit" disabled={loading} className="ce-btn ce-btn-go">
+                      {loading ? (
+                        <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} />
+                      ) : (
+                        <>Create Event <ArrowRight style={{ width: 15, height: 15 }} /></>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   );

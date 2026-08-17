@@ -11,6 +11,7 @@ import dashboardRoutes from './dashboardRoutes';
 import visitorRoutes from './visitorRoutes';
 import clientTicketRoutes from './clientTicketRoutes';
 import adminRoutes from './adminRoutes';
+import contactRoutes from './contactRoutes';
 
 const router = Router();
 
@@ -27,5 +28,6 @@ router.use('/analytics', analyticsRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/visitors', visitorRoutes);
 router.use('/client-tickets', clientTicketRoutes);
+router.use('/contact', contactRoutes);
 
 export default router;

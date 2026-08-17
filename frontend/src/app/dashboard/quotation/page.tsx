@@ -409,11 +409,11 @@ export default function QuotationPage() {
                 </div>
                 <div class="meta-block">
                   <h4>Date</h4>
-                  <p>${quoteDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                  <p>${quoteDate.toLocaleDateString('en-GB')}</p>
                 </div>
                 <div class="meta-block">
                   <h4>Valid Until</h4>
-                  <p>${validUntil.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                  <p>${validUntil.toLocaleDateString('en-GB')}</p>
                 </div>
               </div>
 
@@ -613,7 +613,7 @@ export default function QuotationPage() {
                   
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs text-slate-400 uppercase font-bold tracking-wider">Prospective Client <span className="text-rose-500">*</span></label>
-                    <input type="text" placeholder="e.g. Rahul & Neha" required value={newQuoteClient} onChange={(e) => setNewQuoteClient(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-base text-slate-900 focus:outline-none focus:border-[#c5a880] shadow-sm" />
+                    <input type="text" required value={newQuoteClient} onChange={(e) => setNewQuoteClient(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-base text-slate-900 focus:outline-none focus:border-[#c5a880] shadow-sm" />
                   </div>
                   
                   <hr className="border-slate-200 my-2" />
@@ -633,7 +633,6 @@ export default function QuotationPage() {
                               <input 
                                 type="text" 
                                 required 
-                                placeholder="e.g. Pre-Wedding Shoot" 
                                 value={item.name} 
                                 onChange={(e) => handleItemChange(index, 'name', e.target.value)}
                                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]" 
@@ -644,7 +643,6 @@ export default function QuotationPage() {
                               <input 
                                 type="number" 
                                 required 
-                                placeholder="Price" 
                                 min="0"
                                 value={item.price || ''} 
                                 onChange={(e) => handleItemChange(index, 'price', e.target.value)}
@@ -660,7 +658,6 @@ export default function QuotationPage() {
                           <div className="flex flex-col gap-1">
                             <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Notes (Optional)</label>
                             <textarea
-                              placeholder="e.g. Includes 2 locations, 100 edited photos..."
                               value={item.notes || ''}
                               onChange={(e) => handleItemChange(index, 'notes', e.target.value)}
                               rows={2}

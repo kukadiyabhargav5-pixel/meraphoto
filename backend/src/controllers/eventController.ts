@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import QRCode from 'qrcode';
-import { AuthRequest } from '../middlewares/auth';
+import { AuthRequest, isSuperAdmin } from '../middlewares/auth';
 import { Event, Studio, User, Media } from '../models';
 import Customer from '../models/Customer';
 import { sendAdminNotificationEmail, sendEventInviteEmail } from '../services/EmailService';
@@ -37,12 +37,14 @@ export const createEvent = async (req: AuthRequest, res: Response) => {
     const studio = await Studio.findOne({ ownerId: req.user._id });
     if (!studio) return res.status(404).json({ error: 'Studio not found' });
 
-    // Validate plan limit (Starter limit = 5, Pro = 20, Business = unlimited, etc.)
+    // Validate plan limit (Bypass for SUPER_ADMIN)
     const activeEventsCount = await Event.countDocuments({ studioId: studio._id });
-    if (studio.subscriptionPlan === 'BASIC' && activeEventsCount >= 15) {
-      return res.status(403).json({ error: 'Basic plan limit reached (Max 15 events). Please upgrade.' });
-    } else if (studio.subscriptionPlan === 'STANDARD' && activeEventsCount >= 50) {
-      return res.status(403).json({ error: 'Standard plan limit reached (Max 50 events). Please upgrade.' });
+    if (!isSuperAdmin(req.user)) {
+      if (studio.subscriptionPlan === 'BASIC' && activeEventsCount >= 15) {
+        return res.status(403).json({ error: 'Basic plan limit reached (Max 15 events). Please upgrade.' });
+      } else if (studio.subscriptionPlan === 'STANDARD' && activeEventsCount >= 50) {
+        return res.status(403).json({ error: 'Standard plan limit reached (Max 50 events). Please upgrade.' });
+      }
     }
 
     // Generate unique code slug
@@ -146,7 +148,13 @@ export const getMyEvents = async (req: AuthRequest, res: Response) => {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
     const studio = await Studio.findOne({ ownerId: req.user._id });
-    if (!studio) return res.status(404).json({ error: 'Studio not found' });
+    if (!studio) {
+      if (isSuperAdmin(req.user)) {
+        const events = await Event.find().sort({ date: -1 });
+        return res.json({ events });
+      }
+      return res.json({ events: [] });
+    }
 
     let query: any = { studioId: studio._id };
     if (req.user.role === 'TEAM_MEMBER') {
@@ -168,7 +176,7 @@ export const getEventByCode = async (req: Request, res: Response) => {
 
   try {
     const event = await Event.findOne({ code })
-      .populate('studioId', 'name logoUrl watermark customDomain subdomain');
+      .populate('studioId', 'name logoUrl watermark customDomain instagramUrl facebookUrl');
     
     if (!event) {
       return res.status(404).json({ error: 'Event gallery not found' });
@@ -282,7 +290,7 @@ export const updateEvent = async (req: AuthRequest, res: Response) => {
 
     // Validate that the request comes from the owner of the studio that owns the event
     const studio = await Studio.findOne({ ownerId: req.user._id });
-    if (!studio && req.user.role !== 'SUPER_ADMIN') {
+    if (!studio && !isSuperAdmin(req.user)) {
       if (req.user.role === 'TEAM_MEMBER') {
         const isAssigned = event.assignedTeamMembers.some(
           (tmId) => tmId.toString() === req.user?._id.toString()
@@ -475,7 +483,7 @@ export const updatePortfolioStatus = async (req: AuthRequest, res: Response) => 
 
     // Validate that the request comes from the owner of the studio that owns the event
     const studio = await Studio.findOne({ ownerId: req.user._id });
-    if (!studio && req.user.role !== 'SUPER_ADMIN') {
+    if (!studio && !isSuperAdmin(req.user)) {
       if (req.user.role === 'TEAM_MEMBER') {
         const isAssigned = event.assignedTeamMembers.some(
           (tmId) => tmId.toString() === req.user?._id.toString()

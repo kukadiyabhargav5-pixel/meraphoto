@@ -1,6 +1,67 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth';
-import { Studio, User } from '../models';
+import { Studio, User, Media } from '../models';
+
+export const PLAN_STORAGE_LIMITS: Record<string, { photos: number; videos: number; name: string }> = {
+  BASIC: { photos: 50000, videos: 10, name: 'Basic' },
+  STANDARD: { photos: 150000, videos: 100, name: 'Standard' },
+  ESSENTIAL: { photos: 300000, videos: 200, name: 'Essential' },
+  PREMIUM: { photos: 750000, videos: 500, name: 'Premium' },
+  STARTER: { photos: 50000, videos: 10, name: 'Basic' },
+  PROFESSIONAL: { photos: 150000, videos: 100, name: 'Standard' },
+  BUSINESS: { photos: 300000, videos: 200, name: 'Essential' },
+  ENTERPRISE: { photos: 750000, videos: 500, name: 'Premium' },
+};
+
+export const calculateStudioCredits = async (studioId: any, plan: string) => {
+  const planKey = (plan || 'BASIC').toUpperCase();
+  const limits = PLAN_STORAGE_LIMITS[planKey] || PLAN_STORAGE_LIMITS.BASIC;
+
+  const studio = await Studio.findById(studioId);
+  const activePhotos = await Media.countDocuments({ studioId, type: 'PHOTO' });
+  const activeVideos = await Media.countDocuments({ studioId, type: 'VIDEO' });
+
+  // Consumed quota:
+  // Uploads deduct quota permanently.
+  // Deleting media does NOT restore credits!
+  let consumedPhotos = studio?.usage?.photosUploaded ?? 0;
+  let consumedVideos = studio?.usage?.videosUploaded ?? 0;
+
+  // Initialize if never tracked or if behind active media count
+  if (consumedPhotos < activePhotos) {
+    consumedPhotos = activePhotos;
+    await Studio.findByIdAndUpdate(studioId, { $set: { 'usage.photosUploaded': activePhotos } });
+  }
+  if (consumedVideos < activeVideos) {
+    consumedVideos = activeVideos;
+    await Studio.findByIdAndUpdate(studioId, { $set: { 'usage.videosUploaded': activeVideos } });
+  }
+
+  const totalPhotosUsed = consumedPhotos;
+  const totalVideosUsed = consumedVideos;
+
+  const photoPercent = limits.photos > 0 ? (totalPhotosUsed / limits.photos) * 100 : 0;
+  const videoPercent = limits.videos > 0 ? (totalVideosUsed / limits.videos) * 100 : 0;
+
+  return {
+    plan: planKey,
+    planName: limits.name,
+    photos: {
+      totalLimit: limits.photos,
+      used: totalPhotosUsed,
+      remaining: Math.max(0, limits.photos - totalPhotosUsed),
+      percentUsed: Number(photoPercent.toFixed(2)),
+      rawPercent: photoPercent
+    },
+    videos: {
+      totalLimit: limits.videos,
+      used: totalVideosUsed,
+      remaining: Math.max(0, limits.videos - totalVideosUsed),
+      percentUsed: Number(videoPercent.toFixed(2)),
+      rawPercent: videoPercent
+    }
+  };
+};
 
 /**
  * Get profile of current authenticated studio owner
@@ -23,11 +84,9 @@ export const getMyStudio = async (req: AuthRequest, res: Response) => {
 
       // Auto-create a default Studio profile
       const cleanName = (user ? user.name : 'Mara') + ' Studio';
-      const cleanSub = 'studio-' + Math.random().toString(36).substring(2, 8);
       
       studio = await Studio.create({
         name: cleanName,
-        subdomain: cleanSub,
         ownerId: req.user._id,
         subscriptionPlan: 'BASIC',
         subscriptionStatus: 'ACTIVE',
@@ -42,9 +101,29 @@ export const getMyStudio = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    return res.json({ studio });
+    const credits = await calculateStudioCredits(studio._id, studio.subscriptionPlan);
+
+    return res.json({ studio, credits });
   } catch (err: any) {
     console.error('getMyStudio error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * Get real-time storage credits for current studio
+ */
+export const getStudioCredits = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const studio = await Studio.findOne({ ownerId: req.user._id });
+    if (!studio) return res.status(404).json({ error: 'Studio profile not found' });
+
+    const credits = await calculateStudioCredits(studio._id, studio.subscriptionPlan);
+    return res.json({ credits, studio: { name: studio.name, subscriptionPlan: studio.subscriptionPlan } });
+  } catch (err: any) {
+    console.error('getStudioCredits error:', err);
     return res.status(500).json({ error: err.message });
   }
 };
@@ -53,7 +132,7 @@ export const getMyStudio = async (req: AuthRequest, res: Response) => {
  * Update studio configuration details (Branding, Watermark, Domain)
  */
 export const updateMyStudio = async (req: AuthRequest, res: Response) => {
-  const { name, logoUrl, subdomain, customDomain, watermark, paymentDetails, instagramUrl, facebookUrl } = req.body;
+  const { name, logoUrl, customDomain, watermark, paymentDetails, instagramUrl, facebookUrl } = req.body;
 
   try {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
@@ -78,15 +157,6 @@ export const updateMyStudio = async (req: AuthRequest, res: Response) => {
     if (logoUrl !== undefined) studio.logoUrl = logoUrl;
     if (instagramUrl !== undefined) studio.instagramUrl = instagramUrl;
     if (facebookUrl !== undefined) studio.facebookUrl = facebookUrl;
-
-    if (subdomain) {
-      const cleanSub = subdomain.toLowerCase().replace(/[^a-z0-9-]/g, '');
-      const existing = await Studio.findOne({ subdomain: cleanSub, _id: { $ne: studio._id } });
-      if (existing) {
-        return res.status(400).json({ error: 'Subdomain is already registered by another studio' });
-      }
-      studio.subdomain = cleanSub;
-    }
 
     if (customDomain !== undefined) {
       if (customDomain) {
@@ -124,6 +194,47 @@ export const updateMyStudio = async (req: AuthRequest, res: Response) => {
     await studio.save();
     return res.json({ message: 'Studio updated successfully', studio });
   } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * Update / Upgrade studio subscription plan (1 year duration)
+ */
+export const updateStudioPlan = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { plan, durationDays = 365 } = req.body;
+    const planKey = (plan || '').toUpperCase();
+    if (!planKey || !PLAN_STORAGE_LIMITS[planKey]) {
+      return res.status(400).json({ error: 'Invalid plan selected. Choose from: BASIC, STANDARD, ESSENTIAL, PREMIUM' });
+    }
+
+    const startDate = new Date();
+    const expiresAt = new Date(startDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
+
+    const studio = await Studio.findOneAndUpdate(
+      { ownerId: req.user._id },
+      {
+        subscriptionPlan: planKey,
+        subscriptionStatus: 'ACTIVE',
+        subscriptionStartDate: startDate,
+        subscriptionExpiresAt: expiresAt,
+      },
+      { new: true, upsert: true }
+    );
+
+    const credits = await calculateStudioCredits(studio._id, studio.subscriptionPlan);
+
+    return res.json({
+      success: true,
+      message: `Successfully activated ${credits.planName} plan for 1 year`,
+      studio,
+      credits,
+    });
+  } catch (err: any) {
+    console.error('updateStudioPlan error:', err);
     return res.status(500).json({ error: err.message });
   }
 };

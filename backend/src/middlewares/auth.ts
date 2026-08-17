@@ -43,10 +43,30 @@ export const requireRoles = (roles: Array<'SUPER_ADMIN' | 'STUDIO_OWNER' | 'TEAM
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    if (!roles.includes(req.user.role)) {
+    const userRole = (req.user.role || 'CLIENT').toUpperCase();
+    const userEmail = (req.user.email || '').toLowerCase();
+
+    // Super Admin has unrestricted access to all routes
+    if (userRole === 'SUPER_ADMIN' || userEmail === 'maraphoto303@gmail.com') {
+      return next();
+    }
+
+    const upperRoles = roles.map(r => r.toUpperCase());
+    if (!upperRoles.includes(userRole)) {
       return res.status(403).json({ error: 'Forbidden: Insufficient privileges' });
     }
 
     next();
   };
+};
+
+/**
+ * Utility to check if a user has Super Admin privileges.
+ * Checks both the role field and the known admin email.
+ */
+export const isSuperAdmin = (user?: IUser | null): boolean => {
+  if (!user) return false;
+  const role = (user.role || '').toUpperCase();
+  const email = (user.email || '').toLowerCase();
+  return role === 'SUPER_ADMIN' || email === 'maraphoto303@gmail.com';
 };

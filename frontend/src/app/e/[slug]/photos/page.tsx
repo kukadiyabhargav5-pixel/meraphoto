@@ -79,6 +79,7 @@ export default function EventPhotosPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const [localUrls, setLocalUrls] = useState<Record<string, string>>({});
+  const [mediaTypeFilter, setMediaTypeFilter] = useState<'ALL' | 'PHOTO' | 'VIDEO'>('ALL');
 
   const resolveMediaUrl = (m: any) => {
     if (!m) return '';
@@ -100,7 +101,7 @@ export default function EventPhotosPage() {
 
   const fetchPhotos = async (eventId: string) => {
     try {
-      const res = await apiClient.get(`/media/event/${eventId}?type=PHOTO`);
+      const res = await apiClient.get(`/media/event/${eventId}`);
       const completed = res.data.media.filter((m: any) => m.processedStatus === 'COMPLETED');
       setMedia(completed);
       setFullMedia(completed);
@@ -475,24 +476,40 @@ export default function EventPhotosPage() {
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl border-b border-slate-200 shadow-sm">
         <div className="max-w-[1800px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
-            {event?.studioId?.logoUrl ? (
-              <img src={event.studioId.logoUrl} alt="Logo" className="h-8 max-w-[120px] object-contain" />
-            ) : (
-              <div className="flex items-center gap-2">
-                <div className="bg-[#FF6B00] p-1.5 rounded-lg">
-                  <Camera className="h-4 w-4 text-white" />
-                </div>
-                <span className="text-xs font-extrabold text-[#FF6B00] uppercase tracking-wider">
-                  {event?.studioId?.name || 'Gallery'}
-                </span>
-              </div>
+            {event?.studioId?.logoUrl && (
+              <img src={event.studioId.logoUrl} alt="Logo" className="h-8 max-w-[120px] object-contain rounded" />
             )}
+            <div className="flex items-center gap-2">
+              <div className="bg-[#FF6B00] p-1.5 rounded-lg hidden sm:block">
+                <Camera className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-xs font-extrabold text-[#FF6B00] uppercase tracking-wider">
+                {event?.studioId?.name || 'Gallery'}
+              </span>
+            </div>
             <span className="hidden sm:block h-4 w-px bg-slate-300" />
             <h1 className="text-sm font-bold text-slate-800 truncate max-w-[120px] sm:max-w-none">{event?.name}</h1>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-xs text-slate-500 font-bold">
-              {media.length} photos
+            <select
+              value={mediaTypeFilter}
+              onChange={(e) => {
+                const type = e.target.value as 'ALL' | 'PHOTO' | 'VIDEO';
+                setMediaTypeFilter(type);
+                if (type === 'ALL') {
+                  setMedia(fullMedia);
+                } else {
+                  setMedia(fullMedia.filter(m => m.type === type));
+                }
+              }}
+              className="text-xs bg-slate-100 border-none rounded-lg px-2 py-1.5 outline-none cursor-pointer text-slate-700 font-bold hover:bg-slate-200 transition-colors"
+            >
+              <option value="ALL">All Media</option>
+              <option value="PHOTO">Photos</option>
+              <option value="VIDEO">Videos</option>
+            </select>
+            <span className="text-xs text-slate-500 font-bold hidden sm:inline">
+              {media.length} items
             </span>
           </div>
         </div>
@@ -544,13 +561,21 @@ export default function EventPhotosPage() {
                   className="break-inside-avoid mb-3 sm:mb-6 overflow-hidden rounded-xl cursor-pointer group relative bg-white shadow-sm hover:shadow-md transition-all border border-slate-200"
                   onClick={() => setLightboxIndex(index)}
                 >
-                  <img
-                    src={imgSrc}
-                    alt={`Photo ${index + 1}`}
-                    className="w-full h-auto object-cover transition-all duration-300 group-hover:scale-[1.02]"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-all duration-300" />
+                  {m.type === 'VIDEO' ? (
+                    <video
+                      src={imgSrc}
+                      className="w-full h-auto object-cover transition-all duration-300 group-hover:scale-[1.02]"
+                      controls
+                    />
+                  ) : (
+                    <img
+                      src={imgSrc}
+                      alt={`Media ${index + 1}`}
+                      className="w-full h-auto object-cover transition-all duration-300 group-hover:scale-[1.02]"
+                      loading="lazy"
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-all duration-300 pointer-events-none" />
                 </div>
               );
             })}
@@ -596,12 +621,21 @@ export default function EventPhotosPage() {
           </div>
 
           <div className="w-full h-full p-4 sm:p-16 flex items-center justify-center relative">
-            <img
-              src={resolveMediaUrl(currentLightboxMedia)}
-              alt={`Photo ${lightboxIndex + 1}`}
-              className="max-w-full max-h-full object-contain select-none shadow-2xl"
-              draggable={false}
-            />
+            {currentLightboxMedia.type === 'VIDEO' ? (
+              <video
+                src={resolveMediaUrl(currentLightboxMedia)}
+                className="max-w-full max-h-full object-contain select-none shadow-2xl"
+                controls
+                autoPlay
+              />
+            ) : (
+              <img
+                src={resolveMediaUrl(currentLightboxMedia)}
+                alt={`Media ${lightboxIndex + 1}`}
+                className="max-w-full max-h-full object-contain select-none shadow-2xl"
+                draggable={false}
+              />
+            )}
           </div>
 
           <button

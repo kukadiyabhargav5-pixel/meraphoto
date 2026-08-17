@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
 import { apiClient } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Plus, X, Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRight, Edit2, Trash2, Camera, Video } from 'lucide-react';
+import { Plus, X, Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRight, Edit2, Trash2, Camera, Video, Bell, AlertTriangle } from 'lucide-react';
 import CustomDatePicker from '../../../components/CustomDatePicker';
 
 const EVENT_TYPES = [
@@ -41,6 +41,10 @@ export default function CalendarPage() {
   const [workType, setWorkType] = useState<'Event' | 'Other'>('Event');
   const [viewingShoot, setViewingShoot] = useState<any>(null);
 
+  // Reminder popup
+  const [reminderShoots, setReminderShoots] = useState<any[]>([]);
+  const [showReminderPopup, setShowReminderPopup] = useState(false);
+
   // Form state
   const [formData, setFormData] = useState({
     time: '09:00',
@@ -51,8 +55,27 @@ export default function CalendarPage() {
     photographersNames: [''] as string[],
     videographersNames: [] as string[],
     location: '',
-    notes: ''
+    notes: '',
+    reminder: 'none' as 'none' | '24h' | '72h'
   });
+
+  // Check for reminder shoots on mount
+  useEffect(() => {
+    const now = new Date();
+    const upcoming = shoots.filter((s: any) => {
+      if (!s.reminder || s.reminder === 'none') return false;
+      const shootDate = new Date(s.date);
+      const diffMs = shootDate.getTime() - now.getTime();
+      const diffH = diffMs / (1000 * 60 * 60);
+      if (s.reminder === '24h' && diffH > 0 && diffH <= 24) return true;
+      if (s.reminder === '72h' && diffH > 0 && diffH <= 72) return true;
+      return false;
+    });
+    if (upcoming.length > 0) {
+      setReminderShoots(upcoming);
+      setShowReminderPopup(true);
+    }
+  }, [shoots]);
 
   // Calendar calculations
   const daysInMonth = getDaysInMonth(currentYear, currentMonth);
@@ -107,7 +130,8 @@ export default function CalendarPage() {
         photographersNames: [],
         videographersNames: [],
         location: '',
-        notes: ''
+        notes: '',
+        reminder: 'none'
       });
       setShowForm(true);
     }
@@ -157,7 +181,8 @@ export default function CalendarPage() {
         photographersNames: formData.photographersNames.filter(n => n.trim()),
         videographersNames: workType === 'Other' ? [] : formData.videographersNames.filter(n => n.trim()),
         location: formData.location,
-        notes: formData.notes
+        notes: formData.notes,
+        reminder: formData.reminder
       };
 
       const res = await apiClient.post('/dashboard/shoots', payload);
@@ -407,7 +432,7 @@ export default function CalendarPage() {
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-[#f8f7f4] text-slate-900/50">
                   <div className="flex flex-col gap-2">
                     <h3 className="text-sm font-extrabold text-slate-900">
-                      {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                      {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-GB')}
                     </h3>
                     <div className="flex bg-slate-200/60 rounded-lg p-1 w-fit">
                       <button 
@@ -484,6 +509,33 @@ export default function CalendarPage() {
                       <div>
                         <label className="form-label">Notes (Optional)</label>
                         <textarea className="form-input" rows={2}  value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
+                      </div>
+
+                      {/* Reminder */}
+                      <div>
+                        <label className="form-label flex items-center gap-1.5">
+                          <Bell className="h-3 w-3 text-[#c5a880]" /> Reminder
+                        </label>
+                        <div className="flex gap-2">
+                          {[
+                            { val: 'none', label: 'None' },
+                            { val: '24h', label: '24h Before' },
+                            { val: '72h', label: '72h Before' },
+                          ].map(opt => (
+                            <button
+                              key={opt.val}
+                              type="button"
+                              onClick={() => setFormData({ ...formData, reminder: opt.val as any })}
+                              className={`flex-1 py-2.5 px-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all ${
+                                formData.reminder === opt.val
+                                  ? 'bg-[#c5a880]/10 border-[#c5a880]/30 text-[#a07c4c] shadow-sm'
+                                  : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -585,6 +637,33 @@ export default function CalendarPage() {
                         <label className="form-label">Notes (Optional)</label>
                         <textarea className="form-input" rows={2}  value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
                       </div>
+
+                      {/* Reminder */}
+                      <div>
+                        <label className="form-label flex items-center gap-1.5">
+                          <Bell className="h-3 w-3 text-[#c5a880]" /> Reminder
+                        </label>
+                        <div className="flex gap-2">
+                          {[
+                            { val: 'none', label: 'None' },
+                            { val: '24h', label: '24h Before' },
+                            { val: '72h', label: '72h Before' },
+                          ].map(opt => (
+                            <button
+                              key={opt.val}
+                              type="button"
+                              onClick={() => setFormData({ ...formData, reminder: opt.val as any })}
+                              className={`flex-1 py-2.5 px-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all ${
+                                formData.reminder === opt.val
+                                  ? 'bg-[#c5a880]/10 border-[#c5a880]/30 text-[#a07c4c] shadow-sm'
+                                  : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -622,7 +701,7 @@ export default function CalendarPage() {
                               <div className="flex-1">
                                 <p className="font-bold text-sm text-slate-900">{shoot.eventName}</p>
                                 <p className="text-[10px] text-slate-400 font-mono mt-1">
-                                  {shootDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })} • {shoot.time || '09:00'}
+                                  {shootDate.toLocaleDateString('en-GB')} • {shoot.time || '09:00'}
                                   {shoot.location && <span className="ml-2"><MapPin className="inline h-2.5 w-2.5 -mt-0.5" /> {shoot.location}</span>}
                                 </p>
                                 <div className="flex flex-wrap items-center gap-2 mt-2.5">
@@ -667,7 +746,7 @@ export default function CalendarPage() {
                     <div className="text-center">
                       <span className="font-bold text-sm block">Add Shoot for</span>
                       <span className="text-[11px] font-extrabold uppercase tracking-widest mt-1 opacity-70">
-                        {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-IN', { month: 'long', day: 'numeric', year: 'numeric' })}
+                        {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-GB')}
                       </span>
                     </div>
                   </button>
@@ -692,7 +771,7 @@ export default function CalendarPage() {
               <div>
                 <h3 className="text-xl font-bold text-slate-900 mb-1">{viewingShoot.eventName}</h3>
                 <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400 font-medium">
-                  <span>{new Date(viewingShoot.date).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                  <span>{new Date(viewingShoot.date).toLocaleDateString('en-GB')}</span>
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
                   <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {viewingShoot.time || '09:00'}</span>
                 </div>
@@ -742,6 +821,60 @@ export default function CalendarPage() {
                 className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-900 rounded-xl text-sm font-bold shadow-md transition-colors"
               >
                 Close Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Reminder Popup ═══ */}
+      {showReminderPopup && reminderShoots.length > 0 && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+            <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-amber-50 to-orange-50 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                <Bell className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Upcoming Reminders</h2>
+                <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">{reminderShoots.length} shoot(s) coming up</p>
+              </div>
+            </div>
+            <div className="p-5 space-y-3 max-h-[50vh] overflow-y-auto">
+              {reminderShoots.map((shoot: any) => {
+                const shootDate = new Date(shoot.date);
+                const diffH = Math.round((shootDate.getTime() - Date.now()) / (1000 * 60 * 60));
+                return (
+                  <div key={shoot._id} className="p-4 rounded-2xl border border-amber-100 bg-amber-50/50">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="font-bold text-sm text-slate-900">{shoot.eventName}</h4>
+                        <p className="text-[10px] text-slate-500 font-medium mt-1 flex items-center gap-1">
+                          <CalendarIcon className="w-3 h-3" />
+                          {shootDate.toLocaleDateString('en-GB')}
+                          <span className="mx-1">•</span>
+                          <Clock className="w-3 h-3" /> {shoot.time}
+                        </p>
+                        {shoot.location && (
+                          <p className="text-[10px] text-slate-400 font-medium mt-0.5 flex items-center gap-1">
+                            <MapPin className="w-3 h-3" /> {shoot.location}
+                          </p>
+                        )}
+                      </div>
+                      <span className="shrink-0 px-2 py-1 rounded-lg bg-amber-200/60 text-amber-800 text-[9px] font-black uppercase tracking-wider">
+                        In {diffH}h
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="p-5 border-t border-slate-100 bg-slate-50/50">
+              <button
+                onClick={() => setShowReminderPopup(false)}
+                className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors"
+              >
+                Got it, thanks!
               </button>
             </div>
           </div>

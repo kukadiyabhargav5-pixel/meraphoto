@@ -35,6 +35,7 @@ export default function BillPage() {
   const [newBillClient, setNewBillClient] = useState('');
   const [newBillEmail, setNewBillEmail] = useState('');
   const [newBillMobile, setNewBillMobile] = useState('');
+  const [newBillGst, setNewBillGst] = useState('');
   const [newBillEventName, setNewBillEventName] = useState('');
   const [newBillEvent, setNewBillEvent] = useState('');
   const [newBillAmount, setNewBillAmount] = useState('');
@@ -49,6 +50,47 @@ export default function BillPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [editingBill, setEditingBill] = useState<any>(null);
+
+  const handleGstChange = (val: string) => {
+    const raw = val.toUpperCase().replace(/[^0-9A-Z]/g, '');
+    let result = '';
+
+    for (let i = 0; i < raw.length && i < 15; i++) {
+      const char = raw[i];
+      if (i === 0 || i === 1) {
+        // Digits 1-2: Numbers only (State Code)
+        if (/[0-9]/.test(char)) result += char;
+        else break;
+      } else if (i >= 2 && i <= 6) {
+        // Digits 3-7: Letters only (PAN first 5 chars)
+        if (/[A-Z]/.test(char)) result += char;
+        else break;
+      } else if (i >= 7 && i <= 10) {
+        // Digits 8-11: Numbers only (PAN 4 digits)
+        if (/[0-9]/.test(char)) result += char;
+        else break;
+      } else if (i === 11) {
+        // Digit 12: Letter only (PAN last char)
+        if (/[A-Z]/.test(char)) result += char;
+        else break;
+      } else if (i === 12) {
+        // Digit 13: Number or Letter (Entity code)
+        if (/[0-9A-Z]/.test(char)) result += char;
+        else break;
+      } else if (i === 13) {
+        // Digit 14: Default 'Z'
+        if (char === 'Z') result += char;
+        else if (/[0-9A-Z]/.test(char)) result += 'Z';
+        else break;
+      } else if (i === 14) {
+        // Digit 15: Number or Letter (Checksum)
+        if (/[0-9A-Z]/.test(char)) result += char;
+        else break;
+      }
+    }
+
+    setNewBillGst(result);
+  };
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -81,6 +123,7 @@ export default function BillPage() {
     setNewBillClient(bill.clientName || bill.client || '');
     setNewBillEmail(bill.clientEmail || '');
     setNewBillMobile(bill.clientMobile || '');
+    setNewBillGst(bill.gstNumber || bill.gstNo || '');
     setNewBillEventName(bill.eventName || '');
     setNewEventDate(bill.eventDate ? bill.eventDate.split('T')[0] : '');
     setNewBillDate(bill.issueDate ? bill.issueDate.split('T')[0] : (bill.date || ''));
@@ -98,6 +141,7 @@ export default function BillPage() {
     const studioEmail = user?.email || '';
     const studioPhone = user?.phone || '';
     const clientName = invoice.clientName || invoice.client || '';
+    const gstNumber = invoice.gstNumber || invoice.gstNo || '';
     const total = parseFloat(invoice.amount || 0);
     const advance = parseFloat(invoice.advance || 0);
     const balance = invoice.balance !== undefined ? parseFloat(invoice.balance) : Math.max(0, total - advance);
@@ -215,10 +259,13 @@ export default function BillPage() {
                 <div class="meta-block billed-to">
                   <h4>Billed To</h4>
                   <p>${clientName}</p>
+                  ${gstNumber ? `<div style="font-size: 12px; font-weight: 700; color: #0f172a; margin-top: 4px;"><span style="color: #64748b; font-weight: 600;">GSTIN:</span> ${gstNumber}</div>` : ''}
+                  ${invoice.clientMobile ? `<div style="font-size: 12px; color: #64748b; margin-top: 2px;">Phone: ${invoice.clientMobile}</div>` : ''}
+                  ${invoice.clientEmail ? `<div style="font-size: 12px; color: #64748b; margin-top: 2px;">Email: ${invoice.clientEmail}</div>` : ''}
                 </div>
                 <div class="meta-block">
                   <h4>Invoice Date</h4>
-                  <p>${invoiceDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                  <p>${invoiceDate.toLocaleDateString('en-GB')}</p>
                 </div>
                 <div class="meta-block" style="text-align:right;">
                   <h4>Status</h4>
@@ -290,7 +337,7 @@ export default function BillPage() {
 
   const resetForm = () => {
     setEditingBill(null);
-    setNewBillClient(''); setNewBillEmail(''); setNewBillMobile(''); setNewBillEventName('');
+    setNewBillClient(''); setNewBillEmail(''); setNewBillMobile(''); setNewBillGst(''); setNewBillEventName('');
     setNewEventDate(''); setNewTokenPaymentDate(''); setNewPaymentMethod('Cash');
     setNewBillDate(''); setNewBillAmount(''); setNewBillAdvance(''); 
     setSelectedEventCodeForBill('');
@@ -320,7 +367,22 @@ export default function BillPage() {
   }, 0);
 
   const handleSaveInvoice = async (shouldPrint: boolean) => {
-    if (!newBillClient) return;
+    if (!newBillClient) {
+      setErrorMsg('Please enter client name');
+      return;
+    }
+
+    if (!newBillGst) {
+      setErrorMsg('Please enter 15-digit GST Number');
+      return;
+    }
+
+    const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+    if (!gstRegex.test(newBillGst)) {
+      setErrorMsg('Invalid GST Number format. It must be 15 characters (e.g. 24AAAAA0000A1Z5)');
+      return;
+    }
+
     const totalVal = parseFloat(newBillAmount) || 0;
     const advVal = parseFloat(newBillAdvance) || 0;
     const balVal = Math.max(0, totalVal - advVal);
@@ -330,6 +392,7 @@ export default function BillPage() {
         clientName: newBillClient,
         clientEmail: newBillEmail,
         clientMobile: newBillMobile,
+        gstNumber: newBillGst ? newBillGst.trim().toUpperCase() : undefined,
         eventName: newBillEventName,
         eventDate: newEventDate ? newEventDate : undefined,
         invoiceNo: `INV-2026-${String(bills.length + 101).padStart(3, '0')}`,
@@ -446,7 +509,7 @@ export default function BillPage() {
                         <tr key={i} className="hover:bg-white/[0.01] transition-colors">
                           <td className="p-4 font-mono font-bold text-[#c5a880] text-center">{invoice.invoiceNo || invoice.id}</td>
                           <td className="p-4 font-bold text-slate-900 text-center">{invoice.clientName || invoice.client}</td>
-                          <td className="p-4 font-semibold text-slate-600 text-center">{(invoice.issueDate || invoice.date)?.split('T')[0]}</td>
+                          <td className="p-4 font-semibold text-slate-600 text-center">{(invoice.issueDate || invoice.date)?.split('T')[0].split('-').reverse().join('/')}</td>
                           <td className="p-4 font-black text-slate-900 text-center">₹{invoice.amount?.toLocaleString()}</td>
                           <td className="p-4 font-bold text-[#c5a880] text-center">₹{(invoice.advance || 0).toLocaleString()}</td>
                           <td className="p-4 font-black text-rose-400 text-center">₹{(invoice.balance || 0).toLocaleString()}</td>
@@ -526,14 +589,37 @@ export default function BillPage() {
                     <input type="text" required value={newBillClient} onChange={(e) => setNewBillClient(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Client Email</label>
-                      <input type="email" value={newBillEmail} onChange={(e) => setNewBillEmail(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
+                      <input type="email" value={newBillEmail} onChange={(e) => setNewBillEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Client Mobile</label>
-                      <input type="tel" value={newBillMobile} onChange={(e) => setNewBillMobile(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
+                      <input type="tel" value={newBillMobile} onChange={(e) => setNewBillMobile(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                          GST Number <span className="text-rose-500">*</span>
+                        </label>
+                        <span className={`text-[9px] font-mono font-bold ${newBillGst.length === 15 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                          {newBillGst.length}/15
+                        </span>
+                      </div>
+                      <input 
+                        type="text" 
+                        required
+                        maxLength={15}
+                        placeholder="e.g. 24AAAAA0000A1Z5" 
+                        value={newBillGst} 
+                        onChange={(e) => handleGstChange(e.target.value)} 
+                        className={`w-full bg-white border rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none uppercase font-mono font-bold tracking-wider placeholder:normal-case placeholder:font-normal placeholder:tracking-normal placeholder:text-slate-300 ${
+                          newBillGst.length === 15 
+                            ? 'border-emerald-400 focus:border-emerald-500 bg-emerald-50/10' 
+                            : 'border-slate-200 focus:border-[#c5a880]'
+                        }`} 
+                      />
                     </div>
                   </div>
 

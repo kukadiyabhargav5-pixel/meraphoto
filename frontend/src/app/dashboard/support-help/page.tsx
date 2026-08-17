@@ -153,7 +153,7 @@ export default function SupportHelpPage() {
                         </div>
                         <p className="text-xs text-slate-500 truncate mb-2">{t.complaint}</p>
                         <span className="text-[10px] text-slate-400 font-bold font-mono">
-                          {new Date(t.updatedAt).toLocaleDateString()} {new Date(t.updatedAt).toLocaleTimeString()}
+                          {new Date(t.updatedAt).toLocaleDateString('en-GB')} {new Date(t.updatedAt).toLocaleTimeString()}
                         </span>
                       </div>
                     ))}

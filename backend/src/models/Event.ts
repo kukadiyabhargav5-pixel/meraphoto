@@ -7,7 +7,7 @@ export interface IEvent extends Document {
   clientMobile: string;
   clientEmail: string;
   date: Date;
-  type: 'WEDDING' | 'PRE_WEDDING' | 'PRE WEDDING' | 'RECEPTION' | 'BIRTHDAY' | 'CORPORATE' | 'SCHOOL' | 'GARBA' | 'CONCERT' | 'RELIGIOUS' | 'ENGAGEMENT' | 'BABY SHOWER' | 'PANCHMASI';
+  type: string;
   coverImageUrl?: string;
   description?: string;
   location: string;
@@ -34,6 +34,8 @@ export interface IEvent extends Document {
     height: number;
     opacity: number;
   };
+  isFaceSearchEnabled?: boolean;
+  searchThreshold?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -45,11 +47,7 @@ const EventSchema = new Schema<IEvent>({
   clientMobile: { type: String, required: true },
   clientEmail: { type: String, required: true, lowercase: true, trim: true },
   date: { type: Date, required: true },
-  type: {
-    type: String,
-    enum: ['WEDDING', 'PRE_WEDDING', 'PRE WEDDING', 'RECEPTION', 'BIRTHDAY', 'CORPORATE', 'SCHOOL', 'GARBA', 'CONCERT', 'RELIGIOUS', 'ENGAGEMENT', 'BABY SHOWER', 'PANCHMASI'],
-    required: true
-  },
+  type: { type: String, required: true },
   coverImageUrl: { type: String },
   description: { type: String },
   location: { type: String, required: true },
@@ -83,7 +81,9 @@ const EventSchema = new Schema<IEvent>({
     width: { type: Number, default: 20 },
     height: { type: Number, default: 20 },
     opacity: { type: Number, default: 0.5, min: 0, max: 1 }
-  }
+  },
+  isFaceSearchEnabled: { type: Boolean, default: true },
+  searchThreshold: { type: Number, default: 0.45, min: 0, max: 1 }
 }, {
   timestamps: true
 });

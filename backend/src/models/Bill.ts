@@ -6,6 +6,7 @@ const billSchema = new mongoose.Schema({
   clientEmail: { type: String },
   clientMobile: { type: String },
   eventName: { type: String },
+  gstNumber: { type: String },
   invoiceNo: { type: String, required: true },
   amount: { type: Number, required: true },
   advance: { type: Number, default: 0 },

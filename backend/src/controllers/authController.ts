@@ -21,10 +21,10 @@ const generateTokens = (userId: string, role: string) => {
  * Register a new Studio Owner and auto-initialize their Studio profile
  */
 export const registerStudioOwner = async (req: Request, res: Response) => {
-  const { name, email, password, phone, studioName, subdomain, websiteLink, logoUrl, instagramUrl, facebookUrl } = req.body;
+  const { name, email, password, phone, studioName, websiteLink, logoUrl, instagramUrl, facebookUrl } = req.body;
 
   try {
-    if (!name || !email || !password || !phone || !studioName || !subdomain) {
+    if (!name || !email || !password || !phone || !studioName) {
       return res.status(400).json({ error: 'All fields are required' });
     }
 
@@ -40,12 +40,6 @@ export const registerStudioOwner = async (req: Request, res: Response) => {
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return res.status(400).json({ error: 'Email already registered' });
-    }
-
-    const cleanSubdomain = subdomain.toLowerCase().replace(/[^a-z0-9-]/g, '');
-    const existingStudio = await Studio.findOne({ subdomain: cleanSubdomain });
-    if (existingStudio) {
-      return res.status(400).json({ error: 'Subdomain already taken' });
     }
 
     // Hash password
@@ -64,7 +58,6 @@ export const registerStudioOwner = async (req: Request, res: Response) => {
     // Create studio
     const newStudio = await Studio.create({
       name: studioName,
-      subdomain: cleanSubdomain,
       ownerId: newUser._id,
       subscriptionPlan: 'BASIC',
       subscriptionStatus: 'FREE',
@@ -84,7 +77,7 @@ export const registerStudioOwner = async (req: Request, res: Response) => {
     return res.status(201).json({
       message: 'Studio registered successfully',
       user: { id: newUser._id, name: newUser.name, email: newUser.email, role: newUser.role, phone: newUser.phone },
-      studio: { id: newStudio._id, name: newStudio.name, subdomain: newStudio.subdomain, logoUrl: newStudio.logoUrl, customDomain: newStudio.customDomain },
+      studio: { id: newStudio._id, name: newStudio.name, logoUrl: newStudio.logoUrl, customDomain: newStudio.customDomain },
       ...tokens,
     });
   } catch (err: any) {
@@ -153,7 +146,17 @@ export const login = async (req: Request, res: Response) => {
 
     return res.json({
       user: { id: user._id, name: user.name, email: user.email, role: user.role, phone: user.phone },
-      studio: studio ? { id: studio._id, name: studio.name, subdomain: studio.subdomain } : null,
+      studio: studio ? { 
+        id: studio._id, 
+        name: studio.name, 
+        subscriptionPlan: studio.subscriptionPlan || 'PREMIUM',
+        subscriptionStatus: studio.subscriptionStatus || 'ACTIVE',
+        subscriptionStartDate: studio.subscriptionStartDate,
+        subscriptionExpiresAt: studio.subscriptionExpiresAt,
+        logoUrl: studio.logoUrl,
+        customDomain: studio.customDomain,
+        branding: studio.branding
+      } : null,
       ...tokens,
     });
   } catch (err: any) {
@@ -206,10 +209,8 @@ export const googleLogin = async (req: Request, res: Response) => {
       
       // If new user, create a placeholder studio
       if (!studio) {
-        const cleanSubdomain = name.toLowerCase().replace(/[^a-z0-9]/g, '') + '-' + Math.floor(Math.random() * 10000);
         studio = await Studio.create({
           name: name + "'s Studio",
-          subdomain: cleanSubdomain,
           ownerId: user._id,
           subscriptionPlan: 'BASIC',
           subscriptionStatus: 'FREE',
@@ -223,7 +224,17 @@ export const googleLogin = async (req: Request, res: Response) => {
 
     return res.json({
       user: { id: user._id, name: user.name, email: user.email, role: user.role, phone: user.phone },
-      studio: studio ? { id: studio._id, name: studio.name, subdomain: studio.subdomain } : null,
+      studio: studio ? { 
+        id: studio._id, 
+        name: studio.name, 
+        subscriptionPlan: studio.subscriptionPlan || 'PREMIUM',
+        subscriptionStatus: studio.subscriptionStatus || 'ACTIVE',
+        subscriptionStartDate: studio.subscriptionStartDate,
+        subscriptionExpiresAt: studio.subscriptionExpiresAt,
+        logoUrl: studio.logoUrl,
+        customDomain: studio.customDomain,
+        branding: studio.branding
+      } : null,
       ...tokens,
     });
   } catch (err: any) {
@@ -249,7 +260,17 @@ export const getMe = async (req: AuthRequest, res: Response) => {
 
     return res.json({
       user: { id: user._id, name: user.name, email: user.email, role: user.role, phone: user.phone },
-      studio: studio ? { id: studio._id, name: studio.name, subdomain: studio.subdomain } : null,
+      studio: studio ? { 
+        id: studio._id, 
+        name: studio.name, 
+        subscriptionPlan: studio.subscriptionPlan || 'PREMIUM',
+        subscriptionStatus: studio.subscriptionStatus || 'ACTIVE',
+        subscriptionStartDate: studio.subscriptionStartDate,
+        subscriptionExpiresAt: studio.subscriptionExpiresAt,
+        logoUrl: studio.logoUrl,
+        customDomain: studio.customDomain,
+        branding: studio.branding
+      } : null,
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });

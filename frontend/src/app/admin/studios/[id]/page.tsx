@@ -89,9 +89,6 @@ export default function StudioDetailsPage() {
                 </span>
               </div>
               <div className="flex items-center gap-4 text-sm font-medium text-slate-500">
-                <a href={`https://${studio.subdomain}.maraphoto.com`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 hover:text-[#c5a880] transition-colors">
-                  <Globe className="w-4 h-4" /> {studio.subdomain}.maraphoto.com
-                </a>
                 <div className="flex items-center gap-1.5">
                   <Users className="w-4 h-4" /> {studio.ownerId?.name || 'Unknown Owner'}
                 </div>
@@ -138,7 +135,7 @@ export default function StudioDetailsPage() {
               <div className="space-y-3">
                 <div className="flex justify-between items-center py-2 border-b border-slate-100">
                   <span className="text-xs font-bold text-slate-500 uppercase">Registered Date</span>
-                  <span className="text-sm font-bold text-slate-800">{new Date(studio.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                  <span className="text-sm font-bold text-slate-800">{new Date(studio.createdAt).toLocaleDateString('en-GB')}</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-slate-100">
                   <span className="text-xs font-bold text-slate-500 uppercase">Total Bookings</span>
@@ -183,7 +180,7 @@ export default function StudioDetailsPage() {
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
                             <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                            {new Date(ev.date).toLocaleDateString()}
+                            {new Date(ev.date).toLocaleDateString('en-GB')}
                           </div>
                           {ev.location && (
                             <div className="flex items-center gap-1.5 text-[11px] text-slate-500">

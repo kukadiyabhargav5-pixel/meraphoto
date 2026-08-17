@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import confetti from 'canvas-confetti';
-import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy, ZoomIn, Play, ShieldCheck, RefreshCw, ScanFace, ChevronRight, ChevronLeft, LayoutGrid, Sliders, X, Download, Loader, Sparkles, CalendarDays, Lock, Key, AlertCircle, Search, HelpCircle, Send, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy, ZoomIn, Play, ShieldCheck, RefreshCw, ScanFace, ChevronRight, ChevronLeft, ChevronDown, LayoutGrid, Sliders, X, Download, Loader, Sparkles, CalendarDays, Lock, Key, AlertCircle, Search, HelpCircle, Send, CheckCircle, Globe } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { MasonryPhotoAlbum, RowsPhotoAlbum } from "react-photo-album";
 import "react-photo-album/masonry.css";
@@ -71,6 +71,8 @@ export default function ClientGallery() {
 
   // Gallery view configurations
   const [viewType, setViewType] = useState<'grid' | 'masonry' | 'timeline'>('masonry');
+  const [mediaTypeFilter, setMediaTypeFilter] = useState<'ALL' | 'PHOTO' | 'VIDEO'>('ALL');
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   
   // Selfie Search Modal
   const [searchModalOpen, setSearchModalOpen] = useState(false);
@@ -120,8 +122,16 @@ export default function ClientGallery() {
   };
 
 
-  const resolveMediaUrl = (m: any) => {
+  const resolveMediaUrl = (m: any, isThumbnail = false) => {
     if (!m) return '';
+    if (m.type === 'VIDEO' && isThumbnail) {
+      if (m.thumbnailUrl && !m.thumbnailUrl.endsWith('.mp4')) return m.thumbnailUrl;
+      const base = m.compressedUrl || m.url || m.r2Url || '';
+      if (base.includes('imagekit.io')) {
+        return `${base}/ik-thumbnail.jpg`;
+      }
+      return m.thumbnailUrl || base;
+    }
     const url = m.compressedUrl || m.url || m.r2Url || '';
     if (url.startsWith('localdb://')) {
       const id = url.replace('localdb://', '');
@@ -359,7 +369,7 @@ export default function ClientGallery() {
     setSearchStage('Detecting face in your photo...');
     
     const formData = new FormData();
-    formData.append('selfie', selfieFile);
+    formData.append('file', selfieFile);
 
     // Simulate progress stages
     const progressTimer = setInterval(() => {
@@ -379,7 +389,7 @@ export default function ClientGallery() {
     }, 150);
 
     try {
-      const res = await apiClient.post(`/ai/search/${event._id}`, formData, {
+      const res = await apiClient.post(`/event/${event._id}/face-search`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       
@@ -607,7 +617,8 @@ export default function ClientGallery() {
     );
   }
 
-  const galleryMedia = searchActive ? matchedMedia : media;
+  const baseGalleryMedia = searchActive ? matchedMedia : media;
+  const galleryMedia = baseGalleryMedia.filter(m => mediaTypeFilter === 'ALL' || m.type === mediaTypeFilter);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col relative selection:bg-orange-500 selection:text-white">
@@ -615,19 +626,39 @@ export default function ClientGallery() {
       <header className="sticky top-0 z-40 glass-panel border-b border-slate-200 bg-white/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {event?.studioId?.logoUrl ? (
-              <img src={event.studioId.logoUrl} alt="Logo" className="h-10 sm:h-14 max-w-[140px] sm:max-w-[250px] object-contain transition-all hover:opacity-90 drop-shadow-sm" />
-            ) : (
-              <span className="font-extrabold text-sm tracking-widest text-[#c5a880] uppercase">
-                {event?.studioId?.name}
-              </span>
+            {event?.studioId?.logoUrl && (
+              <img src={event.studioId.logoUrl} alt="Logo" className="h-10 sm:h-14 max-w-[140px] sm:max-w-[250px] object-contain transition-all hover:opacity-90 drop-shadow-sm rounded" />
             )}
+            <span className="font-extrabold text-sm sm:text-base tracking-widest text-[#c5a880] uppercase ml-2">
+              {event?.studioId?.name}
+            </span>
           </div>
           
-          <div className="flex items-center gap-2 sm:gap-4 text-[10px] sm:text-xs font-bold text-slate-500">
-            <span className="truncate max-w-[120px] sm:max-w-none">{event?.name}</span>
-            <span className="h-4 w-[1px] bg-slate-200" />
-            <span>{new Date(event?.date).toLocaleDateString()}</span>
+          <div className="flex items-center gap-3 sm:gap-4">
+            {/* Social Icons */}
+            <div className="flex items-center gap-2 sm:gap-3 mr-2">
+              {event?.studioId?.instagramUrl && (
+                <a href={event.studioId.instagramUrl} target="_blank" rel="noreferrer" className="group w-9 h-9 rounded-full bg-white/60 backdrop-blur-md border border-white/80 shadow-[0_2px_10px_rgba(0,0,0,0.04)] flex items-center justify-center text-slate-600 hover:scale-110 hover:-translate-y-1 hover:shadow-[0_8px_20px_rgba(236,72,153,0.3)] hover:bg-gradient-to-tr hover:from-purple-500 hover:via-pink-500 hover:to-orange-400 hover:text-white hover:border-transparent transition-all duration-300">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-300 group-hover:scale-110"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                </a>
+              )}
+              {event?.studioId?.facebookUrl && (
+                <a href={event.studioId.facebookUrl} target="_blank" rel="noreferrer" className="group w-9 h-9 rounded-full bg-white/60 backdrop-blur-md border border-white/80 shadow-[0_2px_10px_rgba(0,0,0,0.04)] flex items-center justify-center text-slate-600 hover:scale-110 hover:-translate-y-1 hover:shadow-[0_8px_20px_rgba(24,119,242,0.3)] hover:bg-[#1877F2] hover:text-white hover:border-transparent transition-all duration-300">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-300 group-hover:scale-110"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+                </a>
+              )}
+              {event?.studioId?.customDomain && (
+                <a href={`https://${event.studioId.customDomain}`} target="_blank" rel="noreferrer" className="group w-9 h-9 rounded-full bg-white/60 backdrop-blur-md border border-white/80 shadow-[0_2px_10px_rgba(0,0,0,0.04)] flex items-center justify-center text-slate-600 hover:scale-110 hover:-translate-y-1 hover:shadow-[0_8px_20px_rgba(0,0,0,0.1)] hover:bg-slate-900 hover:text-white hover:border-transparent transition-all duration-300">
+                  <Globe className="w-4 h-4 transition-transform duration-300 group-hover:scale-110" />
+                </a>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-2 sm:gap-4 text-[10px] sm:text-xs font-bold text-slate-500 hidden sm:flex">
+              <span className="truncate max-w-[120px] sm:max-w-none">{event?.name}</span>
+              <span className="h-4 w-[1px] bg-slate-200" />
+              <span>{new Date(event?.date).toLocaleDateString('en-GB')}</span>
+            </div>
           </div>
         </div>
       </header>
@@ -666,7 +697,50 @@ export default function ClientGallery() {
       {/* Gallery Controls bar */}
       <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-4 sm:py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="relative">
+            <button 
+              onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
+              className="flex items-center justify-between gap-2 text-xs bg-white border border-slate-200 rounded-xl px-4 py-2.5 outline-none text-slate-700 font-extrabold hover:border-[#c5a880] cursor-pointer shadow-sm min-w-[140px] transition-all duration-300"
+            >
+              <div className="flex items-center gap-2">
+                {mediaTypeFilter === 'ALL' && <LayoutGrid className="w-4 h-4 text-[#c5a880]" />}
+                {mediaTypeFilter === 'PHOTO' && <ImageIcon className="w-4 h-4 text-[#c5a880]" />}
+                {mediaTypeFilter === 'VIDEO' && <Video className="w-4 h-4 text-[#c5a880]" />}
+                <span>
+                  {mediaTypeFilter === 'ALL' && 'All Media'}
+                  {mediaTypeFilter === 'PHOTO' && 'Photos'}
+                  {mediaTypeFilter === 'VIDEO' && 'Videos'}
+                </span>
+              </div>
+              <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${filterDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
 
+            {filterDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setFilterDropdownOpen(false)} />
+                <div className="absolute top-full left-0 mt-2 w-full bg-white border border-slate-100 rounded-xl shadow-xl z-20 py-1.5 overflow-hidden transform opacity-100 scale-100 transition-all origin-top">
+                  <button 
+                    onClick={() => { setMediaTypeFilter('ALL'); setFilterDropdownOpen(false); }}
+                    className={`w-full text-left px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition-colors ${mediaTypeFilter === 'ALL' ? 'bg-[#fcfaf7] text-[#c5a880]' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <LayoutGrid className="w-4 h-4" /> All Media
+                  </button>
+                  <button 
+                    onClick={() => { setMediaTypeFilter('PHOTO'); setFilterDropdownOpen(false); }}
+                    className={`w-full text-left px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition-colors ${mediaTypeFilter === 'PHOTO' ? 'bg-[#fcfaf7] text-[#c5a880]' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <ImageIcon className="w-4 h-4" /> Photos
+                  </button>
+                  <button 
+                    onClick={() => { setMediaTypeFilter('VIDEO'); setFilterDropdownOpen(false); }}
+                    className={`w-full text-left px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition-colors ${mediaTypeFilter === 'VIDEO' ? 'bg-[#fcfaf7] text-[#c5a880]' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <Video className="w-4 h-4" /> Videos
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
 
           {searchActive && searchStats && (
             <span className="text-xs text-slate-400 font-semibold ml-4">
@@ -721,7 +795,7 @@ export default function ClientGallery() {
             {viewType === 'masonry' ? (
                <MasonryPhotoAlbum 
                  photos={galleryMedia.map(m => ({
-                    src: resolveMediaUrl(m),
+                    src: resolveMediaUrl(m, true),
                     width: m.width || (m.type === 'VIDEO' ? 1920 : 1600),
                     height: m.height || (m.type === 'VIDEO' ? 1080 : 1200),
                     key: m._id,
@@ -800,7 +874,7 @@ export default function ClientGallery() {
             ) : (
                <RowsPhotoAlbum 
                  photos={galleryMedia.map(m => ({
-                    src: resolveMediaUrl(m),
+                    src: resolveMediaUrl(m, true),
                     width: m.width || (m.type === 'VIDEO' ? 1920 : 1600),
                     height: m.height || (m.type === 'VIDEO' ? 1080 : 1200),
                     key: m._id,

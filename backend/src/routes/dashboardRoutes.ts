@@ -116,7 +116,7 @@ router.get('/customers', async (req: AuthRequest, res) => {
 router.post('/customers', async (req: AuthRequest, res) => {
   try {
     const studio = await Studio.findOne({ ownerId: req.user!._id });
-    if (!studio) return res.status(403).json({ error: 'Studio not found' });
+    if (!studio) return res.status(404).json({ error: 'No studio profile found. Please set up your studio first.' });
     const customer = new Customer({ ...req.body, studioId: studio._id });
     await customer.save();
     res.json(customer);
@@ -158,7 +158,7 @@ router.get('/team', async (req: AuthRequest, res) => {
 router.post('/team', async (req: AuthRequest, res) => {
   try {
     const studio = await Studio.findOne({ ownerId: req.user!._id });
-    if (!studio) return res.status(403).json({ error: 'Studio not found' });
+    if (!studio) return res.status(404).json({ error: 'No studio profile found. Please set up your studio first.' });
     
     // Check for duplicates
     const existingMember = await Team.findOne({ studioId: studio._id, email: req.body.email });
@@ -207,7 +207,7 @@ router.get('/bookings', async (req: AuthRequest, res) => {
 router.post('/bookings', async (req: AuthRequest, res) => {
   try {
     const studio = await Studio.findOne({ ownerId: req.user!._id });
-    if (!studio) return res.status(403).json({ error: 'Studio not found' });
+    if (!studio) return res.status(404).json({ error: 'No studio profile found. Please set up your studio first.' });
     const booking = new Booking({ ...req.body, studioId: studio._id });
     await booking.save();
     res.json(booking);
@@ -240,7 +240,7 @@ router.get('/quotations', async (req: AuthRequest, res) => {
 router.post('/quotations', async (req: AuthRequest, res) => {
   try {
     const studio = await Studio.findOne({ ownerId: req.user!._id });
-    if (!studio) return res.status(403).json({ error: 'Studio not found' });
+    if (!studio) return res.status(404).json({ error: 'No studio profile found. Please set up your studio first.' });
     const quotation = new Quotation({ ...req.body, studioId: studio._id });
     await quotation.save();
     res.json(quotation);
@@ -286,7 +286,7 @@ router.get('/bills', async (req: AuthRequest, res) => {
 router.post('/bills', async (req: AuthRequest, res) => {
   try {
     const studio = await Studio.findOne({ ownerId: req.user!._id });
-    if (!studio) return res.status(403).json({ error: 'Studio not found' });
+    if (!studio) return res.status(404).json({ error: 'No studio profile found. Please set up your studio first.' });
     const bill = new Bill({ ...req.body, studioId: studio._id });
     await bill.save();
     res.json(bill);
@@ -328,7 +328,7 @@ router.get('/shoots', async (req: AuthRequest, res) => {
 router.post('/shoots', async (req: AuthRequest, res) => {
   try {
     const studio = await Studio.findOne({ ownerId: req.user!._id });
-    if (!studio) return res.status(403).json({ error: 'Studio not found' });
+    if (!studio) return res.status(404).json({ error: 'No studio profile found. Please set up your studio first.' });
     const shoot = new ShootLog({ ...req.body, studioId: studio._id });
     await shoot.save();
     res.json(shoot);
@@ -452,6 +452,55 @@ router.get('/portfolio', async (req: AuthRequest, res) => {
     return res.json({ success: true, portfolios });
   } catch (error: any) {
     return res.status(500).json({ error: error.message || 'Failed to fetch portfolios' });
+  }
+});
+
+// Free direct upgrade endpoint requested by user
+router.post('/free-upgrade', async (req: AuthRequest, res: express.Response) => {
+  try {
+    const { plan } = req.body;
+    console.log('[free-upgrade] Request received:', { plan, userId: req.user?._id, role: req.user?.role });
+    if (!plan) return res.status(400).json({ error: 'Plan is required' });
+
+    let studio = await Studio.findOne({ ownerId: req.user?._id });
+    
+    if (!studio) {
+      console.log('[free-upgrade] No studio found, auto-creating one...');
+      // Auto-create a studio (same logic as /studio/me)
+      const { User: UserModel } = require('../models');
+      const user = await UserModel.findById(req.user?._id);
+      const cleanName = (user ? user.name : 'Mara') + ' Studio';
+      
+      studio = await Studio.create({
+        name: cleanName,
+        ownerId: req.user?._id,
+        subscriptionPlan: plan,
+        subscriptionStatus: 'ACTIVE',
+      });
+      
+      // Upgrade role if needed
+      if (user && user.role === 'CLIENT') {
+        user.role = 'STUDIO_OWNER';
+        await user.save();
+      }
+      
+      console.log('[free-upgrade] Auto-created studio:', studio.name);
+      return res.json({ message: 'Free upgrade successful (new studio created)', studio });
+    }
+
+    const startDate = new Date();
+    const oneYearFromNow = new Date(startDate.getTime() + 365 * 24 * 60 * 60 * 1000);
+    studio.subscriptionPlan = plan;
+    studio.subscriptionStatus = 'ACTIVE';
+    studio.subscriptionStartDate = startDate;
+    studio.subscriptionExpiresAt = oneYearFromNow;
+    await studio.save();
+
+    console.log('[free-upgrade] Studio upgraded:', studio.name, '->', plan);
+    return res.json({ message: 'Free upgrade successful', studio });
+  } catch (err: any) {
+    console.error('[free-upgrade] Error:', err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 

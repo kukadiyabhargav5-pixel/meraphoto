@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { AuthRequest } from '../middlewares/auth';
+import { AuthRequest, isSuperAdmin } from '../middlewares/auth';
 import { Media, Event, Studio, FaceEmbedding } from '../models';
 import { uploadFile, deleteFile, generateSignature } from '../services/StorageService';
 import { photoQueue, videoQueue, processMediaLocal, isRedisAvailable } from '../workers/mediaWorker';
@@ -40,26 +40,28 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
         const isVideo = file.mimetype.startsWith('video/');
         const type = isVideo ? 'VIDEO' : 'PHOTO';
         
-        // Enforce limits based on plan
-        if (type === 'VIDEO') {
-          if (studio.subscriptionPlan === 'BASIC' && (studio.usage.videosUploaded || 0) >= 10) {
-            throw new Error('Basic plan video limit reached (Max 10 videos). Please upgrade.');
-          } else if (studio.subscriptionPlan === 'STANDARD' && (studio.usage.videosUploaded || 0) >= 100) {
-            throw new Error('Standard plan video limit reached (Max 100 videos). Please upgrade.');
-          } else if (studio.subscriptionPlan === 'ESSENTIAL' && (studio.usage.videosUploaded || 0) >= 200) {
-            throw new Error('Essential plan video limit reached (Max 200 videos). Please upgrade.');
-          } else if (studio.subscriptionPlan === 'PREMIUM' && (studio.usage.videosUploaded || 0) >= 500) {
-            throw new Error('Premium plan video limit reached (Max 500 videos). Please upgrade.');
-          }
-        } else if (type === 'PHOTO') {
-          if (studio.subscriptionPlan === 'BASIC' && (studio.usage.photosUploaded || 0) >= 50000) {
-            throw new Error('Basic plan photo limit reached (Max 50,000 photos). Please upgrade.');
-          } else if (studio.subscriptionPlan === 'STANDARD' && (studio.usage.photosUploaded || 0) >= 150000) {
-            throw new Error('Standard plan photo limit reached (Max 150,000 photos). Please upgrade.');
-          } else if (studio.subscriptionPlan === 'ESSENTIAL' && (studio.usage.photosUploaded || 0) >= 300000) {
-            throw new Error('Essential plan photo limit reached (Max 300,000 photos). Please upgrade.');
-          } else if (studio.subscriptionPlan === 'PREMIUM' && (studio.usage.photosUploaded || 0) >= 750000) {
-            throw new Error('Premium plan photo limit reached (Max 750,000 photos). Please upgrade.');
+        // Enforce limits based on plan (Bypass for SUPER_ADMIN)
+        if (!isSuperAdmin(req.user)) {
+          if (type === 'VIDEO') {
+            if (studio.subscriptionPlan === 'BASIC' && (studio.usage.videosUploaded || 0) >= 10) {
+              throw new Error('Basic plan video limit reached (Max 10 videos). Please upgrade.');
+            } else if (studio.subscriptionPlan === 'STANDARD' && (studio.usage.videosUploaded || 0) >= 100) {
+              throw new Error('Standard plan video limit reached (Max 100 videos). Please upgrade.');
+            } else if (studio.subscriptionPlan === 'ESSENTIAL' && (studio.usage.videosUploaded || 0) >= 200) {
+              throw new Error('Essential plan video limit reached (Max 200 videos). Please upgrade.');
+            } else if (studio.subscriptionPlan === 'PREMIUM' && (studio.usage.videosUploaded || 0) >= 500) {
+              throw new Error('Premium plan video limit reached (Max 500 videos). Please upgrade.');
+            }
+          } else if (type === 'PHOTO') {
+            if (studio.subscriptionPlan === 'BASIC' && (studio.usage.photosUploaded || 0) >= 50000) {
+              throw new Error('Basic plan photo limit reached (Max 50,000 photos). Please upgrade.');
+            } else if (studio.subscriptionPlan === 'STANDARD' && (studio.usage.photosUploaded || 0) >= 150000) {
+              throw new Error('Standard plan photo limit reached (Max 150,000 photos). Please upgrade.');
+            } else if (studio.subscriptionPlan === 'ESSENTIAL' && (studio.usage.photosUploaded || 0) >= 300000) {
+              throw new Error('Essential plan photo limit reached (Max 300,000 photos). Please upgrade.');
+            } else if (studio.subscriptionPlan === 'PREMIUM' && (studio.usage.photosUploaded || 0) >= 750000) {
+              throw new Error('Premium plan photo limit reached (Max 750,000 photos). Please upgrade.');
+            }
           }
         }
 
@@ -134,6 +136,18 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
       }
     }
     uploadedMediaList.push(...results);
+
+    // Increment consumed credits permanently
+    const uploadedPhotosCount = uploadedMediaList.filter(m => m && m.type === 'PHOTO').length;
+    const uploadedVideosCount = uploadedMediaList.filter(m => m && m.type === 'VIDEO').length;
+    if (uploadedPhotosCount > 0 || uploadedVideosCount > 0) {
+      await Studio.findByIdAndUpdate(event.studioId, {
+        $inc: {
+          'usage.photosUploaded': uploadedPhotosCount,
+          'usage.videosUploaded': uploadedVideosCount,
+        }
+      });
+    }
 
     if (offlineQueue.length > 0) {
       console.log(`[Upload] Redis offline. Processing ${offlineQueue.length} media items in background batches of 5.`);
@@ -223,7 +237,7 @@ export const deleteMedia = async (req: AuthRequest, res: Response) => {
 
     // Validate that the request is from the owner or team member of the studio
     const studio = await Studio.findOne({ ownerId: req.user._id });
-    if (!studio && req.user.role !== 'SUPER_ADMIN') {
+    if (!studio && !isSuperAdmin(req.user)) {
       return res.status(403).json({ error: 'Unauthorized to delete this media' });
     }
 
@@ -264,7 +278,7 @@ export const deleteBulkMedia = async (req: AuthRequest, res: Response) => {
 
     // Validate that the request is from the owner
     const studio = await Studio.findOne({ ownerId: req.user._id });
-    if (!studio && req.user.role !== 'SUPER_ADMIN') {
+    if (!studio && !isSuperAdmin(req.user)) {
       return res.status(403).json({ error: 'Unauthorized to delete media for this event' });
     }
 
@@ -367,6 +381,39 @@ export const bulkCreateMedia = async (req: AuthRequest, res: Response) => {
     const studio = await Studio.findById(event.studioId);
     if (!studio) return res.status(404).json({ error: 'Studio not found' });
 
+    // Enforce storage limits based on active plan (Bypass for SUPER_ADMIN)
+    if (!isSuperAdmin(req.user)) {
+      const planKey = (studio.subscriptionPlan || 'BASIC').toUpperCase();
+      const limits: Record<string, { photos: number; videos: number }> = {
+        BASIC: { photos: 50000, videos: 10 },
+        STANDARD: { photos: 150000, videos: 100 },
+        ESSENTIAL: { photos: 300000, videos: 200 },
+        PREMIUM: { photos: 750000, videos: 500 },
+        STARTER: { photos: 50000, videos: 10 },
+        PROFESSIONAL: { photos: 150000, videos: 100 },
+        BUSINESS: { photos: 300000, videos: 200 },
+        ENTERPRISE: { photos: 750000, videos: 500 },
+      };
+      const planLimit = limits[planKey] || limits.BASIC;
+
+      const newPhotosCount = mediaList.filter(m => (m.type || 'PHOTO') === 'PHOTO').length;
+      const newVideosCount = mediaList.filter(m => m.type === 'VIDEO').length;
+
+      const currentPhotos = await Media.countDocuments({ studioId: studio._id, type: 'PHOTO' });
+      const currentVideos = await Media.countDocuments({ studioId: studio._id, type: 'VIDEO' });
+
+      if (newPhotosCount > 0 && currentPhotos + newPhotosCount > planLimit.photos) {
+        return res.status(403).json({ 
+          error: `Photo storage limit exceeded. Your ${planKey} plan allows up to ${planLimit.photos.toLocaleString('en-IN')} photos (${Math.max(0, planLimit.photos - currentPhotos)} remaining). Please upgrade your plan.` 
+        });
+      }
+      if (newVideosCount > 0 && currentVideos + newVideosCount > planLimit.videos) {
+        return res.status(403).json({ 
+          error: `Video storage limit exceeded. Your ${planKey} plan allows up to ${planLimit.videos} videos (${Math.max(0, planLimit.videos - currentVideos)} remaining). Please upgrade your plan.` 
+        });
+      }
+    }
+
     const newMediaDocs = mediaList.map(item => ({
       type: item.type || 'PHOTO',
       r2Key: item.publicId,
@@ -383,6 +430,19 @@ export const bulkCreateMedia = async (req: AuthRequest, res: Response) => {
 
     // Insert all documents at once
     const insertedMedia = await Media.insertMany(newMediaDocs);
+
+    // Increment consumed credits permanently (Never refunded on delete)
+    const newPhotosCount = newMediaDocs.filter(m => m.type === 'PHOTO').length;
+    const newVideosCount = newMediaDocs.filter(m => m.type === 'VIDEO').length;
+    if (newPhotosCount > 0 || newVideosCount > 0) {
+      await Studio.findByIdAndUpdate(event.studioId, {
+        $inc: {
+          'usage.photosUploaded': newPhotosCount,
+          'usage.videosUploaded': newVideosCount,
+        }
+      });
+    }
+
     const offlineQueue: any[] = [];
 
     // Queue for processing

@@ -124,7 +124,7 @@ export default function PricingPage() {
 
                 <div className="mt-8">
                   <Link 
-                    href="/signup"
+                    href="/dashboard/plans-billing"
                     className={`w-full py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center justify-center cursor-pointer ${plan.popular ? 'bg-[#c5a880] hover:bg-white text-[#09090b] font-black' : 'border border-[#09090b]/15 text-[#09090b] bg-transparent hover:bg-slate-50'}`}
                   >
                     Choose {plan.name}

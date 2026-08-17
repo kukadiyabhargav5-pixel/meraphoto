@@ -12,6 +12,7 @@ const shootLogSchema = new mongoose.Schema({
   videographersNames: [{ type: String }],
   location: { type: String },
   notes: { type: String },
+  reminder: { type: String, enum: ['none', '24h', '72h'], default: 'none' },
   createdAt: { type: Date, default: Date.now }
 });
 

@@ -193,7 +193,7 @@ export default function GalleryVisitorsPage() {
                           <td className="p-4 text-sm text-slate-500 font-medium">
                             <div className="flex items-center gap-2">
                               <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                              {new Date(v.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              {new Date(v.createdAt).toLocaleDateString('en-GB')} {new Date(v.createdAt).toLocaleTimeString()}
                             </div>
                           </td>
                         </tr>

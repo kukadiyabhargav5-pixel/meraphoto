@@ -95,10 +95,10 @@ export const getStudioById = async (req: Request, res: Response) => {
  */
 export const updateStudio = async (req: Request, res: Response) => {
   try {
-    const { name, subdomain, subscriptionPlan, subscriptionStatus } = req.body;
+    const { name, subscriptionPlan, subscriptionStatus } = req.body;
     const studio = await Studio.findByIdAndUpdate(
       req.params.id,
-      { name, subdomain, subscriptionPlan, subscriptionStatus },
+      { name, subscriptionPlan, subscriptionStatus },
       { new: true, runValidators: true }
     ).populate('ownerId', 'name email');
     if (!studio) return res.status(404).json({ error: 'Studio not found' });
@@ -138,7 +138,7 @@ export const getStudioEvents = async (req: Request, res: Response) => {
 export const getEventById = async (req: Request, res: Response) => {
   try {
     const event = await Event.findById(req.params.id)
-      .populate('studioId', 'name subdomain')
+      .populate('studioId', 'name')
       .populate('assignedTeamMembers', 'name email');
     if (!event) return res.status(404).json({ error: 'Event not found' });
     
@@ -193,10 +193,12 @@ export const getAdminStats = async (req: Request, res: Response) => {
     const totalMedia = await Media.countDocuments();
     const totalBookings = await Booking.countDocuments();
     const totalQuotations = await Quotation.countDocuments();
+    const totalSupportTickets = await SupportTicket.countDocuments();
+    const totalClientTickets = await ClientTicket.countDocuments();
     
     // Calculate total revenue from all bills
     const bills = await Bill.find();
-    const totalRevenue = bills.reduce((acc, bill) => acc + (bill.totalAmount || 0), 0) || 0;
+    const totalRevenue = bills.reduce((acc, bill) => acc + (bill.amount || 0), 0) || 0;
 
     return res.json({
       totalUsers,
@@ -205,6 +207,8 @@ export const getAdminStats = async (req: Request, res: Response) => {
       totalMedia,
       totalBookings,
       totalQuotations,
+      totalSupportTickets,
+      totalClientTickets,
       totalRevenue
     });
   } catch (err: any) {
@@ -217,8 +221,22 @@ export const getAdminStats = async (req: Request, res: Response) => {
  */
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
-    const users = await User.find().select('-passwordHash').sort({ createdAt: -1 });
-    return res.json({ users });
+    const users = await User.find().select('-passwordHash').sort({ createdAt: -1 }).lean();
+    
+    const studios = await Studio.find().select('name ownerId').lean();
+    
+    const usersWithStudios = users.map(u => {
+      const userStudios = studios.filter(s => {
+        if (!s.ownerId || !u._id) return false;
+        return String(s.ownerId) === String(u._id);
+      });
+      return {
+        ...u,
+        studioName: userStudios.length > 0 ? userStudios[0].name : null
+      };
+    });
+
+    return res.json({ users: usersWithStudios });
   } catch (err: any) {
     console.error('getAllUsers Error:', err);
     return res.status(500).json({ error: err.message });
@@ -243,8 +261,20 @@ export const getAllStudios = async (req: Request, res: Response) => {
  */
 export const getAllEvents = async (req: Request, res: Response) => {
   try {
-    const events = await Event.find().populate('studioId', 'name').sort({ createdAt: -1 });
-    return res.json({ events });
+    const events = await Event.find().populate('studioId', 'name').sort({ createdAt: -1 }).lean();
+    
+    // Get media count for all events
+    const mediaList = await Media.find().select('eventId');
+    
+    const eventsWithStats = events.map(ev => {
+      const evMedia = mediaList.filter(m => m.eventId.toString() === ev._id.toString());
+      return {
+        ...ev,
+        mediaCount: evMedia.length,
+      };
+    });
+
+    return res.json({ events: eventsWithStats });
   } catch (err: any) {
     console.error('getAllEvents Error:', err);
     return res.status(500).json({ error: err.message });
@@ -285,7 +315,7 @@ export const getMediaStats = async (req: Request, res: Response) => {
  */
 export const getAllTickets = async (req: Request, res: Response) => {
   try {
-    const tickets = await SupportTicket.find().populate('studioId', 'name').sort({ createdAt: -1 });
+    const tickets = await SupportTicket.find({ status: { $ne: 'RESOLVED' } }).populate('studioId', 'name').sort({ createdAt: -1 });
     return res.json({ tickets });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -323,7 +353,7 @@ const deleteStudioInternal = async (studioId: string) => {
   // Find all events for this studio and delete them
   const events = await Event.find({ studioId });
   for (const event of events) {
-    await deleteEventInternal(event._id as string);
+    await deleteEventInternal(event._id.toString());
   }
   
   // Delete all other studio-related data
@@ -343,7 +373,7 @@ const deleteUserInternal = async (userId: string) => {
   // Find all studios owned by this user
   const studios = await Studio.find({ ownerId: userId });
   for (const studio of studios) {
-    await deleteStudioInternal(studio._id as string);
+    await deleteStudioInternal(studio._id.toString());
   }
   
   // Finally delete the user

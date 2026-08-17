@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Calendar, Settings, CreditCard, HelpCircle,
   LogOut, Plus,
   Users, Users2, FileText, QrCode, User, BookOpen, Receipt, Briefcase,
-  Menu, X, UserPlus
+  Menu, X, UserPlus, ScanLine
 } from 'lucide-react';
 import { DashboardProvider, useDashboard } from './DashboardContext';
 import ProtectedRoute from '../../components/ProtectedRoute';
@@ -48,6 +48,7 @@ const NAV_ITEMS = [
   {
     category: 'System',
     links: [
+      { href: '/dashboard/queries', label: 'Queries', icon: HelpCircle },
       { href: '/dashboard/studio-settings', label: 'Studio Settings', icon: Settings },
       { href: '/dashboard/studio-branding', label: 'Studio Branding', icon: Settings },
       { href: '/dashboard/plans-billing', label: 'Plans & Billing', icon: CreditCard },
@@ -104,6 +105,16 @@ function SidebarContent({
               <Icon className="h-4 w-4 shrink-0" /> {label}
             </Link>
           ))}
+
+          {/* Generate QR Code Link */}
+          <Link
+            href="/dashboard/generate-qr"
+            className={linkClass('/dashboard/generate-qr')}
+            onClick={onLinkClick}
+          >
+            <ScanLine className="h-4 w-4 shrink-0" />
+            Generate QR Code
+          </Link>
         </nav>
       </div>
 
