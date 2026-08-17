@@ -48,7 +48,6 @@ export default function StudioBrandingPage() {
   // Use studio from context if available, otherwise fallback
   const [studioName, setStudioName] = useState(studio?.name || '');
   const [studioLogo, setStudioLogo] = useState(studio?.logoUrl || '');
-  const [studioSubdomain, setStudioSubdomain] = useState(studio?.subdomain || '');
   const [studioCustomDomain, setStudioCustomDomain] = useState(studio?.customDomain || '');
   const [wmType, setWmType] = useState(studio?.watermark?.type || 'NONE');
   const [wmText, setWmText] = useState(studio?.watermark?.text || 'Mara Photo');
@@ -62,7 +61,6 @@ export default function StudioBrandingPage() {
     if (studio) {
       setStudioName(studio.name || '');
       setStudioLogo(studio.logoUrl || '');
-      setStudioSubdomain(studio.subdomain || '');
       setStudioCustomDomain(studio.customDomain || '');
       if (studio.watermark) {
         setWmType(studio.watermark.type || 'NONE');
@@ -83,7 +81,6 @@ export default function StudioBrandingPage() {
       const payload = {
         name: studioName,
         logoUrl: studioLogo,
-        subdomain: studioSubdomain,
         customDomain: studioCustomDomain,
         watermark: {
           type: wmType,
@@ -157,11 +154,6 @@ export default function StudioBrandingPage() {
                     <p className="text-[10px] text-slate-400 mt-2 font-semibold">Max 2MB. Square ratio recommended.</p>
                   </div>
                 </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[12px] text-slate-600 font-bold uppercase tracking-wider">Subdomain (slug.maraphoto.com)</label>
-                <input type="text" required value={studioSubdomain} onChange={(e) => setStudioSubdomain(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]" />
               </div>
 
               <div className="flex flex-col gap-1">

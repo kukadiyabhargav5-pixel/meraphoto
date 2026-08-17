@@ -26,7 +26,7 @@ export default function LoginPage() {
         try {
           const userObj = JSON.parse(userStr);
           if (userObj.role === 'SUPER_ADMIN') {
-            router.replace('/admin');
+            router.replace('/admin-choice');
             return;
           }
         } catch (e) {}
@@ -70,7 +70,7 @@ export default function LoginPage() {
       if (userStr) {
         const userObj = JSON.parse(userStr);
         if (userObj.role === 'SUPER_ADMIN') {
-          router.push('/admin');
+          router.push('/admin-choice');
           return;
         }
       }

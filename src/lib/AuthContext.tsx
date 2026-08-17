@@ -14,7 +14,12 @@ interface AuthUser {
 interface AuthStudio {
   id: string;
   name: string;
-  subdomain: string;
+  subscriptionPlan?: string;
+  subscriptionStatus?: string;
+  subscriptionStartDate?: string | Date;
+  subscriptionExpiresAt?: string | Date;
+  logoUrl?: string;
+  customDomain?: string;
   instagramUrl?: string;
   facebookUrl?: string;
 }

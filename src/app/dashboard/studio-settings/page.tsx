@@ -25,7 +25,6 @@ export default function StudioSettingsPage() {
   // Studio fields
   const [studioName, setStudioName] = useState('');
   const [studioLogo, setStudioLogo] = useState('');
-  const [studioSubdomain, setStudioSubdomain] = useState('');
   const [studioWebsite, setStudioWebsite] = useState('');
   const [studioInstagram, setStudioInstagram] = useState('');
   const [studioFacebook, setStudioFacebook] = useState('');
@@ -40,7 +39,6 @@ export default function StudioSettingsPage() {
     if (studio) {
       setStudioName(studio.name || '');
       setStudioLogo(studio.logoUrl || '');
-      setStudioSubdomain(studio.subdomain || '');
       setStudioWebsite(studio.customDomain || '');
       setStudioInstagram(studio.instagramUrl || '');
       setStudioFacebook(studio.facebookUrl || '');
@@ -80,16 +78,11 @@ export default function StudioSettingsPage() {
       toast.error('Studio name is required');
       return;
     }
-    if (!studioSubdomain.trim()) {
-      toast.error('Subdomain is required');
-      return;
-    }
     setIsSaving(true);
     try {
       const res = await apiClient.put('/studio/me', {
         name: studioName,
         logoUrl: studioLogo,
-        subdomain: studioSubdomain,
         customDomain: studioWebsite || undefined,
         instagramUrl: studioInstagram || undefined,
         facebookUrl: studioFacebook || undefined,
@@ -118,7 +111,6 @@ export default function StudioSettingsPage() {
     if (studio) {
       setStudioName(studio.name || '');
       setStudioLogo(studio.logoUrl || '');
-      setStudioSubdomain(studio.subdomain || '');
       setStudioWebsite(studio.customDomain || '');
       setStudioInstagram(studio.instagramUrl || '');
       setStudioFacebook(studio.facebookUrl || '');
@@ -141,7 +133,6 @@ export default function StudioSettingsPage() {
   };
   const plan = studio?.subscriptionPlan || 'BASIC';
   const pc = planConfig[plan] || planConfig.BASIC;
-  const subdomainLink = studioSubdomain ? `${studioSubdomain}.maraphoto.com` : '';
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8 font-poppins">
@@ -564,37 +555,6 @@ export default function StudioSettingsPage() {
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Subdomain */}
-            <div className="ss-field">
-              <label className="ss-label">
-                Subdomain <span className="text-rose-400">*</span>
-              </label>
-              {isEditing ? (
-                <div className="ss-subdomain-group">
-                  <input
-                    type="text"
-                    required
-                    value={studioSubdomain}
-                    onChange={(e) => setStudioSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                    className="ss-input"
-                    placeholder="your-studio"
-                  />
-                  <span className="ss-subdomain-suffix">.maraphoto.com</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 pt-1">
-                  <Globe className="h-4 w-4 text-[#c5a880] flex-shrink-0" />
-                  {subdomainLink ? (
-                    <a href={`https://${subdomainLink}`} target="_blank" rel="noopener noreferrer" className="ss-link">
-                      {subdomainLink} <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
-                  ) : (
-                    <span className="text-sm text-slate-400 font-semibold italic">Not configured</span>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* Website Link */}
