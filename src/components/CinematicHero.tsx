@@ -263,6 +263,32 @@ export default function CinematicHero() {
           <span className="hero-loading-text">Loading Experience... {loadingProgress}%</span>
         </div>
 
+        {/* Intro Text Overlay */}
+        <div className={`hero-text-intro ${scrollProgress > 0.05 ? 'hero-text-hidden' : ''}`}>
+          <h1 className="hero-intro-headline">
+            Crafting Timeless<br /><em>Memories</em>
+          </h1>
+          <p className="hero-intro-sub">Exquisite Wedding Photography</p>
+          <button 
+            className="hero-intro-cta" 
+            onClick={() => window.scrollTo({ top: window.innerHeight * 1.5, behavior: 'smooth' })}
+          >
+            View Portfolio
+            <ChevronDown />
+          </button>
+        </div>
+
+        {/* Final Text Overlay */}
+        <div className={`hero-text-final ${scrollProgress > 0.95 ? 'hero-text-visible' : ''}`}>
+          <span className="hero-final-brand">Mara Photo</span>
+          <h2 className="hero-final-headline">Your Story,<br /><em>Beautifully Told</em>.</h2>
+          <p className="hero-final-sub">Book your experience today.</p>
+          <a href="/pricing" className="hero-final-cta">
+            Get Started
+            <ChevronDown />
+          </a>
+        </div>
+
 
 
         {/* Scroll Indicator */}
