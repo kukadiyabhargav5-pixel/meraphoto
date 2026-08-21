@@ -5,13 +5,11 @@
 
 /* ─── BASE RESETS ─── */
 html {
-  overflow-x: clip;
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
 }
 
 body {
-  overflow-x: clip;
   min-width: 0;
 }
 
