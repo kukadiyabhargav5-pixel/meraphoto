@@ -68,6 +68,8 @@ export default function GlobalLoader() {
   const domLoadedRef = useRef(false);
   const dataLoadedRef = useRef(false);
   const minTimePassedRef = useRef(false);
+  const heroLoadedRef = useRef(true); // default true unless we see a 'hero-start'
+  const heroProgressRef = useRef(0);
 
   useEffect(() => {
     if (phase !== 'counting') return;
@@ -98,9 +100,6 @@ export default function GlobalLoader() {
     window.addEventListener('api-idle', handleApiIdle);
 
     // ─── Milestone 3: Cinematic Hero loaded ───
-    const heroLoadedRef = useRef(true); // default true unless we see a 'hero-start'
-    const heroProgressRef = useRef(0);
-
     const handleHeroStart = () => { heroLoadedRef.current = false; };
     const handleHeroLoading = (e: Event) => {
       const customEvent = e as CustomEvent;
