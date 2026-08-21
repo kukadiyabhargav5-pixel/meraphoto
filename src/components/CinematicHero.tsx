@@ -8,12 +8,7 @@ import { ChevronDown } from 'lucide-react';
 const FRAME_PREFIX = '/frames/frame_';
 const FRAME_EXT = '.png';
 const TOTAL_FRAMES = 240;
-const PRELOAD_BATCH_INITIAL = 240; // Preload all frames for 100% completion before hiding loader
-const PRELOAD_BATCH_SIZE = 25;
-const PRELOAD_BATCH_DELAY = 100; // ms between batches
-
-// Scroll indicator threshold
-const INDICATOR_HIDE_AT = 0.03;
+const HEADER_HEIGHT = 80; // px — matches the fixed header
 
 /* ─────────────── HELPERS ─────────────── */
 
@@ -32,11 +27,9 @@ function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, cw: num
   let sx = 0, sy = 0, sw = iw, sh = ih;
 
   if (imgRatio > canvasRatio) {
-    // Image wider than canvas — crop sides
     sw = ih * canvasRatio;
     sx = (iw - sw) / 2;
   } else {
-    // Image taller than canvas — crop top/bottom
     sh = iw / canvasRatio;
     sy = (ih - sh) / 2;
   }
@@ -50,16 +43,28 @@ export default function CinematicHero() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imagesRef = useRef<(HTMLImageElement | null)[]>(new Array(TOTAL_FRAMES).fill(null));
-  const currentFrameRef = useRef<number>(0);
   const rafRef = useRef<number>(0);
   const lastDrawnFrameRef = useRef<number>(-1);
+  const progressRef = useRef<number>(0);
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
-  const [scrollHeightPx, setScrollHeightPx] = useState(8000); // Default fallback
-  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [isInView, setIsInView] = useState(true);
+  const [scrollHeight, setScrollHeight] = useState(8000);
 
-  // Preload images
+  // Calculate scroll height on mount
+  useEffect(() => {
+    function calcHeight() {
+      const isMobile = window.innerWidth < 768;
+      const pxPerFrame = isMobile ? window.innerHeight * 0.07 : window.innerHeight * 0.12;
+      setScrollHeight(TOTAL_FRAMES * pxPerFrame);
+    }
+    calcHeight();
+    window.addEventListener('resize', calcHeight);
+    return () => window.removeEventListener('resize', calcHeight);
+  }, []);
+
+  // Preload a single image
   const loadImage = useCallback((index: number): Promise<void> => {
     return new Promise((resolve) => {
       if (imagesRef.current[index]) {
@@ -73,7 +78,6 @@ export default function CinematicHero() {
         resolve();
       };
       img.onerror = () => {
-        // Still resolve to avoid blocking — will just skip this frame
         resolve();
       };
     });
@@ -85,50 +89,34 @@ export default function CinematicHero() {
     window.dispatchEvent(new Event('hero-start'));
 
     async function preloadAll() {
-      // Batch 1: Load first N frames immediately
-      const initialPromises: Promise<void>[] = [];
-      const initialBatchSize = Math.min(PRELOAD_BATCH_INITIAL, TOTAL_FRAMES);
-      let initialLoadedCount = 0;
-      
-      for (let i = 0; i < initialBatchSize; i++) {
-        initialPromises.push(
-          loadImage(i).then(() => {
-            initialLoadedCount++;
-            const prog = Math.floor((initialLoadedCount / initialBatchSize) * 100);
-            setLoadingProgress(prog);
-            window.dispatchEvent(new CustomEvent('hero-loading', { detail: { progress: prog } }));
-          })
-        );
+      let loadedCount = 0;
+      const BATCH = 20;
+
+      for (let start = 0; start < TOTAL_FRAMES && !cancelled; start += BATCH) {
+        const end = Math.min(start + BATCH, TOTAL_FRAMES);
+        const promises: Promise<void>[] = [];
+        for (let i = start; i < end; i++) {
+          promises.push(
+            loadImage(i).then(() => {
+              loadedCount++;
+              const prog = Math.floor((loadedCount / TOTAL_FRAMES) * 100);
+              window.dispatchEvent(new CustomEvent('hero-loading', { detail: { progress: prog } }));
+            })
+          );
+        }
+        await Promise.all(promises);
+        if (start + BATCH < TOTAL_FRAMES) {
+          await new Promise(r => setTimeout(r, 50));
+        }
       }
-      await Promise.all(initialPromises);
 
       if (cancelled) return;
       setIsLoaded(true);
       window.dispatchEvent(new Event('hero-loaded'));
-
-      // Batch 2+: Load remaining frames progressively
-      let loaded = PRELOAD_BATCH_INITIAL;
-      while (loaded < TOTAL_FRAMES && !cancelled) {
-        const batchEnd = Math.min(loaded + PRELOAD_BATCH_SIZE, TOTAL_FRAMES);
-        const batchPromises: Promise<void>[] = [];
-        for (let i = loaded; i < batchEnd; i++) {
-          batchPromises.push(loadImage(i));
-        }
-        await Promise.all(batchPromises);
-        loaded = batchEnd;
-
-        // Small delay between batches to avoid overwhelming the browser
-        if (loaded < TOTAL_FRAMES) {
-          await new Promise(r => setTimeout(r, PRELOAD_BATCH_DELAY));
-        }
-      }
     }
 
     preloadAll();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [loadImage]);
 
   // Canvas resize handler
@@ -137,25 +125,16 @@ export default function CinematicHero() {
     if (!canvas) return;
 
     function resize() {
-      const container = containerRef.current;
-      const sticky = container?.querySelector('.hero-sticky') || container;
-      if (!canvas || !sticky) return;
-      const dpr = Math.max(2, window.devicePixelRatio || 1); // minimum 2x for crisp rendering
-      
-      const w = sticky.clientWidth;
-      const h = sticky.clientHeight;
-      
+      if (!canvas) return;
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const w = window.innerWidth;
+      const h = window.innerHeight - HEADER_HEIGHT;
+
       canvas.width = w * dpr;
       canvas.height = h * dpr;
-      // We don't set inline style width/height so CSS 100% takes over, avoiding gap issues.
-      
-      // Calculate responsive scroll height in pixels (avoids vh jumping on mobile)
-      const isMobile = window.innerWidth < 768;
-      // 7% of screen height per frame on mobile (fast scroll), 12% on desktop
-      const pxPerFrame = isMobile ? window.innerHeight * 0.07 : window.innerHeight * 0.12;
-      setScrollHeightPx(TOTAL_FRAMES * pxPerFrame);
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
 
-      // Force redraw on resize
       lastDrawnFrameRef.current = -1;
     }
 
@@ -182,23 +161,30 @@ export default function CinematicHero() {
         return;
       }
 
-      // Calculate scroll progress within the hero container
       const rect = container.getBoundingClientRect();
-      const scrollableHeight = container.offsetHeight - window.innerHeight;
+      const containerHeight = container.offsetHeight;
+      const viewportHeight = window.innerHeight;
 
+      // Is the scroll container visible?
+      const visible = rect.bottom > HEADER_HEIGHT && rect.top < viewportHeight;
+      setIsInView(visible);
+
+      // Calculate progress: 0 when top of container reaches top of screen,
+      // 1 when bottom of container reaches bottom of screen
+      const scrollableDistance = containerHeight - viewportHeight + HEADER_HEIGHT;
       let progress = 0;
-      if (scrollableHeight > 0) {
-        progress = Math.max(0, Math.min(1, -rect.top / scrollableHeight));
+      if (scrollableDistance > 0) {
+        progress = Math.max(0, Math.min(1, -(rect.top - HEADER_HEIGHT) / scrollableDistance));
       }
+
+      progressRef.current = progress;
+      setScrollProgress(progress);
 
       // Map progress to frame index
       const frameIndex = Math.min(
         TOTAL_FRAMES - 1,
         Math.max(0, Math.floor(progress * TOTAL_FRAMES))
       );
-
-      currentFrameRef.current = frameIndex;
-      setScrollProgress(progress);
 
       // Only redraw if frame changed
       if (frameIndex !== lastDrawnFrameRef.current) {
@@ -238,74 +224,92 @@ export default function CinematicHero() {
     }
   }, [isLoaded]);
 
-  // Compute visibility
-  const indicatorHidden = scrollProgress > INDICATOR_HIDE_AT;
-
-  // Subtle cinematic scale (1.02 → 1.00 over sequence)
+  const indicatorHidden = scrollProgress > 0.03;
   const scale = 1.02 - 0.02 * scrollProgress;
 
   return (
-    <div
-      ref={containerRef}
-      className="hero-scroll-container"
-      style={{ height: `${scrollHeightPx}px` }}
-    >
-      <div className="hero-sticky">
-        {/* Canvas */}
-        <canvas
-          ref={canvasRef}
-          className="hero-canvas"
-          style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}
-        />
-
-        {/* Cinematic Overlay */}
-        <div className="hero-cinematic-overlay" />
-
-        {/* Loading Overlay removed as GlobalLoader handles it now */}
-        <div className="hidden" />
-
-        {/* Intro Text Overlay */}
-        <div className={`hero-text-intro ${scrollProgress > 0.05 ? 'hero-text-hidden' : ''}`}>
-          <h1 className="hero-intro-headline">
-            Crafting Timeless<br /><em>Memories</em>
-          </h1>
-          <p className="hero-intro-sub">Exquisite Wedding Photography</p>
-          <button 
-            className="hero-intro-cta" 
-            onClick={() => window.scrollTo({ top: window.innerHeight * 1.5, behavior: 'smooth' })}
-          >
-            View Portfolio
-            <ChevronDown />
-          </button>
-        </div>
-
-        {/* Final Text Overlay */}
-        <div className={`hero-text-final ${scrollProgress > 0.95 ? 'hero-text-visible' : ''}`}>
-          <span className="hero-final-brand">Mara Photo</span>
-          <h2 className="hero-final-headline">Your Story,<br /><em>Beautifully Told</em>.</h2>
-          <p className="hero-final-sub">Book your experience today.</p>
-          <a href="/pricing" className="hero-final-cta">
-            Get Started
-            <ChevronDown />
-          </a>
-        </div>
-
-
-
-        {/* Scroll Indicator */}
-        <div className={`hero-scroll-indicator ${indicatorHidden ? 'hero-indicator-hidden' : ''}`}>
-          <span className="hero-scroll-indicator-text">Scroll to Explore</span>
-          <ChevronDown className="hero-scroll-indicator-arrow" />
-        </div>
-
-
-
-        {/* Progress Bar */}
+    <>
+      {/* ── Fixed viewport: canvas + overlays stay on screen ── */}
+      {isInView && (
         <div
-          className="hero-progress-bar"
-          style={{ width: `${scrollProgress * 100}%` }}
-        />
-      </div>
-    </div>
+          style={{
+            position: 'fixed',
+            top: HEADER_HEIGHT,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 2,
+            background: '#09090b',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Canvas */}
+          <canvas
+            ref={canvasRef}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              display: 'block',
+              transform: `scale(${scale})`,
+              transformOrigin: 'center center',
+            }}
+          />
+
+          {/* Cinematic Overlay */}
+          <div className="hero-cinematic-overlay" />
+
+          {/* Intro Text */}
+          <div className={`hero-text-intro ${scrollProgress > 0.05 ? 'hero-text-hidden' : ''}`}>
+            <h1 className="hero-intro-headline">
+              Crafting Timeless<br /><em>Memories</em>
+            </h1>
+            <p className="hero-intro-sub">Exquisite Wedding Photography</p>
+            <button
+              className="hero-intro-cta"
+              onClick={() => window.scrollTo({ top: window.innerHeight * 1.5, behavior: 'smooth' })}
+            >
+              View Portfolio
+              <ChevronDown />
+            </button>
+          </div>
+
+          {/* Final Text */}
+          <div className={`hero-text-final ${scrollProgress > 0.95 ? 'hero-text-visible' : ''}`}>
+            <span className="hero-final-brand">Mara Photo</span>
+            <h2 className="hero-final-headline">Your Story,<br /><em>Beautifully Told</em>.</h2>
+            <p className="hero-final-sub">Book your experience today.</p>
+            <a href="/pricing" className="hero-final-cta">
+              Get Started
+              <ChevronDown />
+            </a>
+          </div>
+
+          {/* Scroll Indicator */}
+          <div className={`hero-scroll-indicator ${indicatorHidden ? 'hero-indicator-hidden' : ''}`}>
+            <span className="hero-scroll-indicator-text">Scroll to Explore</span>
+            <ChevronDown className="hero-scroll-indicator-arrow" />
+          </div>
+
+          {/* Progress Bar */}
+          <div
+            className="hero-progress-bar"
+            style={{ width: `${scrollProgress * 100}%` }}
+          />
+        </div>
+      )}
+
+      {/* ── Invisible scroll spacer ── */}
+      <div
+        ref={containerRef}
+        style={{
+          position: 'relative',
+          width: '100%',
+          height: scrollHeight,
+          background: 'transparent',
+          zIndex: 1,
+        }}
+      />
+    </>
   );
 }
