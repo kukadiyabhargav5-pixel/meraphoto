@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Pure CSS Aperture Animation Component
@@ -64,37 +64,56 @@ export default function GlobalLoader() {
   // phases: 'counting' -> 'exploding' -> 'flashing' -> 'revealing' -> 'done'
   const [phase, setPhase] = useState<'counting' | 'exploding' | 'flashing' | 'revealing' | 'done'>('counting');
   
-  // Track two independent loading milestones
-  const [domLoaded, setDomLoaded] = useState(false);
-  const [dataLoaded, setDataLoaded] = useState(false);
+  // Use refs to avoid stale closures in the animation frame loop
+  const domLoadedRef = useRef(false);
+  const dataLoadedRef = useRef(false);
+  const minTimePassedRef = useRef(false);
 
   useEffect(() => {
     if (phase !== 'counting') return;
 
     // ─── Milestone 1: DOM + all assets (images, fonts, scripts) ───
     const handleDomLoad = () => {
-      setDomLoaded(true);
+      domLoadedRef.current = true;
     };
 
     if (document.readyState === 'complete') {
-      setDomLoaded(true);
+      domLoadedRef.current = true;
     } else {
       window.addEventListener('load', handleDomLoad);
     }
 
     // ─── Milestone 2: All API/dashboard data loaded ───
-    // We listen to all Axios requests globally. If no requests are made, it defaults to true.
-    const handleApiActive = () => setDataLoaded(false);
-    const handleApiIdle = () => setDataLoaded(true);
+    // Listen to custom events dispatched by the Axios interceptors in api.ts
+    let apiWasActive = false;
+    const handleApiActive = () => {
+      apiWasActive = true;
+      dataLoadedRef.current = false;
+    };
+    const handleApiIdle = () => {
+      dataLoadedRef.current = true;
+    };
 
     window.addEventListener('api-active', handleApiActive);
     window.addEventListener('api-idle', handleApiIdle);
 
-    // Fallback: if 'api-active' is never fired (e.g. static page with no API calls)
-    // Or just a general fallback timeout in case something hangs
-    const fallbackTimer = setTimeout(() => {
-      setDataLoaded(true);
-    }, 4000);
+    // Fallback: if no API call is ever made (static page), mark data as loaded after 3s
+    const dataFallbackTimer = setTimeout(() => {
+      if (!apiWasActive) {
+        dataLoadedRef.current = true;
+      }
+    }, 3000);
+
+    // Hard fallback: no matter what, don't let the loader sit for more than 10s
+    const hardFallbackTimer = setTimeout(() => {
+      domLoadedRef.current = true;
+      dataLoadedRef.current = true;
+    }, 10000);
+
+    // ─── Minimum display time: ensure the loader shows for at least 1.5s ───
+    const minTimeTimer = setTimeout(() => {
+      minTimePassedRef.current = true;
+    }, 1500);
 
     // ─── Progress animation: smooth count up to 100% while waiting ───
     let animFrame: number;
@@ -103,40 +122,55 @@ export default function GlobalLoader() {
     let isCompleting = false;
 
     const tick = () => {
+      if (isCompleting) return;
+
       const elapsed = Date.now() - startTime;
-      
-      let target = 20;
-      
-      if (domLoaded && dataLoaded) {
-        // Both loaded: rush to 100%
+      const dom = domLoadedRef.current;
+      const data = dataLoadedRef.current;
+      const minTime = minTimePassedRef.current;
+
+      const allReady = dom && data && minTime;
+
+      let target: number;
+
+      if (allReady) {
+        // Everything is ready — rush to 100%
         target = 100;
       } else {
-        if (domLoaded) target += 30;
-        else target += Math.min(25, elapsed / 100);
-        
-        if (dataLoaded) target = 95;
-        else target += Math.min(20, elapsed / 200);
+        // Base: start at 10 and slowly creep up based on elapsed time
+        target = 10 + Math.min(15, elapsed / 150);
+
+        // DOM loaded adds a big chunk
+        if (dom) target += 35;
+
+        // Data loaded adds another chunk (but cap at 92 if DOM isn't done)
+        if (data) target += 30;
+
+        // Time-based slow creep for perceived progress
+        target += Math.min(10, elapsed / 500);
+
+        // Never exceed 95 until truly allReady
+        target = Math.min(target, 95);
       }
 
       // Ease towards target
-      // If rushing to 100, go much faster
-      const speed = target === 100 ? 0.25 : 0.08;
+      const speed = allReady ? 0.2 : 0.06;
       current += (target - current) * speed;
-      
-      if (target !== 100 && current > 95) current = 95; 
-      
+
+      // Hard cap at 95 until ready
+      if (!allReady && current > 95) current = 95;
+
       setProgress(Math.floor(current));
-      
-      if (target === 100 && current >= 99.5 && !isCompleting) {
+
+      if (allReady && current >= 99.5) {
         isCompleting = true;
         setProgress(100);
-        setTimeout(() => setPhase('exploding'), 400); // Wait 400ms at 100% so user can see it
-        return; // Stop animation loop
+        // Wait 500ms at 100% so the user can see it before the transition
+        setTimeout(() => setPhase('exploding'), 500);
+        return;
       }
-      
-      if (phase === 'counting' && !isCompleting) {
-        animFrame = requestAnimationFrame(tick);
-      }
+
+      animFrame = requestAnimationFrame(tick);
     };
     
     animFrame = requestAnimationFrame(tick);
@@ -145,10 +179,12 @@ export default function GlobalLoader() {
       window.removeEventListener('load', handleDomLoad);
       window.removeEventListener('api-active', handleApiActive);
       window.removeEventListener('api-idle', handleApiIdle);
-      clearTimeout(fallbackTimer);
+      clearTimeout(dataFallbackTimer);
+      clearTimeout(hardFallbackTimer);
+      clearTimeout(minTimeTimer);
       cancelAnimationFrame(animFrame);
     };
-  }, [phase, domLoaded, dataLoaded]);
+  }, [phase]);
 
   if (phase === 'done') return null;
 
@@ -208,7 +244,7 @@ export default function GlobalLoader() {
                 transition={{ delay: 0.1 }}
                 className="text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] text-[#c5a880]/80"
               >
-                {progress < 50 ? 'Loading Assets' : progress < 90 ? 'Preparing Studio' : 'Almost Ready'}{' '}
+                {progress < 30 ? 'Loading Assets' : progress < 60 ? 'Loading Experience' : progress < 90 ? 'Preparing Studio' : progress < 100 ? 'Almost Ready' : 'Welcome'}{' '}
                 <span className="font-mono ml-2 text-[#c5a880] text-sm">{progress.toString().padStart(2, '0')}%</span>
               </motion.div>
 

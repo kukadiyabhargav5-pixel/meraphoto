@@ -110,7 +110,8 @@ export default function TeamPage() {
                   </div>
                 </div>
                 <div className="bg-white/30 border border-slate-200 rounded-2xl overflow-hidden shadow-md">
-                  <div className="overflow-x-auto w-full">
+                  {/* Desktop Table */}
+                  <div className="hidden md:block overflow-x-auto w-full">
                     <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
                     <thead>
                       <tr className="border-b border-slate-200 bg-white/[0.03] text-slate-350 uppercase tracking-wider font-black">
@@ -147,6 +148,40 @@ export default function TeamPage() {
                       )}
                     </tbody>
                   </table>
+                  </div>
+
+                  {/* Mobile Card Layout */}
+                  <div className="md:hidden flex flex-col gap-3 p-3">
+                    {filteredTeam.length === 0 ? (
+                      <div className="p-8 text-center text-slate-400 font-bold">No team members found.</div>
+                    ) : (
+                      filteredTeam.map((member: any, i: number) => (
+                        <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-bold text-slate-900 text-sm block">{member.name}</span>
+                              <span className="text-[10px] font-bold text-[#c5a880] uppercase tracking-wider">{member.role}</span>
+                            </div>
+                            <div className="flex gap-1.5">
+                              <button onClick={() => handleEdit(member)} className="p-1.5 bg-slate-100 text-slate-400 hover:text-[#c5a880] rounded-lg border border-slate-200">
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => handleDelete(member)} className="p-1.5 bg-rose-50 text-rose-500 rounded-lg border border-rose-200">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-400 font-bold">Email</span>
+                            <span className="text-slate-600 font-semibold truncate ml-2 max-w-[60%] text-right">{member.email}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-400 font-bold">Mobile</span>
+                            <span className="text-slate-600 font-mono font-semibold">{member.phone || '-'}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </>

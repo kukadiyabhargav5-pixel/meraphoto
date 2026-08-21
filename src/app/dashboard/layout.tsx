@@ -197,14 +197,14 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
         <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-[#0c0c0e] border-b border-white/5 sticky top-0 z-30">
           <button
             onClick={() => setMobileOpen(true)}
-            className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            className="p-2 shrink-0 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
           >
-            <Menu className="h-5 w-5" />
+            <Menu className="h-6 w-6" />
           </button>
-          <Link href="/dashboard">
-            <img src={logoUrl} alt="Studio Logo" className={`h-7 w-auto object-contain ${!studio?.logoUrl ? 'filter invert' : ''}`} />
+          <Link href="/dashboard" className="flex-1 flex justify-center overflow-hidden px-2">
+            <img src={logoUrl} alt="Studio Logo" className={`h-8 w-auto max-w-full object-contain ${!studio?.logoUrl ? 'filter invert' : ''}`} />
           </Link>
-          <div className="w-9" /> {/* spacer */}
+          <div className="w-10 shrink-0" /> {/* spacer to balance the menu button */}
         </header>
 
         {/* Page Content */}

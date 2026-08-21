@@ -102,7 +102,7 @@ export default function ChatbotWidget() {
       {/* Floating Action Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-6 right-6 z-[100] w-16 h-16 rounded-[24px] bg-gradient-to-br from-[#1e293b] to-[#0f172a] text-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center justify-center transition-all duration-500 hover:scale-105 border-[1.5px] border-[#c5a880]/30 bot-float-anim ${isOpen ? 'scale-0 opacity-0 pointer-events-none' : 'scale-100 opacity-100'}`}
+        className={`fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[100] w-14 h-14 sm:w-16 sm:h-16 rounded-[20px] sm:rounded-[24px] bg-gradient-to-br from-[#1e293b] to-[#0f172a] text-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center justify-center transition-all duration-500 hover:scale-105 border-[1.5px] border-[#c5a880]/30 bot-float-anim ${isOpen ? 'scale-0 opacity-0 pointer-events-none' : 'scale-100 opacity-100'}`}
       >
         <div className="relative">
           <Camera className="w-7 h-7 text-[#c5a880] absolute -top-1 -right-1 opacity-20" />

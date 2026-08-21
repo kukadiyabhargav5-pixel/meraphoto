@@ -9,7 +9,7 @@ const isLocalhost = typeof window !== 'undefined' && (
 );
 
 const API_BASE_URL = isLocalhost
-  ? `http://${window.location.hostname}:5000/api`
+  ? `http://${window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname}:5000/api`
   : (process.env.NEXT_PUBLIC_API_URL || 'https://meraphotoes.onrender.com/api');
 
 export const apiClient = axios.create({
@@ -38,7 +38,7 @@ const decrementActiveRequests = () => {
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = setTimeout(() => {
         window.dispatchEvent(new Event('api-idle'));
-      }, 500); // Wait 500ms before declaring idle, in case another request is queued immediately
+      }, 300); // Wait 300ms before declaring idle, in case another request is queued immediately
     }
   }
 };
