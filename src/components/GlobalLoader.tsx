@@ -97,6 +97,23 @@ export default function GlobalLoader() {
     window.addEventListener('api-active', handleApiActive);
     window.addEventListener('api-idle', handleApiIdle);
 
+    // ─── Milestone 3: Cinematic Hero loaded ───
+    const heroLoadedRef = useRef(true); // default true unless we see a 'hero-start'
+    const heroProgressRef = useRef(0);
+
+    const handleHeroStart = () => { heroLoadedRef.current = false; };
+    const handleHeroLoading = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && typeof customEvent.detail.progress === 'number') {
+         heroProgressRef.current = customEvent.detail.progress;
+      }
+    };
+    const handleHeroLoaded = () => { heroLoadedRef.current = true; };
+    
+    window.addEventListener('hero-start', handleHeroStart);
+    window.addEventListener('hero-loading', handleHeroLoading as EventListener);
+    window.addEventListener('hero-loaded', handleHeroLoaded);
+
     // Fallback: if no API call is ever made (static page), mark data as loaded after 3s
     const dataFallbackTimer = setTimeout(() => {
       if (!apiWasActive) {
@@ -105,10 +122,12 @@ export default function GlobalLoader() {
     }, 3000);
 
     // Hard fallback: no matter what, don't let the loader sit for more than 10s
+    // BUT give it more time (15s) if the hero is loading (hero takes longer)
     const hardFallbackTimer = setTimeout(() => {
       domLoadedRef.current = true;
       dataLoadedRef.current = true;
-    }, 10000);
+      heroLoadedRef.current = true;
+    }, 15000);
 
     // ─── Minimum display time: ensure the loader shows for at least 1.5s ───
     const minTimeTimer = setTimeout(() => {
@@ -128,8 +147,9 @@ export default function GlobalLoader() {
       const dom = domLoadedRef.current;
       const data = dataLoadedRef.current;
       const minTime = minTimePassedRef.current;
+      const hero = heroLoadedRef.current;
 
-      const allReady = dom && data && minTime;
+      const allReady = dom && data && minTime && hero;
 
       let target: number;
 
@@ -140,11 +160,19 @@ export default function GlobalLoader() {
         // Base: start at 10 and slowly creep up based on elapsed time
         target = 10 + Math.min(15, elapsed / 150);
 
-        // DOM loaded adds a big chunk
-        if (dom) target += 35;
+        // DOM loaded adds a chunk
+        if (dom) target += 25;
 
-        // Data loaded adds another chunk (but cap at 92 if DOM isn't done)
-        if (data) target += 30;
+        // Data loaded adds a chunk
+        if (data) target += 20;
+
+        // Hero loaded adds a chunk OR uses heroProgress if available
+        if (hero) {
+          target += 30;
+        } else {
+          // If hero is loading, map its 0-100 progress to a 0-30 chunk
+          target += (heroProgressRef.current * 0.3);
+        }
 
         // Time-based slow creep for perceived progress
         target += Math.min(10, elapsed / 500);
@@ -179,6 +207,9 @@ export default function GlobalLoader() {
       window.removeEventListener('load', handleDomLoad);
       window.removeEventListener('api-active', handleApiActive);
       window.removeEventListener('api-idle', handleApiIdle);
+      window.removeEventListener('hero-start', handleHeroStart);
+      window.removeEventListener('hero-loading', handleHeroLoading as EventListener);
+      window.removeEventListener('hero-loaded', handleHeroLoaded);
       clearTimeout(dataFallbackTimer);
       clearTimeout(hardFallbackTimer);
       clearTimeout(minTimeTimer);

@@ -82,6 +82,7 @@ export default function CinematicHero() {
   // Progressive preloading
   useEffect(() => {
     let cancelled = false;
+    window.dispatchEvent(new Event('hero-start'));
 
     async function preloadAll() {
       // Batch 1: Load first N frames immediately
@@ -93,7 +94,9 @@ export default function CinematicHero() {
         initialPromises.push(
           loadImage(i).then(() => {
             initialLoadedCount++;
-            setLoadingProgress(Math.floor((initialLoadedCount / initialBatchSize) * 100));
+            const prog = Math.floor((initialLoadedCount / initialBatchSize) * 100);
+            setLoadingProgress(prog);
+            window.dispatchEvent(new CustomEvent('hero-loading', { detail: { progress: prog } }));
           })
         );
       }
@@ -101,6 +104,7 @@ export default function CinematicHero() {
 
       if (cancelled) return;
       setIsLoaded(true);
+      window.dispatchEvent(new Event('hero-loaded'));
 
       // Batch 2+: Load remaining frames progressively
       let loaded = PRELOAD_BATCH_INITIAL;
@@ -257,11 +261,8 @@ export default function CinematicHero() {
         {/* Cinematic Overlay */}
         <div className="hero-cinematic-overlay" />
 
-        {/* Loading Overlay */}
-        <div className={`hero-loading-overlay ${isLoaded ? 'hero-loading-done' : ''}`}>
-          <div className="hero-loading-spinner" />
-          <span className="hero-loading-text">Loading Experience... {loadingProgress}%</span>
-        </div>
+        {/* Loading Overlay removed as GlobalLoader handles it now */}
+        <div className="hidden" />
 
         {/* Intro Text Overlay */}
         <div className={`hero-text-intro ${scrollProgress > 0.05 ? 'hero-text-hidden' : ''}`}>
