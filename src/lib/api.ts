@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 
 const isLocalhost = typeof window !== 'undefined' && (
   window.location.hostname === 'localhost' ||
@@ -19,6 +19,52 @@ export const apiClient = axios.create({
   },
 });
 
+// ─── IN-MEMORY API CACHE (Stale-While-Revalidate) ───
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+  ttl: number;
+}
+
+const apiCache = new Map<string, CacheEntry>();
+
+export const getCacheKey = (url: string, params?: any): string => {
+  const paramStr = params ? JSON.stringify(params) : '';
+  return `${url}::${paramStr}`;
+};
+
+export const getCachedData = (url: string, params?: any): any | null => {
+  const key = getCacheKey(url, params);
+  const entry = apiCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > entry.ttl) {
+    apiCache.delete(key);
+    return null;
+  }
+  return entry.data;
+};
+
+export const setCachedData = (url: string, params: any, data: any, ttl = 300000): void => {
+  const key = getCacheKey(url, params);
+  apiCache.set(key, {
+    data,
+    timestamp: Date.now(),
+    ttl,
+  });
+};
+
+export const invalidateCache = (urlPattern?: string): void => {
+  if (!urlPattern) {
+    apiCache.clear();
+    return;
+  }
+  for (const key of apiCache.keys()) {
+    if (key.includes(urlPattern)) {
+      apiCache.delete(key);
+    }
+  }
+};
+
 let activeRequests = 0;
 let idleTimer: any = null;
 
@@ -38,12 +84,12 @@ const decrementActiveRequests = () => {
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = setTimeout(() => {
         window.dispatchEvent(new Event('api-idle'));
-      }, 300); // Wait 300ms before declaring idle, in case another request is queued immediately
+      }, 300);
     }
   }
 };
 
-// Request interceptor to attach JWT
+// Request interceptor to attach JWT & check cache
 apiClient.interceptors.request.use(
   (config) => {
     incrementActiveRequests();
@@ -61,10 +107,36 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle token refresh
+// Response interceptor to handle token refresh & cache updates
 apiClient.interceptors.response.use(
   (response) => {
     decrementActiveRequests();
+
+    // Cache successful GET responses if not explicitly disabled
+    if (response.config.method?.toLowerCase() === 'get') {
+      const url = response.config.url || '';
+      // Don't cache sensitive dynamic endpoints like auth tokens
+      if (!url.includes('/auth/refresh-token')) {
+        setCachedData(url, response.config.params, response.data, 300000); // 5 min TTL
+      }
+    }
+
+    // On mutations (POST, PUT, DELETE), invalidate corresponding cache entries
+    const method = response.config.method?.toLowerCase();
+    if (method && ['post', 'put', 'delete', 'patch'].includes(method)) {
+      const url = response.config.url || '';
+      if (url.includes('/customer')) invalidateCache('/customers');
+      if (url.includes('/team')) invalidateCache('/team');
+      if (url.includes('/studio')) {
+        invalidateCache('/studio');
+        invalidateCache('/dashboard/stats');
+      }
+      if (url.includes('/event')) {
+        invalidateCache('/event');
+        invalidateCache('/dashboard/stats');
+      }
+    }
+
     return response;
   },
   async (error) => {
@@ -75,7 +147,6 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       
-      // Don't try to refresh if this is already an auth endpoint
       const url = originalRequest.url || '';
       if (url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/me') || url.includes('/auth/refresh-token')) {
         return Promise.reject(error);
@@ -87,7 +158,6 @@ apiClient.interceptors.response.use(
           throw new Error('No refresh token available');
         }
 
-        // Request a new access token
         const res = await axios.post(`${API_BASE_URL}/auth/refresh-token`, {
           refreshToken: refToken,
         });
@@ -100,7 +170,6 @@ apiClient.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return apiClient(originalRequest);
       } catch (refreshErr) {
-        // Clear tokens and redirect to login if refresh fails
         if (typeof window !== 'undefined') {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');

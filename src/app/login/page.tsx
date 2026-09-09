@@ -154,7 +154,7 @@ export default function LoginPage() {
                 <Lock className="w-4 h-4" />
               </div>
               <input 
-                type="password" id="loginPassword" required placeholder="Password"
+                id="loginPassword" required placeholder="Password"
                 className="peer w-full bg-slate-50/80 border border-slate-200 rounded-xl pl-11 pr-12 pt-6 pb-2 text-sm font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#c5a880]/20 focus:border-[#c5a880] transition-all outline-none shadow-sm placeholder-transparent" 
                 value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} autoComplete="current-password"
                 type={showPassword ? 'text' : 'password'}

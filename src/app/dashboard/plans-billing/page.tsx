@@ -5,10 +5,11 @@ import { useDashboard } from '../DashboardContext';
 import { useAuth } from '@/lib/AuthContext';
 import { apiClient } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
+import confetti from 'canvas-confetti';
 import {
   Shield, Zap, Sparkles, Crown, Check, CheckCircle2,
   Lock, ArrowRight, RefreshCw, AlertCircle, HelpCircle,
-  Calendar, Flame, CreditCard
+  Calendar, Flame, CreditCard, Loader2, PartyPopper
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -162,6 +163,8 @@ export default function PlansBillingPage() {
   const [loadingPlanKey, setLoadingPlanKey] = useState<string | null>(null);
   const [loadingCancel, setLoadingCancel] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [upgradedPlanName, setUpgradedPlanName] = useState('');
 
   // Active studio plan key
   const activePlanKey = (studio?.subscriptionPlan?.toUpperCase() || authStudio?.subscriptionPlan?.toUpperCase() || 'BASIC') as PlanTier['key'];
@@ -318,7 +321,34 @@ export default function PlansBillingPage() {
                 context.refreshCredits();
               }
 
-              setSuccessMsg(`🎉 Success! Your studio has been upgraded to the ${plan.name} Plan.`);
+              setUpgradedPlanName(plan.name);
+              setShowSuccessModal(true);
+              
+              // Trigger confetti
+              const end = Date.now() + 3 * 1000;
+              const colors = ['#c5a880', '#e3d8c8', '#a07c4c', '#ffffff'];
+              
+              (function frame() {
+                confetti({
+                  particleCount: 5,
+                  angle: 60,
+                  spread: 55,
+                  origin: { x: 0 },
+                  colors: colors
+                });
+                confetti({
+                  particleCount: 5,
+                  angle: 120,
+                  spread: 55,
+                  origin: { x: 1 },
+                  colors: colors
+                });
+              
+                if (Date.now() < end) {
+                  requestAnimationFrame(frame);
+                }
+              }());
+
             } else {
               throw new Error(verifyRes.data.error || 'Payment signature verification failed');
             }
@@ -534,13 +564,14 @@ export default function PlansBillingPage() {
                 <motion.div
                   variants={itemVariants}
                   key={plan.key}
+                  whileHover={!isCurrent ? { y: -8, scale: 1.02 } : undefined}
                   onClick={() => !isLoading && !isCurrent && handleSelectPlan(plan)}
-                  className={`relative rounded-[2rem] p-8 flex flex-col justify-between transition-all duration-500 ease-out flex-1 ${
+                  className={`relative rounded-[2rem] p-8 flex flex-col justify-between transition-all duration-300 ease-out flex-1 backdrop-blur-sm ${
                     isCurrent
-                      ? 'bg-white border-2 border-emerald-500 shadow-xl scale-[1.02] z-10'
+                      ? 'bg-white/90 border-2 border-emerald-500 shadow-[0_20px_50px_-12px_rgba(16,185,129,0.3)] scale-[1.02] z-10'
                       : plan.popular
-                        ? 'bg-slate-900 border-2 border-slate-900 text-white shadow-2xl hover:shadow-[#c5a880]/20 hover:-translate-y-3 cursor-pointer z-10'
-                        : 'bg-white border border-slate-200/80 shadow-md hover:border-[#c5a880] hover:shadow-xl cursor-pointer hover:-translate-y-2'
+                        ? 'bg-slate-900/95 border border-[#c5a880]/30 text-white shadow-[0_20px_50px_-12px_rgba(197,168,128,0.2)] cursor-pointer z-10 hover:border-[#c5a880]'
+                        : 'bg-white/70 border border-slate-200/80 shadow-lg cursor-pointer hover:border-[#c5a880]/50 hover:shadow-[0_20px_40px_-12px_rgba(197,168,128,0.15)]'
                   }`}
                 >
                   {/* Background Glows for Dark Card */}
@@ -621,30 +652,30 @@ export default function PlansBillingPage() {
                         e.stopPropagation();
                         if (!isCurrent) handleSelectPlan(plan);
                       }}
-                      className={`w-full py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 ${
+                      className={`group w-full py-4 px-2 rounded-2xl text-[8px] sm:text-[9px] font-black uppercase tracking-wide transition-all duration-300 flex items-center justify-center gap-1 ${
                         isCurrent
                           ? 'bg-emerald-50 text-emerald-700 cursor-default'
                           : isLoading
                             ? 'bg-slate-200 text-slate-500 cursor-wait opacity-80'
                             : plan.popular
-                              ? 'bg-[#c5a880] hover:bg-white text-slate-900 shadow-xl shadow-[#c5a880]/20 cursor-pointer'
-                              : 'bg-slate-900 hover:bg-[#c5a880] text-white shadow-lg shadow-slate-900/10 cursor-pointer'
+                              ? 'bg-[#c5a880] hover:bg-white text-slate-900 shadow-xl shadow-[#c5a880]/20 cursor-pointer hover:-translate-y-1 hover:shadow-2xl'
+                              : 'bg-slate-900 hover:bg-[#c5a880] text-white shadow-lg shadow-slate-900/10 cursor-pointer hover:-translate-y-1 hover:shadow-2xl'
                       }`}
                     >
                       {isCurrent ? (
                         <>
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>Current Plan</span>
+                          <CheckCircle2 className="w-3 h-3 shrink-0" />
+                          <span className="whitespace-nowrap">Current Plan</span>
                         </>
                       ) : isLoading ? (
                         <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>Processing...</span>
+                          <RefreshCw className="w-3 h-3 animate-spin shrink-0" />
+                          <span className="whitespace-nowrap">Processing...</span>
                         </>
                       ) : (
                         <>
-                          <span>Choose {plan.name}</span>
-                          <ArrowRight className="w-4 h-4" />
+                          <span className="whitespace-nowrap">Choose {plan.name}</span>
+                          <ArrowRight className="w-3 h-3 shrink-0 transition-transform duration-300 group-hover:translate-x-1" />
                         </>
                       )}
                     </button>
@@ -688,6 +719,41 @@ export default function PlansBillingPage() {
                   className="w-full py-4 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center justify-center"
                 >
                   {loadingCancel ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Yes, Downgrade'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Upgrade Success Modal */}
+      <AnimatePresence>
+        {showSuccessModal && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.8, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.8, y: 30 }}
+              transition={{ type: "spring", duration: 0.6 }}
+              className="w-full max-w-lg bg-white rounded-[2rem] p-10 shadow-2xl border border-slate-100 text-center relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-[60px] pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#c5a880]/10 rounded-full blur-[60px] pointer-events-none" />
+              
+              <div className="relative z-10">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-500/30">
+                  <PartyPopper className="w-10 h-10" />
+                </div>
+                <h3 className="text-3xl font-black text-slate-900 tracking-tight mb-2 font-serif-luxury">Congratulations!</h3>
+                <p className="text-base text-slate-500 leading-relaxed mb-8">
+                  Your studio has successfully been upgraded to the <strong className="text-emerald-600 uppercase tracking-widest text-xs ml-1 mr-1">{upgradedPlanName}</strong> Plan. You now have access to all the premium features!
+                </p>
+                <button
+                  onClick={() => setShowSuccessModal(false)}
+                  className="w-full py-4 rounded-xl bg-slate-900 hover:bg-[#c5a880] text-white font-bold text-xs uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-slate-900/20 hover:shadow-[#c5a880]/30 hover:-translate-y-1"
+                >
+                  Start Using New Features
                 </button>
               </div>
             </motion.div>

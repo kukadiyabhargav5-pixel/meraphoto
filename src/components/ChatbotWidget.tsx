@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Bot, X, Send, User, Sparkles, Loader, Trash2, Camera } from 'lucide-react';
+import { MessageCircle, Bot, X, Send, User, Sparkles, Loader, Trash2, Camera } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 
 interface Message {
@@ -106,7 +106,7 @@ export default function ChatbotWidget() {
       >
         <div className="relative">
           <Camera className="w-7 h-7 text-[#c5a880] absolute -top-1 -right-1 opacity-20" />
-          <Bot className="w-7 h-7 text-white relative z-10" />
+          <MessageCircle className="w-7 h-7 text-white relative z-10" />
           <div className="absolute -top-2 -right-2 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-[#0f172a]"></div>
         </div>
       </button>
