@@ -80,6 +80,10 @@ export default function ClientGallery() {
   const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [shutterFlash, setShutterFlash] = useState(false);
+  const [isMatchedSuccess, setIsMatchedSuccess] = useState(false);
+  const [indexingStatus, setIndexingStatus] = useState<any>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [searchProgress, setSearchProgress] = useState(0);
@@ -312,24 +316,57 @@ export default function ClientGallery() {
     }
   }, [webcamStream]);
 
-  const capturePhoto = () => {
-    if (!videoRef.current) return;
+  const capturePhoto = async () => {
+    if (!videoRef.current || isCapturing) return;
+    setIsCapturing(true);
+    setSearchError('');
+    setIsMatchedSuccess(false);
+
+    // Trigger camera shutter flash effect
+    setShutterFlash(true);
+    setTimeout(() => setShutterFlash(false), 300);
+
     const canvas = document.createElement('canvas');
     canvas.width = 640;
     canvas.height = 480;
     const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0, 640, 480);
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const file = new File([blob], 'selfie.jpg', { type: 'image/jpeg' });
-          setSelfieFile(file);
-          setSelfiePreview(URL.createObjectURL(file));
-          stopWebcam();
-          setSearchTab('upload'); // Switch to upload tab to show preview
-        }
-      }, 'image/jpeg', 0.92);
+    if (!ctx) {
+      setIsCapturing(false);
+      return;
     }
+
+    // Capture primary frame
+    ctx.drawImage(videoRef.current, 0, 0, 640, 480);
+    const primaryBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+    if (!primaryBlob) {
+      setIsCapturing(false);
+      return;
+    }
+
+    const primaryFile = new File([primaryBlob], 'selfie_primary.jpg', { type: 'image/jpeg' });
+    const previewUrl = URL.createObjectURL(primaryFile);
+    setSelfiePreview(previewUrl);
+    setSelfieFile(primaryFile);
+
+    const frames: File[] = [primaryFile];
+
+    // Capture 2 rapid burst frames to improve AI recognition accuracy
+    for (let i = 1; i <= 2; i++) {
+      await new Promise(r => setTimeout(r, 120));
+      if (videoRef.current) {
+        ctx.drawImage(videoRef.current, 0, 0, 640, 480);
+        const b = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+        if (b) {
+          frames.push(new File([b], `frame_${i}.jpg`, { type: 'image/jpeg' }));
+        }
+      }
+    }
+
+    stopWebcam();
+    setIsCapturing(false);
+
+    // Trigger AI Biometric multi-frame search with scanning animation
+    await performMultiFrameSearch(frames);
   };
 
   // ── File upload handling ──────────────────
@@ -358,35 +395,37 @@ export default function ClientGallery() {
     if (selfiePreview) URL.revokeObjectURL(selfiePreview);
     setSelfiePreview(null);
     setSearchError('');
+    setIsMatchedSuccess(false);
   };
 
   // ── AI Search ──────────────────────────
-  const handleAISearch = async () => {
-    if (!selfieFile || !event) return;
+  const performMultiFrameSearch = async (files: File[]) => {
+    if (!event || files.length === 0) return;
     setSearchLoading(true);
+    setIsMatchedSuccess(false);
     setSearchError('');
-    setSearchProgress(0);
-    setSearchStage('Detecting face in your photo...');
+    setSearchProgress(10);
+    setSearchStage('Scanning facial geometry & landmark coordinates...');
     
     const formData = new FormData();
-    formData.append('file', selfieFile);
+    files.forEach(file => formData.append('file', file));
 
-    // Simulate progress stages
+    // Realistic multi-stage biometric progress animation
     const progressTimer = setInterval(() => {
       setSearchProgress(prev => {
-        if (prev < 30) {
-          setSearchStage('Detecting face in your photo...');
+        if (prev < 32) {
+          setSearchStage('Analyzing 68 facial landmark coordinates...');
+          return prev + 4;
+        } else if (prev < 68) {
+          setSearchStage('Generating 512-D neural facial vector embedding...');
           return prev + 3;
-        } else if (prev < 60) {
-          setSearchStage('Generating facial embedding...');
+        } else if (prev < 90) {
+          setSearchStage('Matching biometric embedding against album photos...');
           return prev + 2;
-        } else if (prev < 85) {
-          setSearchStage('Matching against album photos...');
-          return prev + 1;
         }
         return prev;
       });
-    }, 150);
+    }, 180);
 
     try {
       const res = await apiClient.post(`/event/${event._id}/face-search`, formData, {
@@ -395,50 +434,71 @@ export default function ClientGallery() {
       
       clearInterval(progressTimer);
       setSearchProgress(100);
-      setSearchStage('Complete!');
 
       const matches = res.data.matches || [];
+      const status = res.data.indexingStatus;
+      
       setMatchedMedia(matches);
+      setIndexingStatus(status);
       setSearchStats({
         totalSearched: res.data.totalSearched || 0,
         message: res.data.message || '',
       });
       setSearchActive(true);
 
-      // Close modal after a brief success moment
-      setTimeout(() => {
-        setSearchModalOpen(false);
-        clearSelfie();
-        setSearchProgress(0);
-        setSearchStage('');
-      }, 600);
-
       if (matches.length > 0) {
+        setIsMatchedSuccess(true);
+        setSearchStage(`Face matched! Found ${matches.length} photo${matches.length > 1 ? 's' : ''}`);
+        
+        // Let user see the green biometric lock-in state for 1.2 seconds
+        setTimeout(() => {
+          setSearchModalOpen(false);
+          clearSelfie();
+          setSearchProgress(0);
+          setSearchStage('');
+          setIsMatchedSuccess(false);
+          setSearchLoading(false);
+        }, 1200);
+
         setTimeout(() => {
           confetti({
             particleCount: 200,
             spread: 100,
             origin: { y: 0.5 },
-            colors: ['#2563EB', '#22D3EE', '#8B5CF6', '#EC4899', '#F59E0B'],
+            colors: ['#c5a880', '#FF6B00', '#10B981', '#3B82F6', '#EC4899'],
           });
         }, 300);
+      } else {
+        setSearchLoading(false);
+        setIsMatchedSuccess(false);
+        if (status && status.pending > 0) {
+          setSearchError(`No photos matched yet, but ${status.pending} photos are still being indexed.`);
+        } else {
+          setSearchError('No matching photos found. Try scanning with better lighting or looking directly at the camera.');
+        }
       }
     } catch (err: any) {
       clearInterval(progressTimer);
       setSearchProgress(0);
       setSearchStage('');
+      setSearchLoading(false);
+      setIsMatchedSuccess(false);
       
       const errorMsg = err.response?.data?.error || 'AI Face Search failed. Please try again.';
       setSearchError(errorMsg);
-    } finally {
-      setSearchLoading(false);
     }
+  };
+
+  const handleAISearch = async () => {
+    if (!selfieFile) return;
+    await performMultiFrameSearch([selfieFile]);
   };
 
   const clearSearch = () => {
     setSearchActive(false);
     setMatchedMedia([]);
     setSearchStats(null);
+    setIndexingStatus(null);
   };
 
   const toggleSelectMedia = (id: string) => {
@@ -477,6 +537,9 @@ export default function ClientGallery() {
     setSearchError('');
     setSearchProgress(0);
     setSearchStage('');
+    setSearchLoading(false);
+    setIsMatchedSuccess(false);
+    setShutterFlash(false);
   };
 
   if (loading) {
@@ -843,20 +906,6 @@ export default function ClientGallery() {
                            </div>
                          )}
 
-                         {/* Similarity badge */}
-                         {searchActive && m.similarityPercent && (
-                           <div className="absolute top-3 left-3 z-20">
-                             <div className={`px-2 py-1 rounded-lg text-[10px] font-bold backdrop-blur-md border flex items-center gap-1 ${
-                               m.confidence === 'HIGH' 
-                                 ? 'bg-emerald-500/90 border-emerald-400/50 text-white' 
-                                 : 'bg-amber-500/90 border-amber-400/50 text-white'
-                             }`}>
-                               <ShieldCheck className="h-3 w-3" />
-                               {m.similarityPercent}% match
-                             </div>
-                           </div>
-                         )}
-
                          {isMultiSelect ? (
                            <div className="absolute inset-0 bg-black/10 flex items-start justify-start p-3 cursor-pointer z-30" onClick={() => toggleSelectMedia(m._id)}>
                              <div className={`w-5.5 h-5.5 rounded-md border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#c5a880] border-[#c5a880] text-white shadow-md' : 'border-white/60 bg-black/20 backdrop-blur-sm hover:bg-black/40'}`}>
@@ -917,20 +966,6 @@ export default function ClientGallery() {
                            </div>
                          )}
 
-                         {/* Similarity badge */}
-                         {searchActive && m.similarityPercent && (
-                           <div className="absolute top-3 left-3 z-20">
-                             <div className={`px-2 py-1 rounded-lg text-[10px] font-bold backdrop-blur-md border flex items-center gap-1 ${
-                               m.confidence === 'HIGH' 
-                                 ? 'bg-emerald-500/90 border-emerald-400/50 text-white' 
-                                 : 'bg-amber-500/90 border-amber-400/50 text-white'
-                             }`}>
-                               <ShieldCheck className="h-3 w-3" />
-                               {m.similarityPercent}% match
-                             </div>
-                           </div>
-                         )}
-
                          {isMultiSelect ? (
                            <div className="absolute inset-0 bg-black/10 flex items-start justify-start p-3 cursor-pointer z-30" onClick={() => toggleSelectMedia(m._id)}>
                              <div className={`w-5.5 h-5.5 rounded-md border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#c5a880] border-[#c5a880] text-white shadow-md' : 'border-white/60 bg-black/20 backdrop-blur-sm hover:bg-black/40'}`}>
@@ -976,187 +1011,405 @@ export default function ClientGallery() {
 
       {/* ── Professional Selfie Search Modal ── */}
       {searchModalOpen && (
-        <div className="fixed inset-0 z-50 bg-[#0F172A]/90 backdrop-blur-lg flex items-center justify-center p-6">
-          <div className="w-full max-w-lg bg-white p-0 rounded-3xl relative shadow-2xl overflow-y-auto max-h-[90vh] animate-in fade-in zoom-in-95 duration-200 border border-slate-200">
-            
+        <div className="fixed inset-0 z-50 bg-[#0F172A]/80 backdrop-blur-xl flex items-center justify-center p-6 transition-all duration-500 animate-fade-in">
+          <div className="w-full max-w-lg bg-white/95 backdrop-blur-2xl p-0 rounded-[2rem] relative shadow-[0_0_50px_-12px_rgba(197,168,128,0.4)] overflow-y-auto max-h-[90vh] border border-white/40 transform transition-all animate-in zoom-in-95 duration-500">
+            {/* Ambient Background Glow */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-gradient-to-b from-[#c5a880]/20 to-transparent blur-3xl rounded-full pointer-events-none" />
+
             {/* Modal Header */}
-            <div className="relative bg-[#f8f7f4] border-b border-[#e5e7eb] p-6 pb-8">
+            <div className="relative bg-gradient-to-b from-[#fcfaf7] to-white border-b border-slate-100 p-8 pb-8 rounded-t-[2rem]">
               <button 
                 onClick={closeSearchModal} 
-                className="absolute top-4 right-4 text-slate-400 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-200/50 transition-colors"
+                className="absolute top-6 right-6 text-slate-400 hover:text-slate-800 p-2 rounded-xl hover:bg-slate-100 hover:rotate-90 transition-all duration-300 shadow-sm"
               >
                 <X className="h-5 w-5" />
               </button>
               
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-white border border-[#c5a880]/30 shadow-sm flex items-center justify-center">
-                  <ScanFace className="h-6 w-6 text-[#c5a880]" />
+              <div className="flex items-center gap-4 relative z-10">
+                <div className="w-14 h-14 rounded-2xl bg-white border border-[#c5a880]/30 shadow-lg shadow-[#c5a880]/10 flex items-center justify-center relative overflow-hidden group">
+                  <div className="absolute inset-0 bg-gradient-to-tr from-[#c5a880]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  <ScanFace className="h-7 w-7 text-[#c5a880] animate-pulse-soft" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-extrabold text-slate-800">Find My Photos</h3>
-                  <p className="text-xs text-slate-500 font-medium mt-0.5">Upload a photo or scan your face to find all photos you appear in</p>
+                  <h3 className="text-2xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 tracking-tight">Find My Photos</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-1 tracking-wide">Upload a photo or scan your face to magically find all your photos.</p>
                 </div>
               </div>
             </div>
 
-            <div className="p-6 -mt-3 bg-white">
-              {/* Tab Switcher */}
-              <div className="bg-slate-100/70 p-1 rounded-xl flex mb-6 border border-slate-200">
-                <button 
-                  onClick={() => { setSearchTab('upload'); stopWebcam(); }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                    searchTab === 'upload' 
-                      ? 'bg-white text-slate-900 shadow-sm border border-slate-200/60' 
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  <Upload className="h-4 w-4" />
-                  Upload Photo
-                </button>
-                <button 
-                  onClick={startWebcam}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                    searchTab === 'camera' 
-                      ? 'bg-white text-slate-900 shadow-sm border border-slate-200/60' 
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  <Camera className="h-4 w-4" />
-                  Face Scan
-                </button>
-              </div>
-
+            <div className="p-8 -mt-2 bg-white rounded-b-[2rem] relative z-10">
               {/* Error message */}
               {searchError && (
-                <div className="mb-5 bg-[#fef2f2] border border-[#fecaca] text-[#b91c1c] p-3.5 rounded-xl text-xs flex items-start gap-2.5 font-semibold shadow-sm">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>{searchError}</span>
+                <div className="mb-6 bg-rose-50/80 backdrop-blur-sm border border-rose-200 text-rose-600 p-4 rounded-2xl text-xs flex items-start gap-3 font-semibold shadow-sm animate-in slide-in-from-top-2 duration-300">
+                  <AlertCircle className="h-4.5 w-4.5 shrink-0 animate-pulse text-rose-500" />
+                  <span className="leading-relaxed">{searchError}</span>
                 </div>
               )}
 
-              {/* Camera View */}
-              {searchTab === 'camera' && webcamStream && (
-                <div className="flex flex-col items-center gap-4">
-                  <div className="w-full rounded-2xl border border-slate-200 overflow-hidden bg-black relative shadow-inner">
-                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-auto max-h-[60vh] object-contain scale-x-[-1]" />
-                    {/* Face guide overlay */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-48 h-48 border-2 border-[#c5a880]/60 rounded-full border-dashed" />
-                    </div>
-                    <div className="absolute bottom-4 left-0 right-0 text-center">
-                      <span className="text-[10px] text-white font-semibold bg-black/60 backdrop-blur-sm px-4 py-1.5 rounded-full border border-white/10">
-                        Position your face in the circle
-                      </span>
+              {searchLoading || isMatchedSuccess ? (
+                /* ── FULL BIOMETRIC AI FACE SCANNING VIEW ── */
+                <div className="flex flex-col items-center gap-6 py-2 animate-in fade-in zoom-in-95 duration-500">
+                  {/* Biometric Viewport */}
+                  <div className={`relative w-full max-w-sm aspect-[4/3] rounded-3xl overflow-hidden bg-slate-950 border-2 transition-all duration-700 shadow-2xl flex items-center justify-center ${
+                    isMatchedSuccess 
+                      ? 'border-emerald-500 shadow-[0_0_50px_rgba(16,185,129,0.5)]' 
+                      : 'border-[#c5a880]/60 shadow-[0_0_40px_rgba(197,168,128,0.35)] animate-biometric-glow'
+                  }`}>
+                    {/* Captured / Uploaded Face Image */}
+                    {selfiePreview ? (
+                      <img 
+                        src={selfiePreview} 
+                        alt="Face Scan Target" 
+                        className={`w-full h-full object-cover transition-all duration-700 ${
+                          isMatchedSuccess ? 'brightness-105 contrast-105' : 'brightness-90 contrast-110'
+                        }`} 
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-slate-900">
+                        <ScanFace className="w-20 h-20 text-[#c5a880]/40 animate-pulse" />
+                      </div>
+                    )}
+
+                    {/* Cyber Grid Texture Overlay */}
+                    <div className="absolute inset-0 biometric-grid-overlay pointer-events-none opacity-50" />
+
+                    {/* Radial Vignette */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/60 pointer-events-none" />
+
+                    {/* ── High-Tech Biometric HUD Overlay ── */}
+                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                      
+                      {/* Outer Rotating Segmented Ring */}
+                      <div className={`absolute w-56 h-56 rounded-full border border-dashed transition-all duration-700 ${
+                        isMatchedSuccess 
+                          ? 'border-emerald-400 scale-105 opacity-100' 
+                          : 'border-[#c5a880]/60 animate-spin-slow opacity-80'
+                      }`} />
+
+                      {/* Inner Rotating Segmented Ring */}
+                      <div className={`absolute w-44 h-44 rounded-full border border-dotted transition-all duration-700 ${
+                        isMatchedSuccess 
+                          ? 'border-emerald-300 scale-100 opacity-90' 
+                          : 'border-[#c5a880]/90 animate-spin-reverse-slow opacity-80'
+                      }`} />
+
+                      {/* Center Target Crosshairs */}
+                      <div className="absolute w-14 h-14 flex items-center justify-center pointer-events-none">
+                        <div className={`w-full h-[1px] ${isMatchedSuccess ? 'bg-emerald-400' : 'bg-[#c5a880]/60'}`} />
+                        <div className={`h-full w-[1px] absolute ${isMatchedSuccess ? 'bg-emerald-400' : 'bg-[#c5a880]/60'}`} />
+                      </div>
+
+                      {/* Concentric Radar Pulse Waves */}
+                      {!isMatchedSuccess && (
+                        <div className="absolute w-44 h-44 rounded-full border border-[#c5a880]/50 animate-radar-pulse" />
+                      )}
+
+                      {/* ── 4 HUD Corner Target Brackets ── */}
+                      <div className="absolute inset-3 pointer-events-none">
+                        {/* Top-Left */}
+                        <div className={`absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 transition-colors duration-500 ${isMatchedSuccess ? 'border-emerald-400' : 'border-[#c5a880]'}`}>
+                          <span className="absolute -top-3 left-0 text-[8px] font-mono tracking-wider text-[#c5a880] font-bold">SCAN_ID</span>
+                        </div>
+                        {/* Top-Right */}
+                        <div className={`absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 transition-colors duration-500 ${isMatchedSuccess ? 'border-emerald-400' : 'border-[#c5a880]'}`}>
+                          <span className="absolute -top-3 right-0 text-[8px] font-mono tracking-wider text-[#c5a880] font-bold">LIVE●</span>
+                        </div>
+                        {/* Bottom-Left */}
+                        <div className={`absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 transition-colors duration-500 ${isMatchedSuccess ? 'border-emerald-400' : 'border-[#c5a880]'}`}>
+                          <span className="absolute -bottom-3 left-0 text-[8px] font-mono tracking-wider text-[#c5a880] font-bold">512-D</span>
+                        </div>
+                        {/* Bottom-Right */}
+                        <div className={`absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 transition-colors duration-500 ${isMatchedSuccess ? 'border-emerald-400' : 'border-[#c5a880]'}`}>
+                          <span className="absolute -bottom-3 right-0 text-[8px] font-mono tracking-wider text-[#c5a880] font-bold">AI_LOCK</span>
+                        </div>
+                      </div>
+
+                      {/* ── Sweeping Holographic Laser Scanner ── */}
+                      {!isMatchedSuccess && (
+                        <div className="absolute inset-x-0 animate-scan-laser pointer-events-none z-20">
+                          <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-[#c5a880] to-transparent shadow-[0_0_14px_rgba(197,168,128,1)]" />
+                          <div className="h-12 w-full bg-gradient-to-b from-[#c5a880]/20 to-transparent pointer-events-none" />
+                        </div>
+                      )}
+
+                      {/* ── Facial Landmark Feature Points (Biometric Nodes) ── */}
+                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                        <svg className="w-56 h-64 overflow-visible" viewBox="0 0 200 240">
+                          {/* Eye nodes */}
+                          <circle cx="68" cy="88" r="3.5" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880] animate-node-point"} />
+                          <circle cx="132" cy="88" r="3.5" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880] animate-node-point"} />
+                          
+                          {/* Eyebrows */}
+                          <circle cx="58" cy="74" r="2.5" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880]/80 animate-node-point"} />
+                          <circle cx="78" cy="72" r="2.5" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880]/80 animate-node-point"} />
+                          <circle cx="122" cy="72" r="2.5" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880]/80 animate-node-point"} />
+                          <circle cx="142" cy="74" r="2.5" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880]/80 animate-node-point"} />
+
+                          {/* Nose bridge & tip */}
+                          <circle cx="100" cy="100" r="2.5" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880] animate-node-point"} />
+                          <circle cx="100" cy="120" r="3.5" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880] animate-node-point"} />
+                          <circle cx="88" cy="122" r="2.5" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880]/80 animate-node-point"} />
+                          <circle cx="112" cy="122" r="2.5" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880]/80 animate-node-point"} />
+
+                          {/* Mouth & jaw nodes */}
+                          <circle cx="78" cy="148" r="3" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880] animate-node-point"} />
+                          <circle cx="122" cy="148" r="3" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880] animate-node-point"} />
+                          <circle cx="100" cy="144" r="2.5" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880] animate-node-point"} />
+                          <circle cx="100" cy="154" r="2.5" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880] animate-node-point"} />
+                          <circle cx="100" cy="188" r="3.5" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880] animate-node-point"} />
+                          <circle cx="65" cy="168" r="2.5" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880]/80 animate-node-point"} />
+                          <circle cx="135" cy="168" r="2.5" className={isMatchedSuccess ? "fill-emerald-400" : "fill-[#c5a880]/80 animate-node-point"} />
+
+                          {/* Facial Geometry Mesh Lines */}
+                          <path 
+                            d="M 68 88 L 100 100 L 132 88 M 100 100 L 100 120 M 88 122 L 100 120 L 112 122 M 78 148 L 100 144 L 122 148 M 78 148 L 100 154 L 122 148 M 100 154 L 100 188 M 65 168 L 100 188 L 135 168" 
+                            className={`transition-colors duration-500 fill-none stroke-[1] stroke-dasharray-[2_2] ${
+                              isMatchedSuccess ? 'stroke-emerald-400/80' : 'stroke-[#c5a880]/50'
+                            }`}
+                          />
+                        </svg>
+                      </div>
+
+                      {/* Top Floating HUD Badges */}
+                      <div className="absolute top-3.5 inset-x-3.5 flex items-center justify-between pointer-events-none">
+                        <div className="bg-black/75 backdrop-blur-md border border-[#c5a880]/30 rounded-full px-3 py-1 flex items-center gap-1.5 shadow-lg">
+                          <span className={`w-2 h-2 rounded-full ${isMatchedSuccess ? 'bg-emerald-400 shadow-[0_0_8px_#10B981]' : 'bg-emerald-500 animate-pulse'}`} />
+                          <span className="text-[10px] font-mono font-bold tracking-wider text-slate-200">
+                            {isMatchedSuccess ? 'TARGET LOCKED' : 'AI NEURAL SCAN'}
+                          </span>
+                        </div>
+
+                        <div className="bg-black/75 backdrop-blur-md border border-[#c5a880]/30 rounded-full px-3 py-1 text-[10px] font-mono font-bold tracking-wider text-[#c5a880] shadow-lg">
+                          {isMatchedSuccess ? 'MATCHED' : `${searchProgress}%`}
+                        </div>
+                      </div>
+
+                      {/* Match Confirmed Overlay */}
+                      {isMatchedSuccess && (
+                        <div className="absolute inset-0 bg-emerald-950/60 backdrop-blur-[2px] flex flex-col items-center justify-center p-6 text-center animate-in zoom-in-95 duration-300">
+                          <div className="w-16 h-16 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-[0_0_35px_rgba(16,185,129,0.9)] mb-3 animate-bounce">
+                            <Check className="w-9 h-9 stroke-[3]" />
+                          </div>
+                          <h4 className="text-xl font-black text-white tracking-wider drop-shadow-md">FACE IDENTIFIED!</h4>
+                          <p className="text-xs text-emerald-300 font-extrabold mt-1">Personal gallery ready</p>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <button 
-                    onClick={capturePhoto} 
-                    className="w-full bg-[#c5a880] hover:bg-[#b09672] text-[#09090b] font-extrabold py-3.5 rounded-xl text-sm transition-all shadow-[0_4px_14px_0_rgba(197,168,128,0.39)] flex items-center justify-center gap-2"
-                  >
-                    <Camera className="h-4.5 w-4.5" />
-                    Capture Photo
-                  </button>
-                </div>
-              )}
 
-              {/* Upload View */}
-              {searchTab === 'upload' && (
-                <div className="flex flex-col gap-4">
-                  {selfieFile && selfiePreview ? (
-                    <div className="flex flex-col items-center gap-4">
-                      {/* Preview */}
-                      <div className="relative w-full">
-                        <div className="w-full rounded-2xl border border-slate-200 overflow-hidden bg-[#f8f7f4] flex items-center justify-center shadow-inner">
-                          <img src={selfiePreview} alt="Selfie Preview" className="w-full h-auto object-contain" />
-                        </div>
-                        <button 
-                          onClick={clearSelfie} 
-                          className="absolute top-4 right-4 bg-white/90 hover:bg-white text-slate-800 p-2 rounded-xl transition-all shadow-md border border-slate-200"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
+                  {/* Dynamic Progress & Stage Status Card */}
+                  <div className="w-full bg-slate-50 border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#c5a880] flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        {isMatchedSuccess ? 'Biometric Match Complete' : 'AI Facial Processing'}
+                      </span>
+                      <span className="text-xs font-mono font-bold text-slate-700">
+                        {searchProgress}%
+                      </span>
+                    </div>
 
-                      {/* Action buttons */}
-                      <div className="w-full space-y-3">
-                        <button 
-                          onClick={() => fileInputRef.current?.click()} 
-                          className="w-full text-xs text-[#c5a880] hover:text-[#b09672] font-extrabold py-2 flex items-center justify-center gap-1.5 transition-colors"
-                        >
-                          <RefreshCw className="h-3.5 w-3.5" />
-                          Remove & choose another
-                        </button>
-
-                        {/* Search button with progress */}
-                        <button 
-                          onClick={handleAISearch} 
-                          disabled={searchLoading} 
-                          className="relative w-full bg-[#c5a880] hover:bg-[#b09672] disabled:bg-[#d6c3aa] text-[#09090b] font-extrabold py-4 rounded-xl text-sm transition-all shadow-[0_4px_14px_0_rgba(197,168,128,0.39)] disabled:shadow-none disabled:cursor-not-allowed flex items-center justify-center gap-2.5 overflow-hidden"
-                        >
-                          {/* Progress bar inside button */}
-                          {searchLoading && (
-                            <div 
-                              className="absolute inset-y-0 left-0 bg-white/30 transition-all duration-300 ease-out"
-                              style={{ width: `${searchProgress}%` }}
-                            />
-                          )}
-                          <span className="relative flex items-center gap-2.5">
-                            {searchLoading ? (
-                              <>
-                                <Loader className="h-4.5 w-4.5 animate-spin" />
-                                <span>{searchStage}</span>
-                              </>
-                            ) : (
-                              <>
-                                <Search className="h-4.5 w-4.5" />
-                                <span>Search Photos</span>
-                              </>
-                            )}
-                          </span>
-                        </button>
+                    {/* Shimmering Glowing Progress Bar */}
+                    <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden relative shadow-inner">
+                      <div 
+                        className={`h-full transition-all duration-300 ease-out relative ${
+                          isMatchedSuccess 
+                            ? 'bg-gradient-to-r from-emerald-500 to-teal-400' 
+                            : 'bg-gradient-to-r from-[#c5a880] via-orange-400 to-[#9c7c56]'
+                        }`}
+                        style={{ width: `${searchProgress}%` }}
+                      >
+                        <div className="absolute inset-0 bg-white/30 animate-[shimmer_1.5s_infinite] -skew-x-12" />
                       </div>
                     </div>
-                  ) : (
-                    /* Drop zone */
-                    <div
-                      onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-                      onDragLeave={() => setIsDragOver(false)}
-                      onDrop={handleDrop}
-                      onClick={() => fileInputRef.current?.click()}
-                      className={`w-full min-h-[250px] rounded-2xl border-2 border-dashed cursor-pointer transition-all flex flex-col items-center justify-center gap-3 p-6 ${
-                        isDragOver 
-                          ? 'border-[#c5a880] bg-[#fdfbf9]' 
-                          : 'border-slate-200 bg-[#f8f7f4] hover:border-[#c5a880] hover:bg-[#fdfbf9]'
+
+                    {/* Stage Description Text */}
+                    <div className="mt-3.5 flex items-center gap-2.5">
+                      <div className="w-5 h-5 rounded-full bg-white border border-slate-200 shadow-xs flex items-center justify-center shrink-0">
+                        {isMatchedSuccess ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" />
+                        ) : (
+                          <Loader className="w-3.5 h-3.5 text-[#c5a880] animate-spin" />
+                        )}
+                      </div>
+                      <p className="text-xs font-bold text-slate-800 tracking-wide">
+                        {searchStage || 'Processing face detection...'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Tab Switcher */}
+                  <div className="bg-slate-50 p-1.5 rounded-2xl flex mb-8 border border-slate-100 shadow-inner">
+                    <button 
+                      onClick={() => { setSearchTab('upload'); stopWebcam(); }}
+                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all duration-300 ${
+                        searchTab === 'upload' 
+                          ? 'bg-white text-slate-900 shadow-md transform scale-[1.02] border border-slate-100' 
+                          : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'
                       }`}
                     >
-                      <div className="w-14 h-14 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-center">
-                        <Upload className="h-6 w-6 text-[#c5a880]" />
+                      <Upload className={`h-4 w-4 ${searchTab === 'upload' ? 'text-[#c5a880]' : ''}`} />
+                      Upload Photo
+                    </button>
+                    <button 
+                      onClick={startWebcam}
+                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all duration-300 ${
+                        searchTab === 'camera' 
+                          ? 'bg-white text-slate-900 shadow-md transform scale-[1.02] border border-slate-100' 
+                          : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'
+                      }`}
+                    >
+                      <Camera className={`h-4 w-4 ${searchTab === 'camera' ? 'text-[#c5a880]' : ''}`} />
+                      Face Scan
+                    </button>
+                  </div>
+
+                  {/* Camera View */}
+                  {searchTab === 'camera' && webcamStream && (
+                    <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                      <div className="w-full rounded-3xl border-4 border-slate-50 overflow-hidden bg-slate-900 relative shadow-xl group">
+                        <video ref={videoRef} autoPlay playsInline muted className="w-full h-auto max-h-[50vh] object-contain scale-x-[-1] opacity-90 transition-opacity duration-300 group-hover:opacity-100" />
+                        
+                        {/* Shutter flash effect */}
+                        {shutterFlash && (
+                          <div className="absolute inset-0 bg-white z-50 animate-shutter-flash pointer-events-none" />
+                        )}
+
+                        {/* Face guide overlay */}
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="w-56 h-56 border-2 border-[#c5a880]/80 rounded-full border-dashed shadow-[0_0_0_9999px_rgba(0,0,0,0.5)] transition-all duration-500 group-hover:scale-105 group-hover:border-[#c5a880]" />
+                          {/* Scanning laser */}
+                          <div className="absolute w-56 h-0.5 bg-gradient-to-r from-transparent via-[#c5a880] to-transparent animate-scan-laser shadow-[0_0_8px_rgba(197,168,128,0.8)]" />
+                        </div>
+                        <div className="absolute bottom-6 left-0 right-0 text-center animate-pulse-soft">
+                          <span className="text-[11px] tracking-widest text-white font-bold bg-black/60 backdrop-blur-md px-6 py-2 rounded-full border border-white/20 shadow-lg">
+                            POSITION YOUR FACE IN CIRCLE
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-center">
-                        <p className="text-sm font-extrabold text-slate-800">
-                          Drag & drop your photo here
-                        </p>
-                        <p className="text-xs text-slate-500 font-medium mt-1">
-                          or click to browse • JPG, PNG supported
-                        </p>
-                      </div>
+                      <button 
+                        onClick={capturePhoto} 
+                        disabled={isCapturing}
+                        className="w-full bg-gradient-to-r from-[#c5a880] to-[#b09672] hover:from-[#b09672] hover:to-[#9c7c56] text-white font-extrabold py-4 rounded-2xl text-sm transition-all duration-300 shadow-[0_8px_20px_rgba(197,168,128,0.4)] hover:shadow-[0_8px_25px_rgba(197,168,128,0.5)] hover:-translate-y-1 flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed"
+                      >
+                        {isCapturing ? (
+                          <>
+                            <Loader className="h-5 w-5 animate-spin" />
+                            <span>Scanning & Analyzing Face...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Camera className="h-5 w-5" />
+                            <span>Capture Photo & Scan Face</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   )}
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    onChange={handleSelfieUploadChange} 
-                    className="hidden" 
-                    accept="image/*" 
-                  />
-                </div>
+
+                  {/* Upload View */}
+                  {searchTab === 'upload' && (
+                    <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                      {selfieFile && selfiePreview ? (
+                        <div className="flex flex-col items-center gap-6">
+                          {/* Preview */}
+                          <div className="relative w-full group">
+                            <div className="w-full rounded-3xl border-4 border-slate-50 overflow-hidden bg-slate-100 flex items-center justify-center shadow-lg relative">
+                              <img src={selfiePreview} alt="Selfie Preview" className="w-full h-auto max-h-[300px] object-cover transition-transform duration-700 group-hover:scale-105" />
+                            </div>
+                            <button 
+                              onClick={clearSelfie} 
+                              className="absolute top-4 right-4 bg-white/90 backdrop-blur-md hover:bg-white text-slate-800 p-2.5 rounded-xl transition-all duration-300 shadow-xl border border-slate-200 hover:scale-110 hover:text-rose-500"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+
+                          {/* Action buttons */}
+                          <div className="w-full space-y-4">
+                            <button 
+                              onClick={() => fileInputRef.current?.click()} 
+                              className="w-full text-xs text-[#c5a880] hover:text-[#b09672] font-extrabold py-2 flex items-center justify-center gap-1.5 transition-colors"
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                              Remove & choose another
+                            </button>
+
+                            {/* Search button */}
+                            <button 
+                              onClick={handleAISearch} 
+                              className="relative w-full bg-slate-900 hover:bg-black text-white font-extrabold py-4 rounded-2xl text-sm transition-all duration-300 shadow-[0_8px_20px_rgba(0,0,0,0.2)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.3)] hover:-translate-y-1 flex items-center justify-center gap-2 overflow-hidden group"
+                            >
+                              <span className="relative flex items-center gap-2.5 z-10 tracking-wide">
+                                <Sparkles className="h-5 w-5 text-[#c5a880] group-hover:animate-pulse" />
+                                <span>Search Matches with AI</span>
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Drop zone */
+                        <div
+                          onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                          onDragLeave={() => setIsDragOver(false)}
+                          onDrop={handleDrop}
+                          onClick={() => fileInputRef.current?.click()}
+                          className={`w-full min-h-[260px] rounded-3xl border-2 border-dashed cursor-pointer transition-all duration-500 flex flex-col items-center justify-center gap-4 p-8 relative overflow-hidden group ${
+                            isDragOver 
+                              ? 'border-[#c5a880] bg-[#fcfaf7] scale-[1.02]' 
+                              : 'border-slate-200 bg-slate-50 hover:border-[#c5a880]/50 hover:bg-[#fcfaf7]'
+                          }`}
+                        >
+                          <div className={`absolute inset-0 bg-gradient-to-br from-[#c5a880]/5 to-transparent opacity-0 transition-opacity duration-500 ${isDragOver ? 'opacity-100' : 'group-hover:opacity-100'}`} />
+                          
+                          <div className={`w-16 h-16 rounded-2xl bg-white border shadow-sm flex items-center justify-center relative z-10 transition-all duration-500 ${isDragOver ? 'border-[#c5a880] shadow-[#c5a880]/20 scale-110' : 'border-slate-100 group-hover:scale-110 group-hover:shadow-md'}`}>
+                            <Upload className={`h-7 w-7 transition-colors duration-300 ${isDragOver ? 'text-[#c5a880]' : 'text-slate-400 group-hover:text-[#c5a880]'}`} />
+                          </div>
+                          
+                          <div className="text-center relative z-10">
+                            <p className="text-sm font-extrabold text-slate-800 transition-colors group-hover:text-slate-900">
+                              {isDragOver ? 'Drop your photo here!' : 'Drag & drop your photo here'}
+                            </p>
+                            <p className="text-xs text-slate-500 font-medium mt-1.5 tracking-wide">
+                              or click to browse • JPG, PNG supported
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleSelfieUploadChange} 
+                        className="hidden" 
+                        accept="image/*" 
+                      />
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Privacy note */}
-              <div className="mt-5 flex items-center gap-2 text-[10px] text-slate-400 font-medium">
-                <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-                <span>Your photo is only used for face matching and is never stored permanently.</span>
+              <div className="mt-8 flex items-center justify-center gap-2 text-[10px] text-slate-400 font-semibold uppercase tracking-wider bg-slate-50 py-2.5 px-4 rounded-xl">
+                <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" />
+                <span>Your photo is never stored permanently</span>
               </div>
+
+              {/* Indexing Status Banner */}
+              {indexingStatus && indexingStatus.pending > 0 && (
+                <div className="mt-4 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200/60 rounded-2xl p-4 flex items-start gap-4 animate-in fade-in slide-in-from-bottom-4 shadow-sm">
+                  <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center shrink-0 border border-orange-100">
+                    <Loader className="w-5 h-5 text-orange-500 animate-spin" />
+                  </div>
+                  <div className="mt-0.5">
+                    <h4 className="text-sm font-extrabold text-orange-900">Photo indexing in progress</h4>
+                    <p className="text-xs font-medium text-orange-700/80 mt-1 leading-relaxed">
+                      {indexingStatus.pending} photos are still being processed. Check back later to find more matches!
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1166,14 +1419,7 @@ export default function ClientGallery() {
       {selectedItem && (
         <div className="fixed inset-0 z-50 bg-black flex flex-col justify-between p-6">
           <div className="flex items-center justify-between w-full absolute top-6 left-0 px-6 z-10 pointer-events-none">
-            <div>
-              {/* Image name removed per request, but keeping AI match badge if it exists */}
-              {selectedItem.similarityPercent && (
-                <span className="text-[#FF6B00] font-mono text-xs font-bold bg-black/50 px-3 py-1.5 rounded-lg border border-white/10 pointer-events-auto">
-                  {selectedItem.similarityPercent}% AI match
-                </span>
-              )}
-            </div>
+            <div></div>
             <div className="flex items-center gap-4 pointer-events-auto">
               <a href={resolveMediaUrl(selectedItem)} target="_blank" className="bg-white/10 hover:bg-white/20 px-4 py-2 text-white rounded-lg flex items-center gap-2 font-bold text-sm transition-colors border border-white/10">
                 <Download className="h-4 w-4" />

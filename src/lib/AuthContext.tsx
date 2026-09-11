@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { apiClient } from './api';
+import { LoadingManager } from './LoadingManager';
 
 interface AuthUser {
   id: string;
@@ -149,6 +150,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     localStorage.removeItem('studio');
     setUser(null);
     setStudio(null);
+
+    // Reset the LoadingManager so the preloader works on next page load
+    LoadingManager.reset();
   };
 
   return (

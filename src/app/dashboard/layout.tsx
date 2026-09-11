@@ -52,6 +52,7 @@ const NAV_ITEMS = [
       { href: '/dashboard/queries', label: 'Queries', icon: HelpCircle },
       { href: '/dashboard/studio-settings', label: 'Studio Settings', icon: Settings },
       { href: '/dashboard/studio-branding', label: 'Studio Branding', icon: Settings },
+      { href: '/dashboard/face-index', label: 'Face Index', icon: ScanLine },
       { href: '/dashboard/plans-billing', label: 'Plans & Billing', icon: CreditCard },
       { href: '/dashboard/support-help', label: 'Support Help', icon: HelpCircle },
     ],

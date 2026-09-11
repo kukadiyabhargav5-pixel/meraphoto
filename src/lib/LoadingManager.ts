@@ -179,6 +179,28 @@ class LoadingManagerClass {
     this.startLoading(true);
   }
 
+  /**
+   * Full reset — clears the singleton state + sessionStorage flag.
+   * Call this on sign-out so that the next page load shows the loader properly.
+   */
+  public reset() {
+    this.clearSafetyTimer();
+    this.cleanupHeroListeners();
+    this.state = {
+      currentPhase: 1,
+      progress: 0,
+      status: 'Initializing...',
+      error: null,
+      isCriticalFailed: false,
+      applicationReady: false,
+    };
+    this.hasStarted = false;
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('app_initial_ready');
+    }
+    this.notify();
+  }
+
   // ─── Phase Implementations ───
 
   /**
