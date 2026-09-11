@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { Lock, Key, AlertCircle, Loader, ChevronLeft, ChevronRight, X, Camera, ScanFace, Download, UploadCloud, CheckCircle2, ImagePlus, Video } from 'lucide-react';
+import { Lock, Key, AlertCircle, Loader, ChevronLeft, ChevronRight, X, Camera, ScanFace, Download, UploadCloud, CheckCircle2, ImagePlus, Video, Sparkles, CheckCircle, RefreshCw } from 'lucide-react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { apiClient } from '../../../../lib/api';
@@ -74,6 +74,9 @@ export default function EventPhotosPage() {
   const [aiTab, setAiTab] = useState<'upload' | 'camera'>('upload');
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [indexingStatus, setIndexingStatus] = useState<any>(null);
+  const [aiMessage, setAiMessage] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -283,40 +286,67 @@ export default function EventPhotosPage() {
     setCameraReady(false);
   };
 
-  const captureFromCamera = () => {
-    if (!videoRef.current || !canvasRef.current) return;
+  const captureFromCamera = async () => {
+    if (!videoRef.current || !canvasRef.current || isCapturing) return;
+    setIsCapturing(true);
+    setAiError('');
     const video = videoRef.current;
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0);
-    canvas.toBlob((blob) => {
+    if (!ctx) {
+      setIsCapturing(false);
+      return;
+    }
+
+    const frames: File[] = [];
+    
+    // Capture 3 frames over 900ms
+    for (let i = 0; i < 3; i++) {
+      ctx.drawImage(video, 0, 0);
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
       if (blob) {
-        const file = new File([blob], 'face_scan.jpg', { type: 'image/jpeg' });
-        setSelfieFile(file);
-        setSelfiePreview(canvas.toDataURL('image/jpeg'));
-        stopCamera();
+        frames.push(new File([blob], `frame_${i}.jpg`, { type: 'image/jpeg' }));
       }
-    }, 'image/jpeg', 0.92);
+      if (i < 2) await new Promise(r => setTimeout(r, 300));
+    }
+
+    if (frames.length > 0) {
+      setSelfiePreview(URL.createObjectURL(frames[0]));
+      stopCamera();
+      await performAiSearch(frames);
+    }
+    setIsCapturing(false);
   };
 
-  const performAiSearch = async (file: File) => {
+  const performAiSearch = async (files: File[]) => {
     setAiLoading(true);
     setAiError('');
+    setAiMessage('');
 
     try {
       const formData = new FormData();
-      formData.append('selfie', file);
+      files.forEach(file => {
+        formData.append('file', file);
+      });
 
-      const res = await apiClient.post(`/ai/search/${event._id}`, formData, {
+      const res = await apiClient.post(`/event/${event._id}/face-search`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
       const matches = res.data.matches || [];
+      const status = res.data.indexingStatus;
+      
+      setIndexingStatus(status);
+      setAiMessage(res.data.message || '');
+
       if (matches.length === 0) {
-        setAiError('Your photos not found in this album. Try a different photo.');
+        if (status && status.pending > 0) {
+           setAiError(`No photos found yet, but ${status.pending} photos are still being indexed.`);
+        } else {
+           setAiError('Your photos not found in this album. Try a different photo.');
+        }
         return;
       }
 
@@ -333,7 +363,7 @@ export default function EventPhotosPage() {
   const handleSelfieSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selfieFile) return;
-    await performAiSearch(selfieFile);
+    await performAiSearch([selfieFile]);
   };
 
   const closeAiModal = () => {
@@ -350,6 +380,8 @@ export default function EventPhotosPage() {
     setIsFiltered(false);
     setSelfieFile(null);
     setSelfiePreview(null);
+    setIndexingStatus(null);
+    setAiMessage('');
   };
 
   // --- LIGHTBOX FLOW ---
@@ -656,27 +688,30 @@ export default function EventPhotosPage() {
 
       {/* ====== AI FACE SEARCH MODAL ====== */}
       {aiModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative overflow-y-auto max-h-[90vh]">
-            <button onClick={closeAiModal} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 transition-colors z-10">
-              <X className="h-5 w-5 text-slate-400" />
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white/95 backdrop-blur-xl border border-white/20 rounded-[2rem] p-8 w-full max-w-md shadow-2xl relative overflow-y-auto max-h-[90vh] transform transition-all animate-in zoom-in-95 duration-500">
+            {/* Glowing background blob */}
+            <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-br from-[#FF6B00]/20 to-purple-500/20 blur-3xl pointer-events-none rounded-t-[2rem]" />
+            
+            <button onClick={closeAiModal} className="absolute top-5 right-5 p-2 rounded-full bg-slate-100/50 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-all z-10 hover:rotate-90">
+              <X className="h-5 w-5" />
             </button>
 
-            <div className="text-center mb-5 mt-2">
-              <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                <ScanFace className="h-6 w-6" />
+            <div className="text-center mb-6 mt-2 relative z-10">
+              <div className="w-16 h-16 bg-gradient-to-br from-[#FF6B00] to-orange-400 text-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-orange-500/30 ring-4 ring-orange-50 transform hover:scale-105 transition-transform">
+                <ScanFace className="h-8 w-8" />
               </div>
-              <h3 className="text-lg font-bold text-slate-800">Find My Photos</h3>
-              <p className="text-sm text-slate-500 mt-1">Upload a photo or scan your face to find all photos you are in.</p>
+              <h3 className="text-2xl font-extrabold text-slate-800 bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600">Find My Photos</h3>
+              <p className="text-sm text-slate-500 mt-2 font-medium">Upload a photo or scan your face to magically find all photos you appear in.</p>
             </div>
 
             {/* Tab Switcher */}
-            <div className="flex bg-slate-100 rounded-xl p-1 mb-5">
+            <div className="flex bg-slate-100/80 backdrop-blur-sm rounded-xl p-1.5 mb-6 relative z-10 shadow-inner">
               <button
                 type="button"
                 onClick={() => { setAiTab('upload'); stopCamera(); setAiError(''); }}
-                className={`flex-1 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                  aiTab === 'upload' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                className={`flex-1 py-3 rounded-lg text-xs font-extrabold flex items-center justify-center gap-2 transition-all duration-300 ${
+                  aiTab === 'upload' ? 'bg-white text-[#FF6B00] shadow-md transform scale-[1.02]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
                 }`}
               >
                 <ImagePlus className="h-4 w-4" /> Upload Photo
@@ -684,8 +719,8 @@ export default function EventPhotosPage() {
               <button
                 type="button"
                 onClick={() => { setAiTab('camera'); setSelfieFile(null); setSelfiePreview(null); setAiError(''); startCamera(); }}
-                className={`flex-1 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                  aiTab === 'camera' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                className={`flex-1 py-3 rounded-lg text-xs font-extrabold flex items-center justify-center gap-2 transition-all duration-300 ${
+                  aiTab === 'camera' ? 'bg-white text-[#FF6B00] shadow-md transform scale-[1.02]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
                 }`}
               >
                 <Video className="h-4 w-4" /> Face Scan
@@ -693,8 +728,8 @@ export default function EventPhotosPage() {
             </div>
 
             {aiError && (
-              <div className="mb-4 bg-rose-50 text-rose-600 p-3 rounded-xl text-xs font-bold text-center border border-rose-100 flex items-center justify-center gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0" />
+              <div className="mb-5 bg-rose-50/80 backdrop-blur-sm text-rose-600 p-4 rounded-xl text-xs font-bold text-center border border-rose-100 flex items-center justify-center gap-2 shadow-sm animate-in slide-in-from-top-2 duration-300">
+                <AlertCircle className="h-4 w-4 shrink-0 animate-pulse" />
                 {aiError}
               </div>
             )}
@@ -704,18 +739,24 @@ export default function EventPhotosPage() {
 
             {/* Upload Tab */}
             {aiTab === 'upload' && (
-              <form onSubmit={handleSelfieSubmit} className="flex flex-col gap-4">
-                <label className={`border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-orange-400 hover:bg-orange-50/30 transition-all group overflow-hidden ${
-                  selfiePreview ? 'border-[#FF6B00] bg-[#f8f7f4] shadow-inner' : 'border-slate-200'
+              <form onSubmit={handleSelfieSubmit} className="flex flex-col gap-5 relative z-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <label className={`relative border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center gap-4 cursor-pointer transition-all duration-300 group overflow-hidden ${
+                  selfiePreview ? 'border-[#FF6B00] bg-orange-50/30' : 'border-slate-300 hover:border-[#FF6B00] hover:bg-orange-50/10 hover:shadow-lg'
                 }`}>
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-white/0 pointer-events-none" />
                   {selfiePreview ? (
-                    <img src={selfiePreview} alt="Preview" className="w-full h-auto max-h-[350px] object-contain rounded-xl" />
+                    <div className="relative w-full">
+                      <img src={selfiePreview} alt="Preview" className="w-full h-auto max-h-[300px] object-cover rounded-xl shadow-md border border-orange-100" />
+                      <div className="absolute inset-0 rounded-xl ring-2 ring-[#FF6B00] ring-inset opacity-50" />
+                    </div>
                   ) : (
-                    <>
-                      <UploadCloud className="h-8 w-8 text-slate-400 group-hover:text-[#FF6B00] transition-colors" />
-                      <span className="text-sm font-bold text-slate-500 group-hover:text-[#FF6B00] transition-colors">Tap to upload photo</span>
-                      <span className="text-xs text-slate-400">Use a clear photo of your face</span>
-                    </>
+                    <div className="flex flex-col items-center justify-center py-6 text-center">
+                      <div className="w-16 h-16 bg-slate-100 text-slate-400 group-hover:bg-orange-100 group-hover:text-[#FF6B00] rounded-full flex items-center justify-center mb-3 transition-all duration-300 group-hover:scale-110 group-hover:shadow-md">
+                        <UploadCloud className="h-8 w-8" />
+                      </div>
+                      <span className="text-sm font-extrabold text-slate-600 group-hover:text-[#FF6B00] transition-colors">Tap to upload your photo</span>
+                      <span className="text-xs text-slate-400 mt-1 font-medium">Use a clear, well-lit photo of your face</span>
+                    </div>
                   )}
                   <input
                     type="file"
@@ -726,28 +767,29 @@ export default function EventPhotosPage() {
                 </label>
 
                 {selfiePreview && (
-                  <button type="button" onClick={() => { setSelfieFile(null); setSelfiePreview(null); }} className="text-xs text-slate-500 hover:text-rose-500 font-bold transition-colors">
-                    Remove & choose another
+                  <button type="button" onClick={() => { setSelfieFile(null); setSelfiePreview(null); }} className="text-xs text-slate-500 hover:text-rose-500 font-bold transition-colors flex items-center justify-center gap-1">
+                    <X className="h-3 w-3" /> Remove & choose another
                   </button>
                 )}
 
                 <button
                   type="submit"
                   disabled={!selfieFile || aiLoading}
-                  className="w-full bg-[#FF6B00] hover:bg-[#E05E00] disabled:opacity-50 text-white font-bold py-3.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2"
+                  className="relative w-full bg-gradient-to-r from-[#FF6B00] to-orange-500 hover:from-[#E05E00] hover:to-orange-600 disabled:from-slate-300 disabled:to-slate-300 disabled:text-slate-500 text-white font-extrabold py-4 rounded-xl text-sm transition-all duration-300 flex items-center justify-center gap-2 shadow-[0_8px_20px_rgba(255,107,0,0.3)] hover:shadow-[0_8px_25px_rgba(255,107,0,0.4)] hover:-translate-y-0.5 disabled:shadow-none disabled:transform-none overflow-hidden group"
                 >
-                  {aiLoading ? <Loader className="h-5 w-5 animate-spin" /> : <ScanFace className="h-5 w-5" />}
-                  {aiLoading ? 'Searching...' : 'Search Photos'}
+                  {aiLoading && <div className="absolute inset-0 bg-white/20 animate-pulse" />}
+                  {aiLoading ? <Loader className="h-5 w-5 animate-spin relative z-10" /> : <Sparkles className="h-5 w-5 relative z-10 group-hover:animate-pulse" />}
+                  <span className="relative z-10 tracking-wide">{aiLoading ? 'Searching Album...' : 'Find My Photos'}</span>
                 </button>
               </form>
             )}
 
             {/* Camera / Face Scan Tab */}
             {aiTab === 'camera' && (
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-5 relative z-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 {/* Camera View */}
                 {cameraActive && !selfiePreview && (
-                  <div className="relative rounded-2xl overflow-hidden bg-black">
+                  <div className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-inner group">
                     <video
                       ref={(node) => {
                         videoRef.current = node;
@@ -759,33 +801,56 @@ export default function EventPhotosPage() {
                       autoPlay
                       playsInline
                       muted
-                      className="w-full h-auto max-h-[60vh] object-contain"
+                      className="w-full h-auto max-h-[50vh] object-cover scale-[1.01]"
                     />
                     {/* Face guide overlay */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-40 h-52 border-2 border-white/40 rounded-[50%]" />
+                      <div className="relative w-48 h-64">
+                        <div className="absolute inset-0 border-2 border-white/50 rounded-[50%] shadow-[0_0_0_9999px_rgba(0,0,0,0.5)] transition-all duration-500" />
+                        {/* Scanning animation line */}
+                        <style>{`
+                          @keyframes scan {
+                            0% { transform: translateY(0); opacity: 0; }
+                            10% { opacity: 1; }
+                            90% { opacity: 1; }
+                            100% { transform: translateY(16rem); opacity: 0; }
+                          }
+                        `}</style>
+                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#FF6B00] to-transparent animate-[scan_2.5s_ease-in-out_infinite] opacity-70" style={{ animationName: 'scan' }} />
+                      </div>
                     </div>
                     {cameraReady && (
-                      <p className="absolute bottom-3 left-0 right-0 text-center text-xs text-white/70 font-bold">Position your face in the oval</p>
+                      <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+                        <span className="bg-black/60 backdrop-blur-md text-white text-xs font-bold px-4 py-2 rounded-full border border-white/10 shadow-lg">
+                          Position your face in the oval
+                        </span>
+                      </div>
                     )}
                   </div>
                 )}
 
                 {/* Captured preview */}
                 {selfiePreview && !cameraActive && (
-                  <div className="flex flex-col items-center gap-3">
-                    <img src={selfiePreview} alt="Captured" className="w-40 h-40 rounded-xl object-cover shadow-md border-2 border-orange-200" />
-                    <button type="button" onClick={() => { setSelfieFile(null); setSelfiePreview(null); startCamera(); }} className="text-xs text-slate-500 hover:text-rose-500 font-bold transition-colors">
-                      Retake photo
+                  <div className="flex flex-col items-center gap-4 animate-in zoom-in-95 duration-300">
+                    <div className="relative p-1 bg-gradient-to-br from-[#FF6B00] to-purple-500 rounded-2xl shadow-xl">
+                      <img src={selfiePreview} alt="Captured" className="w-48 h-48 rounded-xl object-cover border-4 border-white" />
+                      <div className="absolute -bottom-3 -right-3 bg-white rounded-full p-2 shadow-lg text-[#FF6B00]">
+                        <CheckCircle className="h-6 w-6" />
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => { setSelfieFile(null); setSelfiePreview(null); startCamera(); }} className="text-xs text-slate-500 hover:text-rose-500 font-bold transition-colors flex items-center gap-1 mt-2">
+                      <RefreshCw className="h-3 w-3" /> Retake scan
                     </button>
                   </div>
                 )}
 
                 {/* No camera yet */}
                 {!cameraActive && !selfiePreview && (
-                  <div className="rounded-2xl bg-slate-50 border border-slate-200 p-8 flex flex-col items-center justify-center gap-3">
-                    <Video className="h-8 w-8 text-slate-400" />
-                    <p className="text-sm text-slate-500 font-bold">Camera starting...</p>
+                  <div className="rounded-2xl bg-slate-50/80 border border-slate-200 p-10 flex flex-col items-center justify-center gap-4 text-center shadow-inner">
+                    <div className="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center animate-pulse">
+                      <Video className="h-8 w-8 text-slate-400" />
+                    </div>
+                    <p className="text-sm text-slate-500 font-bold">Initializing Camera...</p>
                   </div>
                 )}
 
@@ -794,10 +859,12 @@ export default function EventPhotosPage() {
                   <button
                     type="button"
                     onClick={captureFromCamera}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2"
+                    className="w-full bg-slate-900 hover:bg-black text-white font-extrabold py-4 rounded-xl text-sm transition-all duration-300 flex items-center justify-center gap-2 shadow-[0_8px_20px_rgba(0,0,0,0.2)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.3)] hover:-translate-y-0.5 group"
                   >
-                    <Camera className="h-5 w-5" />
-                    Capture Photo
+                    <div className="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <div className="w-4 h-4 bg-[#FF6B00] rounded-full" />
+                    </div>
+                    Take Photo
                   </button>
                 )}
 
@@ -807,10 +874,11 @@ export default function EventPhotosPage() {
                     type="button"
                     onClick={() => performAiSearch(selfieFile)}
                     disabled={aiLoading}
-                    className="w-full bg-[#FF6B00] hover:bg-[#E05E00] disabled:opacity-50 text-white font-bold py-3.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2"
+                    className="relative w-full bg-gradient-to-r from-[#FF6B00] to-orange-500 hover:from-[#E05E00] hover:to-orange-600 disabled:from-slate-300 disabled:to-slate-300 disabled:text-slate-500 text-white font-extrabold py-4 rounded-xl text-sm transition-all duration-300 flex items-center justify-center gap-2 shadow-[0_8px_20px_rgba(255,107,0,0.3)] hover:shadow-[0_8px_25px_rgba(255,107,0,0.4)] hover:-translate-y-0.5 overflow-hidden group"
                   >
-                    {aiLoading ? <Loader className="h-5 w-5 animate-spin" /> : <ScanFace className="h-5 w-5" />}
-                    {aiLoading ? 'Searching...' : 'Search Photos'}
+                    {aiLoading && <div className="absolute inset-0 bg-white/20 animate-pulse" />}
+                    {aiLoading ? <Loader className="h-5 w-5 animate-spin relative z-10" /> : <Sparkles className="h-5 w-5 relative z-10 group-hover:animate-pulse" />}
+                    <span className="relative z-10 tracking-wide">{aiLoading ? 'Searching Album...' : 'Find My Photos'}</span>
                   </button>
                 )}
               </div>

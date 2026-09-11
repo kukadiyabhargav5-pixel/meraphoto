@@ -33,6 +33,7 @@ export default function TeamPage() {
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberEmail, setNewMemberEmail] = useState('');
   const [newMemberPhone, setNewMemberPhone] = useState('');
+  const [newMemberCategory, setNewMemberCategory] = useState('Photography Team');
   const [newMemberRole, setNewMemberRole] = useState('Lead Photographer');
   const [searchQuery, setSearchQuery] = useState('');
   const [editingMember, setEditingMember] = useState<any>(null);
@@ -56,6 +57,18 @@ export default function TeamPage() {
     setNewMemberEmail(member.email);
     setNewMemberPhone(member.phone || '');
     setNewMemberRole(member.role || 'Lead Photographer');
+    
+    const photoRoles = ['Lead Photographer', 'Second Shooter', 'Assistant Photographer', 'Candid Photographer', 'Traditional Photographer', 'Pre-Wedding Specialist', 'Portrait Specialist'];
+    const videoRoles = ['Lead Cinematographer', 'Traditional Videographer', 'Candid Videographer', 'Drone / Aerial Specialist', 'Assistant Videographer'];
+    const editRoles = ['Chief Photo Editor', 'Chief Video Editor', 'AI Tuning & Retoucher', 'Highlight Reel Editor'];
+    const mgmtRoles = ['Studio Manager', 'Client Coordinator', 'Lighting Technician'];
+
+    if (photoRoles.includes(member.role)) setNewMemberCategory('Photography Team');
+    else if (videoRoles.includes(member.role)) setNewMemberCategory('Videography & Cinematography Team');
+    else if (editRoles.includes(member.role)) setNewMemberCategory('Editing & Post-Production');
+    else if (mgmtRoles.includes(member.role)) setNewMemberCategory('Management & Support');
+    else setNewMemberCategory('Other');
+
     setTeamSubView('edit');
   };
 
@@ -65,6 +78,7 @@ export default function TeamPage() {
     setNewMemberEmail('');
     setNewMemberPhone('');
     setNewMemberRole('Lead Photographer');
+    setNewMemberCategory('Photography Team');
     setTeamSubView('list');
   };
 
@@ -110,7 +124,8 @@ export default function TeamPage() {
                   </div>
                 </div>
                 <div className="bg-white/30 border border-slate-200 rounded-2xl overflow-hidden shadow-md">
-                  <div className="overflow-x-auto w-full">
+                  {/* Desktop Table */}
+                  <div className="hidden md:block overflow-x-auto w-full">
                     <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
                     <thead>
                       <tr className="border-b border-slate-200 bg-white/[0.03] text-slate-350 uppercase tracking-wider font-black">
@@ -147,6 +162,40 @@ export default function TeamPage() {
                       )}
                     </tbody>
                   </table>
+                  </div>
+
+                  {/* Mobile Card Layout */}
+                  <div className="md:hidden flex flex-col gap-3 p-3">
+                    {filteredTeam.length === 0 ? (
+                      <div className="p-8 text-center text-slate-400 font-bold">No team members found.</div>
+                    ) : (
+                      filteredTeam.map((member: any, i: number) => (
+                        <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-bold text-slate-900 text-sm block">{member.name}</span>
+                              <span className="text-[10px] font-bold text-[#c5a880] uppercase tracking-wider">{member.role}</span>
+                            </div>
+                            <div className="flex gap-1.5">
+                              <button onClick={() => handleEdit(member)} className="p-1.5 bg-slate-100 text-slate-400 hover:text-[#c5a880] rounded-lg border border-slate-200">
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => handleDelete(member)} className="p-1.5 bg-rose-50 text-rose-500 rounded-lg border border-rose-200">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-400 font-bold">Email</span>
+                            <span className="text-slate-600 font-semibold truncate ml-2 max-w-[60%] text-right">{member.email}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-400 font-bold">Mobile</span>
+                            <span className="text-slate-600 font-mono font-semibold">{member.phone || '-'}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </>
@@ -198,36 +247,70 @@ export default function TeamPage() {
                     <input type="email" required value={newMemberEmail} onChange={(e) => setNewMemberEmail(e.target.value)} className="w-full text-center bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] transition-all" />
                   </div>
                   <div className="flex flex-col gap-1.5 items-center">
-                    <label className="text-[11px] text-slate-400 uppercase font-black tracking-widest text-center">Role / Specialization</label>
-                    <select value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)} className="w-full text-center bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] transition-all cursor-pointer">
-                      <optgroup label="Photography Team" className="text-slate-500 font-bold bg-[#f8f7f4] text-slate-900">
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Lead Photographer">Lead Photographer</option>
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Second Shooter">Second Shooter</option>
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Assistant Photographer">Assistant Photographer</option>
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Candid Photographer">Candid Photographer</option>
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Traditional Photographer">Traditional Photographer</option>
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Pre-Wedding Specialist">Pre-Wedding Specialist</option>
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Portrait Specialist">Portrait Specialist</option>
-                      </optgroup>
-                      <optgroup label="Videography & Cinematography Team" className="text-slate-500 font-bold bg-[#f8f7f4] text-slate-900">
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Lead Cinematographer">Lead Cinematographer</option>
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Traditional Videographer">Traditional Videographer</option>
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Candid Videographer">Candid Videographer</option>
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Drone/Aerial Specialist">Drone / Aerial Specialist</option>
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Assistant Videographer">Assistant Videographer</option>
-                      </optgroup>
-                      <optgroup label="Editing & Post-Production" className="text-slate-500 font-bold bg-[#f8f7f4] text-slate-900">
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Chief Photo Editor">Chief Photo Editor</option>
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Chief Video Editor">Chief Video Editor</option>
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="AI Tuning & Retoucher">AI Tuning & Retoucher</option>
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Highlight Reel Editor">Highlight Reel Editor</option>
-                      </optgroup>
-                      <optgroup label="Management & Support" className="text-slate-500 font-bold bg-[#f8f7f4] text-slate-900">
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Studio Manager">Studio Manager</option>
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Client Coordinator">Client Coordinator</option>
-                        <option className="bg-[#f8f7f4] text-slate-900 font-semibold" value="Lighting Technician">Lighting Technician</option>
-                      </optgroup>
+                    <label className="text-[11px] text-slate-400 uppercase font-black tracking-widest text-center">Team Category</label>
+                    <select value={newMemberCategory} onChange={(e) => {
+                      const cat = e.target.value;
+                      setNewMemberCategory(cat);
+                      if (cat === 'Other') {
+                        setNewMemberRole('');
+                      } else {
+                        if (cat === 'Photography Team') setNewMemberRole('Lead Photographer');
+                        if (cat === 'Videography & Cinematography Team') setNewMemberRole('Lead Cinematographer');
+                        if (cat === 'Editing & Post-Production') setNewMemberRole('Chief Photo Editor');
+                        if (cat === 'Management & Support') setNewMemberRole('Studio Manager');
+                      }
+                    }} className="w-full text-center bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] transition-all cursor-pointer">
+                      <option value="Photography Team">Photography Team</option>
+                      <option value="Videography & Cinematography Team">Videography & Cinematography Team</option>
+                      <option value="Editing & Post-Production">Editing & Post-Production</option>
+                      <option value="Management & Support">Management & Support</option>
+                      <option value="Other">Other (Custom Role)</option>
                     </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 items-center">
+                    <label className="text-[11px] text-slate-400 uppercase font-black tracking-widest text-center">Role / Specialization</label>
+                    {newMemberCategory === 'Other' ? (
+                      <input type="text" required placeholder="Enter custom role..." value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)} className="w-full text-center bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] transition-all" />
+                    ) : (
+                      <select value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)} className="w-full text-center bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] transition-all cursor-pointer">
+                        {newMemberCategory === 'Photography Team' && (
+                          <>
+                            <option value="Lead Photographer">Lead Photographer</option>
+                            <option value="Second Shooter">Second Shooter</option>
+                            <option value="Assistant Photographer">Assistant Photographer</option>
+                            <option value="Candid Photographer">Candid Photographer</option>
+                            <option value="Traditional Photographer">Traditional Photographer</option>
+                            <option value="Pre-Wedding Specialist">Pre-Wedding Specialist</option>
+                            <option value="Portrait Specialist">Portrait Specialist</option>
+                          </>
+                        )}
+                        {newMemberCategory === 'Videography & Cinematography Team' && (
+                          <>
+                            <option value="Lead Cinematographer">Lead Cinematographer</option>
+                            <option value="Traditional Videographer">Traditional Videographer</option>
+                            <option value="Candid Videographer">Candid Videographer</option>
+                            <option value="Drone / Aerial Specialist">Drone / Aerial Specialist</option>
+                            <option value="Assistant Videographer">Assistant Videographer</option>
+                          </>
+                        )}
+                        {newMemberCategory === 'Editing & Post-Production' && (
+                          <>
+                            <option value="Chief Photo Editor">Chief Photo Editor</option>
+                            <option value="Chief Video Editor">Chief Video Editor</option>
+                            <option value="AI Tuning & Retoucher">AI Tuning & Retoucher</option>
+                            <option value="Highlight Reel Editor">Highlight Reel Editor</option>
+                          </>
+                        )}
+                        {newMemberCategory === 'Management & Support' && (
+                          <>
+                            <option value="Studio Manager">Studio Manager</option>
+                            <option value="Client Coordinator">Client Coordinator</option>
+                            <option value="Lighting Technician">Lighting Technician</option>
+                          </>
+                        )}
+                      </select>
+                    )}
                   </div>
                   <button type="submit" disabled={isSubmitting} className="flex justify-center items-center gap-2 w-full bg-white hover:bg-[#c5a880] text-slate-900 hover:text-[#09090b] uppercase tracking-wider font-bold py-4 rounded-xl text-xs mt-4 cursor-pointer transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
                     {isSubmitting ? <Loader className="h-4 w-4 animate-spin" /> : (teamSubView === 'edit' ? 'Save Changes' : 'Send Invitation Link')}

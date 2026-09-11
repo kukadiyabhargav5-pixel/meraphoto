@@ -490,7 +490,8 @@ export default function BillPage() {
                 </div>
 
                 <div className="bg-white/30 border border-slate-200 rounded-2xl overflow-hidden shadow-md">
-                  <div className="overflow-x-auto w-full">
+                  {/* Desktop Table */}
+                  <div className="hidden md:block overflow-x-auto w-full">
                     <table className="w-full text-center border-collapse text-xs whitespace-nowrap">
                     <thead>
                       <tr className="border-b border-slate-200 bg-white/[0.03] text-slate-350 uppercase tracking-wider font-black">
@@ -540,6 +541,58 @@ export default function BillPage() {
                       )}
                     </tbody>
                   </table>
+                  </div>
+
+                  {/* Mobile Card Layout */}
+                  <div className="md:hidden flex flex-col gap-3 p-3">
+                    {filteredBills.length === 0 ? (
+                      <div className="p-8 text-center text-slate-400 font-bold">No invoices found.</div>
+                    ) : (
+                      filteredBills.map((invoice: any, i: number) => (
+                        <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-bold text-[#c5a880] text-sm">{invoice.invoiceNo || invoice.id}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${invoice.status === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10' : invoice.status === 'Overdue' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/10' : 'bg-amber-500/10 text-amber-400 border border-amber-500/10'}`}>
+                              {invoice.status}
+                            </span>
+                          </div>
+                          
+                          <div>
+                            <div className="font-bold text-slate-900">{invoice.clientName || invoice.client}</div>
+                            <div className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
+                              Issue: {(invoice.issueDate || invoice.date)?.split('T')[0].split('-').reverse().join('/')}
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-50 rounded-lg p-3 space-y-2">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-500 font-bold">Total Amount</span>
+                              <span className="font-black text-slate-900">₹{invoice.amount?.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-500 font-bold">Token Paid</span>
+                              <span className="font-bold text-[#c5a880]">₹{(invoice.advance || 0).toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-200 mt-2">
+                              <span className="text-slate-500 font-bold">Balance Left</span>
+                              <span className="font-black text-rose-500">₹{(invoice.balance || 0).toLocaleString()}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                            <button onClick={() => handlePrintExisting(invoice)} className="p-2 text-slate-400 hover:text-slate-700 bg-slate-50 rounded-lg border border-slate-200">
+                              <Printer className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => handleEdit(invoice)} className="p-2 text-slate-400 hover:text-[#c5a880] bg-slate-50 rounded-lg border border-slate-200">
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => handleDelete(invoice)} className="p-2 text-rose-400 hover:text-rose-500 bg-rose-50 rounded-lg border border-rose-100">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </>
