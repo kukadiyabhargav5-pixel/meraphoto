@@ -236,17 +236,6 @@ export default function CinematicHero() {
         />
         <div className="hero-cinematic-overlay" />
 
-        {/* Final Text */}
-        <div className={`hero-text-final ${scrollProgress > 0.95 ? 'hero-text-visible' : ''}`}>
-          <span className="hero-final-brand">Mara Photo</span>
-          <h2 className="hero-final-headline">Your Story,<br /><em>Beautifully Told</em>.</h2>
-          <p className="hero-final-sub">Book your experience today.</p>
-          <a href="/pricing" className="hero-final-cta">
-            Get Started
-            <ChevronDown />
-          </a>
-        </div>
-
         {/* Scroll Indicator */}
         <div className={`hero-scroll-indicator ${indicatorHidden ? 'hero-indicator-hidden' : ''}`}>
           <span className="hero-scroll-indicator-text">Scroll to Explore</span>
