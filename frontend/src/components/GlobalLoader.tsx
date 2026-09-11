@@ -198,13 +198,13 @@ export default function GlobalLoader() {
     }
   }, [isReady, progress, isDismissed, skipLoader]);
 
-  // Smooth progress animation — faster easing
+  // Smooth progress animation — fast & responsive easing
   useEffect(() => {
     if (isDismissed || skipLoader) return;
     const animate = () => {
       const target = progress;
       if (currentValRef.current < target) {
-        const step = Math.max(1, (target - currentValRef.current) * 0.15);
+        const step = Math.max(1.5, (target - currentValRef.current) * 0.22);
         currentValRef.current = Math.min(target, currentValRef.current + step);
         setDisplayProgress(Math.round(currentValRef.current));
       }
@@ -214,21 +214,21 @@ export default function GlobalLoader() {
     return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
   }, [progress, isDismissed, skipLoader]);
 
-  // Flash + dismiss ONLY after displayProgress visually reaches 100%
+  // Flash + dismiss quickly when reaching 100%
   useEffect(() => {
     if (!isReady || isDismissed || skipLoader) return;
     const waitInterval = setInterval(() => {
-      if (currentValRef.current >= 99.5) {
+      if (currentValRef.current >= 99) {
         clearInterval(waitInterval);
         setDisplayProgress(100);
-        // Show 100% for a moment, then flash, then dismiss
+        // Quick 150ms pause at 100%, camera flash, then dismiss into home page
         setTimeout(() => {
           setIsFlashing(true);
           setTimeout(() => {
             hasCompletedOnceRef.current = true;
             setIsDismissed(true);
-          }, 600);
-        }, 350);
+          }, 450);
+        }, 150);
       }
     }, 20);
     return () => clearInterval(waitInterval);
