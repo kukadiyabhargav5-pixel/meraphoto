@@ -6,14 +6,14 @@ import { ChevronDown } from 'lucide-react';
 /* ─────────────── CONFIGURATION ─────────────── */
 
 const FRAME_PREFIX = '/frames/frame_';
-const FRAME_EXT = '.png';
-const TOTAL_FRAMES = 240;
+const FRAME_EXT = '.jpg';
+const TOTAL_FRAMES = 35;
 const HEADER_HEIGHT = 80;
 
 /* ─────────────── HELPERS ─────────────── */
 
 function getFramePath(index: number): string {
-  const num = String(index + 1).padStart(6, '0');
+  const num = String(index + 1).padStart(3, '0');
   return `${FRAME_PREFIX}${num}${FRAME_EXT}`;
 }
 
@@ -44,14 +44,14 @@ export default function CinematicHero() {
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
-  const [scrollHeight, setScrollHeight] = useState(8000);
+  const [scrollHeight, setScrollHeight] = useState(3000);
 
   // Calculate scroll height
   useEffect(() => {
     function calcHeight() {
       const isMobile = window.innerWidth < 768;
-      const pxPerFrame = isMobile ? window.innerHeight * 0.07 : window.innerHeight * 0.12;
-      setScrollHeight(TOTAL_FRAMES * pxPerFrame);
+      const pxPerFrame = isMobile ? window.innerHeight * 0.07 : window.innerHeight * 0.10;
+      setScrollHeight(Math.max(window.innerHeight * 2.5, TOTAL_FRAMES * pxPerFrame));
     }
     calcHeight();
     window.addEventListener('resize', calcHeight);
@@ -75,7 +75,7 @@ export default function CinematicHero() {
 
     async function preloadAll() {
       let loadedCount = 0;
-      const BATCH = 20;
+      const BATCH = 10;
       for (let start = 0; start < TOTAL_FRAMES && !cancelled; start += BATCH) {
         const end = Math.min(start + BATCH, TOTAL_FRAMES);
         const promises: Promise<void>[] = [];
@@ -90,7 +90,7 @@ export default function CinematicHero() {
         }
         await Promise.all(promises);
         if (start + BATCH < TOTAL_FRAMES) {
-          await new Promise(r => setTimeout(r, 50));
+          await new Promise(r => setTimeout(r, 20));
         }
       }
       if (cancelled) return;
@@ -161,6 +161,8 @@ export default function CinematicHero() {
         if (img) {
           const cw = canvas.width;
           const ch = canvas.height;
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
           ctx.clearRect(0, 0, cw, ch);
           drawCover(ctx, img, cw, ch);
           lastDrawnFrameRef.current = frameIndex;
@@ -183,6 +185,8 @@ export default function CinematicHero() {
     if (!ctx) return;
     const img = imagesRef.current[0];
     if (img) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       drawCover(ctx, img, canvas.width, canvas.height);
       lastDrawnFrameRef.current = 0;
     }
