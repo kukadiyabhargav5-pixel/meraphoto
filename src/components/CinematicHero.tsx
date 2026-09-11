@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { ChevronDown } from 'lucide-react';
 
 /* ─────────────── CONFIGURATION ─────────────── */
 
@@ -205,7 +204,6 @@ export default function CinematicHero() {
     }
   }, [isLoaded]);
 
-  const indicatorHidden = scrollProgress > 0.03;
   const scale = 1.02 - 0.02 * scrollProgress;
 
   return (
@@ -235,12 +233,6 @@ export default function CinematicHero() {
           }}
         />
         <div className="hero-cinematic-overlay" />
-
-        {/* Scroll Indicator */}
-        <div className={`hero-scroll-indicator ${indicatorHidden ? 'hero-indicator-hidden' : ''}`}>
-          <span className="hero-scroll-indicator-text">Scroll to Explore</span>
-          <ChevronDown className="hero-scroll-indicator-arrow" />
-        </div>
 
         {/* Progress Bar */}
         <div className="hero-progress-bar" style={{ width: `${scrollProgress * 100}%` }} />

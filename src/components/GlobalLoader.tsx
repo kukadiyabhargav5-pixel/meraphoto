@@ -154,15 +154,24 @@ const LoaderErrorState = ({ error, onRetry }: { error: string; onRetry: () => vo
 export default function GlobalLoader() {
   const { progress, status, isReady, error, isCriticalFailed, retry } = useApplicationLoader();
 
-  const [displayProgress, setDisplayProgress] = useState(0);
+  const [displayProgress, setDisplayProgress] = useState(1);
   const [isFlashing, setIsFlashing] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
-  const [skipLoader, setSkipLoader] = useState(false);
   const animRef = useRef<number | null>(null);
-  const currentValRef = useRef(0);
+  const currentValRef = useRef(1);
   const keepAliveStartedRef = useRef(false);
-  // Track if THIS session completed naturally (to prevent false resets)
-  const hasCompletedOnceRef = useRef(false);
+
+  // Lock body scroll while loader is visible — background page stays completely hidden & unscrollable
+  useEffect(() => {
+    if (!isDismissed) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isDismissed]);
 
   // Start keep-alive once
   useEffect(() => {
@@ -172,69 +181,52 @@ export default function GlobalLoader() {
     }
   }, []);
 
-  // On mount: check sessionStorage to skip loader if already loaded in this session
-  // Using useEffect avoids SSR hydration mismatch
+  // When reset is called explicitly
   useEffect(() => {
-    if (typeof window !== 'undefined' && sessionStorage.getItem('app_initial_ready') === 'true') {
-      setSkipLoader(true);
-      setIsDismissed(true);
-      hasCompletedOnceRef.current = true;
+    if (!isReady && progress <= 1 && isDismissed) {
+      setIsDismissed(false);
+      setIsFlashing(false);
+      setDisplayProgress(1);
+      currentValRef.current = 1;
     }
-  }, []);
+  }, [isReady, progress, isDismissed]);
 
-  // When LoadingManager explicitly resets (e.g. after logout),
-  // reset ALL local state so the loader re-appears from 0%
+  // Smooth progress animation from 1% to 100% fast & responsive
   useEffect(() => {
-    if (!isReady && progress === 0 && (isDismissed || skipLoader) && hasCompletedOnceRef.current) {
-      // Check if sessionStorage was actually cleared (confirming a real reset)
-      if (typeof window !== 'undefined' && sessionStorage.getItem('app_initial_ready') !== 'true') {
-        hasCompletedOnceRef.current = false;
-        setSkipLoader(false);
-        setIsDismissed(false);
-        setIsFlashing(false);
-        setDisplayProgress(0);
-        currentValRef.current = 0;
-      }
-    }
-  }, [isReady, progress, isDismissed, skipLoader]);
-
-  // Smooth progress animation — fast & responsive easing
-  useEffect(() => {
-    if (isDismissed || skipLoader) return;
+    if (isDismissed) return;
     const animate = () => {
-      const target = progress;
+      const target = Math.max(1, Math.min(100, progress));
       if (currentValRef.current < target) {
-        const step = Math.max(1.5, (target - currentValRef.current) * 0.22);
+        const diff = target - currentValRef.current;
+        const step = Math.max(1.2, diff * 0.20);
         currentValRef.current = Math.min(target, currentValRef.current + step);
-        setDisplayProgress(Math.round(currentValRef.current));
+        setDisplayProgress(Math.min(100, Math.round(currentValRef.current)));
+      } else if (currentValRef.current >= 100) {
+        setDisplayProgress(100);
       }
       animRef.current = requestAnimationFrame(animate);
     };
     animRef.current = requestAnimationFrame(animate);
     return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
-  }, [progress, isDismissed, skipLoader]);
+  }, [progress, isDismissed]);
 
-  // Flash + dismiss quickly when reaching 100%
+  // Flash + dismiss ONLY after displayProgress reaches 100% AND isReady is true!
   useEffect(() => {
-    if (!isReady || isDismissed || skipLoader) return;
-    const waitInterval = setInterval(() => {
-      if (currentValRef.current >= 99) {
-        clearInterval(waitInterval);
-        setDisplayProgress(100);
-        // Quick 150ms pause at 100%, camera flash, then dismiss into home page
-        setTimeout(() => {
-          setIsFlashing(true);
-          setTimeout(() => {
-            hasCompletedOnceRef.current = true;
-            setIsDismissed(true);
-          }, 450);
-        }, 150);
-      }
-    }, 20);
-    return () => clearInterval(waitInterval);
-  }, [isReady, isDismissed, skipLoader]);
+    if (!isReady || isDismissed || displayProgress < 100) return;
 
-  if (isDismissed || skipLoader) return null;
+    // Must visibly be 100%
+    const holdTimer = setTimeout(() => {
+      setIsFlashing(true);
+      const dismissTimer = setTimeout(() => {
+        setIsDismissed(true);
+      }, 400);
+      return () => clearTimeout(dismissTimer);
+    }, 180);
+
+    return () => clearTimeout(holdTimer);
+  }, [isReady, displayProgress, isDismissed]);
+
+  if (isDismissed) return null;
 
   const completionReady = isReady && displayProgress >= 100;
 

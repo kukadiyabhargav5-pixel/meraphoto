@@ -47,8 +47,8 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
 class LoadingManagerClass {
   private state: LoadingState = {
     currentPhase: 1,
-    progress: 0,
-    status: 'Initializing...',
+    progress: 1,
+    status: 'Initializing Experience...',
     error: null,
     isCriticalFailed: false,
     applicationReady: false,
@@ -77,19 +77,11 @@ class LoadingManagerClass {
   }
 
   /**
-   * Main entry point. Runs the loading pipeline ONCE per session.
+   * Main entry point. Runs the loading pipeline.
    */
   public async startLoading(force = false) {
     if (this.hasStarted && !force) return;
     this.hasStarted = true;
-
-    // If session already loaded, skip entirely
-    if (typeof window !== 'undefined' && !force) {
-      if (sessionStorage.getItem('app_initial_ready') === 'true') {
-        this.completeInstantly();
-        return;
-      }
-    }
 
     // Global safety timeout
     this.globalSafetyTimer = setTimeout(() => {
@@ -164,7 +156,7 @@ class LoadingManagerClass {
     this.cleanupHeroListeners();
     this.state = {
       currentPhase: 1,
-      progress: 0,
+      progress: 1,
       status: 'Retrying...',
       error: null,
       isCriticalFailed: false,
@@ -184,8 +176,8 @@ class LoadingManagerClass {
     this.cleanupHeroListeners();
     this.state = {
       currentPhase: 1,
-      progress: 0,
-      status: 'Initializing...',
+      progress: 1,
+      status: 'Initializing Experience...',
       error: null,
       isCriticalFailed: false,
       applicationReady: false,
