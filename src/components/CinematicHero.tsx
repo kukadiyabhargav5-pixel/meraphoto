@@ -75,8 +75,24 @@ export default function CinematicHero() {
 
     async function preloadAll() {
       let loadedCount = 0;
-      const BATCH = 10;
-      for (let start = 0; start < TOTAL_FRAMES && !cancelled; start += BATCH) {
+      // 1. Load initial frame immediately and paint to canvas right away
+      await loadImage(0);
+      loadedCount = 1;
+      window.dispatchEvent(new CustomEvent('hero-loading', { detail: { progress: Math.floor((1 / TOTAL_FRAMES) * 100) } }));
+
+      if (canvasRef.current && imagesRef.current[0]) {
+        const ctx = canvasRef.current.getContext('2d');
+        if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          drawCover(ctx, imagesRef.current[0], canvasRef.current.width, canvasRef.current.height);
+          lastDrawnFrameRef.current = 0;
+        }
+      }
+
+      // 2. Load remaining 34 frames in fast parallel batches
+      const BATCH = 12;
+      for (let start = 1; start < TOTAL_FRAMES && !cancelled; start += BATCH) {
         const end = Math.min(start + BATCH, TOTAL_FRAMES);
         const promises: Promise<void>[] = [];
         for (let i = start; i < end; i++) {
@@ -89,9 +105,6 @@ export default function CinematicHero() {
           );
         }
         await Promise.all(promises);
-        if (start + BATCH < TOTAL_FRAMES) {
-          await new Promise(r => setTimeout(r, 20));
-        }
       }
       if (cancelled) return;
       setIsLoaded(true);
@@ -222,21 +235,6 @@ export default function CinematicHero() {
           }}
         />
         <div className="hero-cinematic-overlay" />
-
-        {/* Intro Text */}
-        <div className={`hero-text-intro ${scrollProgress > 0.05 ? 'hero-text-hidden' : ''}`}>
-          <h1 className="hero-intro-headline">
-            Crafting Timeless<br /><em>Memories</em>
-          </h1>
-          <p className="hero-intro-sub">Exquisite Wedding Photography</p>
-          <button
-            className="hero-intro-cta"
-            onClick={() => window.scrollTo({ top: window.innerHeight * 1.5, behavior: 'smooth' })}
-          >
-            View Portfolio
-            <ChevronDown />
-          </button>
-        </div>
 
         {/* Final Text */}
         <div className={`hero-text-final ${scrollProgress > 0.95 ? 'hero-text-visible' : ''}`}>
