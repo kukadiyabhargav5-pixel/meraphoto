@@ -34,9 +34,21 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [mediaFilter, setMediaFilter] = useState<'ALL' | 'PHOTO' | 'VIDEO'>('ALL');
 
+  // Uncredited media in this event waiting to be saved & deducted
+  const uncreditedPhotos = mediaItems.filter(item => item.type === 'PHOTO' && item.creditDeducted === false);
+  const uncreditedVideos = mediaItems.filter(item => item.type === 'VIDEO' && item.creditDeducted === false);
+  const pendingPhotosCount = credits?.photos?.pendingSave !== undefined ? credits.photos.pendingSave : uncreditedPhotos.length;
+  const pendingVideosCount = credits?.videos?.pendingSave !== undefined ? credits.videos.pendingSave : uncreditedVideos.length;
+
+  const currentPhotoRemaining = credits?.photos?.remaining !== undefined ? credits.photos.remaining : 0;
+  const projectedPhotoRemaining = credits?.photos?.projectedRemaining !== undefined ? credits.photos.projectedRemaining : Math.max(0, currentPhotoRemaining - pendingPhotosCount);
+
+  const currentVideoRemaining = credits?.videos?.remaining !== undefined ? credits.videos.remaining : 0;
+  const projectedVideoRemaining = credits?.videos?.projectedRemaining !== undefined ? credits.videos.projectedRemaining : Math.max(0, currentVideoRemaining - pendingVideosCount);
+
   // Credit limit flags
-  const isPhotoLimitReached = credits?.photos?.remaining !== undefined && credits.photos.remaining <= 0;
-  const isVideoLimitReached = credits?.videos?.remaining !== undefined && credits.videos.remaining <= 0;
+  const isPhotoLimitReached = projectedPhotoRemaining <= 0 && credits?.photos?.remaining !== undefined;
+  const isVideoLimitReached = projectedVideoRemaining <= 0 && credits?.videos?.remaining !== undefined;
   const isAllCreditsExhausted = isPhotoLimitReached && isVideoLimitReached;
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<any>(null);
@@ -132,33 +144,49 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
       const IMAGEKIT_PUBLIC_KEY = "public_2AYAbqW1EUFL0ejxVPrCgx06Es0=";
 
       const imageCompression = (await import('browser-image-compression')).default;
-      let uploadedCount = 0;
+      const fileArray = Array.from(files);
+      const mediaList: any[] = [];
       let successful = 0;
       let failed = 0;
-      const mediaList = [];
-      const batchSize = 10;
+      let currentFileIndex = 0;
+      const concurrency = 6; // 6 parallel uploads for max speed without rate limiting
 
-      for (let i = 0; i < files.length; i += batchSize) {
-        const chunk = Array.from(files).slice(i, i + batchSize);
-        const chunkPromises = chunk.map(async (file, idx) => {
-          const globalIdx = i + idx;
-          const authParams = signatures[globalIdx] || signatures[0];
-          
+      const worker = async () => {
+        while (currentFileIndex < fileArray.length) {
+          const idx = currentFileIndex++;
+          const file = fileArray[idx];
+          const authParams = signatures[idx] || signatures[0];
+
           let fileToUpload: File | Blob = file;
           const isVideo = file.type.startsWith('video/');
-          
+
+          // Strict Maximum 2MB compression for photos with fast skip if already <= 2MB
           if (!isVideo && file.type.startsWith('image/')) {
-            try {
-              const options = {
-                maxSizeMB: 2,
-                maxWidthOrHeight: 2500,
-                useWebWorker: true,
-                alwaysKeepResolution: true
-              };
-              const compressedBlob = await imageCompression(file, options);
-              fileToUpload = new File([compressedBlob], file.name, { type: compressedBlob.type });
-            } catch (err) {
-              console.error('Compression skipped:', err);
+            const TWO_MB = 2 * 1024 * 1024;
+            if (file.size > TWO_MB) {
+              try {
+                const options = {
+                  maxSizeMB: 1.9, // Target 1.9MB to strictly guarantee <= 2MB
+                  maxWidthOrHeight: 2560,
+                  useWebWorker: true,
+                  fileType: 'image/jpeg',
+                  initialQuality: 0.85
+                };
+                let compressedBlob = await imageCompression(file, options);
+                // Extra safety check: if still above 2MB, run a fast second pass
+                if (compressedBlob.size > TWO_MB) {
+                  compressedBlob = await imageCompression(new File([compressedBlob], file.name, { type: 'image/jpeg' }), {
+                    maxSizeMB: 1.8,
+                    maxWidthOrHeight: 2048,
+                    useWebWorker: true,
+                    fileType: 'image/jpeg',
+                    initialQuality: 0.75
+                  });
+                }
+                fileToUpload = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' });
+              } catch (compErr) {
+                console.warn('Compression fallback:', compErr);
+              }
             }
           }
 
@@ -179,30 +207,29 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
             });
 
             if (!response.ok) {
-              throw new Error('ImageKit upload failed');
+              throw new Error(`ImageKit upload failed with status ${response.status}`);
             }
             const data = await response.json();
-            return {
+            mediaList.push({
               url: data.url,
               publicId: data.fileId,
               type: isVideo ? 'VIDEO' : 'PHOTO',
               size: fileToUpload.size,
               folderPath: file.webkitRelativePath || ''
-            };
+            });
+            successful++;
+          } catch (uploadErr) {
+            console.error('Upload failed for file:', file.name, uploadErr);
+            failed++;
           } finally {
             setUploadProgress(prev => ({ ...prev, current: prev.current + 1 }));
           }
-        });
+        }
+      };
 
-        const results = await Promise.allSettled(chunkPromises);
-        const successfulUploads = results
-          .filter(r => r.status === 'fulfilled')
-          .map((r: any) => r.value);
-        
-        mediaList.push(...successfulUploads);
-        successful += successfulUploads.length;
-        failed += chunk.length - successfulUploads.length;
-      }
+      // Launch parallel workers for maximum speed
+      const workerCount = Math.min(concurrency, fileArray.length);
+      await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
       // Send the resulting data to the backend
       if (mediaList.length > 0) {
@@ -212,9 +239,11 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
       if (failed > 0) {
         toast.error(`Uploaded ${successful}, failed ${failed}`);
       } else {
-        toast.success(`Successfully uploaded ${files.length} files!`);
+        toast.success(`Successfully uploaded ${files.length} file${files.length > 1 ? 's' : ''}! Click "Save Event Details" to save & deduct credits.`, { duration: 6000 });
       }
-      fetchEventDetails();
+      await fetchEventDetails();
+      await fetchCredits();
+      window.dispatchEvent(new Event('studio_plan_updated'));
     } catch (err: any) {
        console.error('Upload error:', err);
        toast.error(err?.response?.data?.error || err.message || 'Upload failed. Please check console.');
@@ -314,9 +343,12 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
     'SCHOOL', 'GARBA', 'CONCERT', 'RELIGIOUS', 'ENGAGEMENT', 
     'BABY SHOWER', 'PANCHMASI'
   ];
+  const [isCustomType, setIsCustomType] = useState(false);
 
   useEffect(() => {
     if (event) {
+      const isCustom = !!event.type && !EVENT_TYPES.includes(event.type);
+      setIsCustomType(isCustom);
       setFormData({
         name: event.name || '',
         clientName: event.clientName || '',
@@ -417,136 +449,233 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
 
-        {/* Sleek, Compact Storage Credits Box */}
-        <div className="w-full max-w-5xl mx-auto bg-[#09090b]/95 backdrop-blur-2xl text-white rounded-2xl p-5 sm:p-6 border border-[#c5a880]/20 hover:border-[#c5a880]/60 shadow-[0_8px_30px_rgba(0,0,0,0.4)] relative overflow-hidden group transition-all duration-500 hover:shadow-[0_15px_40px_rgba(197,168,128,0.15)]">
-            {/* Ambient Background Glows */}
-            <div className="absolute -top-20 -right-20 w-64 h-64 bg-[#c5a880]/10 rounded-full blur-[80px] pointer-events-none group-hover:bg-[#c5a880]/25 group-hover:scale-125 transition-all duration-700 ease-out" />
-            <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-[#e6d0a7]/5 rounded-full blur-[80px] pointer-events-none group-hover:bg-[#e6d0a7]/15 group-hover:scale-125 transition-all duration-700 ease-out delay-75" />
+        {/* Sleek, Ultra-Modern Storage Credits Box */}
+        <div className="w-full max-w-4xl mx-auto p-[1px] rounded-3xl bg-gradient-to-r from-[#c5a880]/30 via-white/10 to-[#c5a880]/40 shadow-[0_15px_40px_rgba(0,0,0,0.4)] hover:shadow-[0_20px_50px_rgba(197,168,128,0.18)] transition-all duration-500 group relative">
+          
+          <div className="w-full bg-[#0b0b0e]/95 backdrop-blur-2xl text-white rounded-[23px] p-4 sm:p-5 relative overflow-hidden">
+            {/* Ambient Animated Aura Lighting */}
+            <div className="absolute -top-24 -right-24 w-60 h-60 bg-gradient-to-br from-[#c5a880]/20 via-[#f3d9a2]/10 to-transparent rounded-full blur-[65px] pointer-events-none animate-aura-breathe" />
+            <div className="absolute -bottom-24 -left-24 w-60 h-60 bg-gradient-to-tr from-[#9c7c56]/20 via-[#c5a880]/10 to-transparent rounded-full blur-[65px] pointer-events-none animate-aura-breathe [animation-delay:2.5s]" />
+            
+            {/* Subtle Grid / Starfield Overlay */}
+            <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none opacity-60" />
+            
+            {/* Glowing Accent Top Beam */}
+            <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#c5a880] to-transparent animate-beam-scan pointer-events-none" />
 
             {/* Header Row */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/5 relative z-10 transition-colors duration-500 group-hover:border-white/15">
+            <div className="flex flex-row items-center justify-between gap-3 pb-3 border-b border-white/[0.08] relative z-10">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#c5a880]/20 via-[#c5a880]/5 to-transparent text-[#c5a880] border border-[#c5a880]/30 flex items-center justify-center shadow-[0_0_15px_rgba(197,168,128,0.1)] shrink-0 group-hover:rotate-12 group-hover:scale-110 group-hover:border-[#c5a880]/60 group-hover:text-[#e6d0a7] transition-all duration-500">
-                  <Sparkles className="w-4 h-4 group-hover:animate-pulse" />
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-[#2a241d] to-[#141312] text-[#e6d0a7] border border-[#c5a880]/40 flex items-center justify-center shadow-[0_0_15px_rgba(197,168,128,0.25)] shrink-0 relative group/icon">
+                  <div className="absolute inset-0 rounded-xl bg-[#c5a880]/20 blur-sm opacity-0 group-hover/icon:opacity-100 transition-opacity duration-300" />
+                  <Sparkles className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-[#f3d9a2] animate-pulse-soft relative z-10" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black uppercase tracking-widest text-[#e6d0a7] drop-shadow-sm">
-                    {credits?.planName || 'Standard'} Plan Storage
-                  </h3>
-                  <p className="text-[10px] text-slate-400 font-medium mt-0.5 tracking-wide group-hover:text-slate-300 transition-colors duration-500">
-                    Live balance. Deducts on upload.
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs sm:text-sm font-black uppercase tracking-[0.16em] bg-gradient-to-r from-amber-100 via-[#f5deb3] to-[#c5a880] bg-clip-text text-transparent drop-shadow-sm leading-none">
+                      {credits?.planName || 'Standard'} Plan Storage
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
+                    </span>
+                    <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium tracking-wide">
+                      Live Balance • Deducts on event save
+                    </p>
+                  </div>
                 </div>
               </div>
 
+              {/* White Luxe Upgrade Button */}
               <Link
                 href="/dashboard/plans-billing"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-[#c5a880] text-[#c5a880] hover:text-[#09090b] text-[10px] font-bold uppercase tracking-widest transition-all duration-300 border border-[#c5a880]/30 hover:border-transparent shrink-0 hover:shadow-[0_5px_20px_rgba(197,168,128,0.3)] hover:-translate-y-0.5 group/btn"
+                className="relative overflow-hidden group/btn inline-flex items-center gap-2 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-950 text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all duration-300 shadow-[0_4px_16px_rgba(255,255,255,0.25)] hover:shadow-[0_6px_25px_rgba(255,255,255,0.45)] hover:-translate-y-0.5 active:translate-y-0 border border-white shrink-0 cursor-pointer"
               >
-                <Crown className="w-3.5 h-3.5 transition-colors" />
-                <span>Upgrade</span>
-                <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-1 transition-transform" />
+                {/* Gloss sweep effect */}
+                <div className="absolute inset-0 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-black/10 to-transparent pointer-events-none" />
+                <Crown className="w-3.5 h-3.5 text-amber-500 fill-amber-500 drop-shadow-xs" />
+                <span className="font-extrabold tracking-wide">Upgrade</span>
+                <ArrowRight className="w-3.5 h-3.5 stroke-[2.5] text-slate-950 group-hover/btn:translate-x-0.5 transition-transform" />
               </Link>
             </div>
 
             {/* 2 Credit Metric Cards: Photos & Videos */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 relative z-10">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-3.5 relative z-10">
               
               {/* Photo Credits Card */}
-              <div className="bg-[#121214]/60 hover:bg-[#18181b] rounded-xl p-4 border border-white/5 hover:border-[#c5a880]/50 space-y-4 backdrop-blur-md transition-all duration-500 group/card relative overflow-hidden shadow-sm hover:shadow-[0_8px_25px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(197,168,128,0.3)] hover:-translate-y-1">
-                <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-[#c5a880]/0 to-transparent group-hover/card:via-[#c5a880] transition-all duration-500 opacity-0 group-hover/card:opacity-100" />
+              <div className={`relative rounded-2xl p-3.5 sm:p-4 bg-gradient-to-b from-white/[0.06] via-white/[0.02] to-transparent border transition-all duration-300 group/card shadow-md hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col justify-between space-y-3 ${pendingPhotosCount > 0 ? 'border-amber-500/50 ring-1 ring-amber-500/30' : 'border-white/10 hover:border-[#c5a880]/50'}`}>
+                {/* Glowing top line highlight */}
+                <div className={`absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent ${pendingPhotosCount > 0 ? 'via-amber-400 opacity-100' : 'via-[#c5a880]/40 group-hover/card:via-[#c5a880] opacity-70 group-hover/card:opacity-100'} transition-all duration-500`} />
                 
+                {/* Card Top Row */}
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-[11px] font-bold text-slate-300 group-hover/card:text-white transition-colors duration-300">
-                    <div className="w-6 h-6 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-[#c5a880] group-hover/card:bg-[#c5a880]/15 group-hover/card:border-[#c5a880]/40 group-hover/card:scale-110 transition-all duration-300">
-                      <ImageIcon className="w-3 h-3 group-hover/card:text-[#e6d0a7]" />
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#c5a880]/20 to-[#c5a880]/5 border border-[#c5a880]/30 flex items-center justify-center text-[#e6d0a7] shadow-[0_0_10px_rgba(197,168,128,0.15)]">
+                      <ImageIcon className="w-3 h-3" />
                     </div>
-                    <span className="tracking-wide uppercase">Photos</span>
+                    <span className="text-xs font-bold text-slate-300 group-hover/card:text-white transition-colors tracking-wider uppercase">
+                      Photos
+                    </span>
                   </div>
-                  <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-md border transition-all duration-300 ${isPhotoLimitReached ? 'text-red-400 bg-red-500/10 border-red-500/20 group-hover/card:border-red-500/50' : 'text-[#e6d0a7] bg-[#c5a880]/10 border-[#c5a880]/20 group-hover/card:bg-[#c5a880]/20 group-hover/card:border-[#c5a880]/50'}`}>
-                    {credits?.photos ? `${Number(credits.photos.remaining).toLocaleString('en-IN')} Left` : 'Active'}
-                  </span>
+
+                  {pendingPhotosCount > 0 ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border text-amber-300 bg-amber-500/20 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)] animate-pulse">
+                      ⏳ {pendingPhotosCount} Pending Save
+                    </span>
+                  ) : (
+                    <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border transition-all duration-300 ${isPhotoLimitReached ? 'text-red-400 bg-red-500/15 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'text-[#f5deb3] bg-[#c5a880]/15 border-[#c5a880]/30 shadow-[0_0_10px_rgba(197,168,128,0.12)] group-hover/card:border-[#c5a880]/60'}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+                      {credits?.photos ? `${Number(currentPhotoRemaining).toLocaleString('en-IN')} Left` : 'Active'}
+                    </span>
+                  )}
                 </div>
 
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-white tracking-tighter font-mono group-hover/card:text-[#fef3c7] transition-colors duration-300" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {credits?.photos?.remaining !== undefined ? Number(credits.photos.remaining).toLocaleString('en-IN') : '---'}
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-bold font-mono tracking-wider group-hover/card:text-slate-400 transition-colors">
-                    / {credits?.photos?.totalLimit ? Number(credits.photos.totalLimit).toLocaleString('en-IN') : '---'}
-                  </span>
+                {/* Primary Numbers */}
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl sm:text-3xl font-black text-white tracking-tight font-mono group-hover/card:text-[#fef3c7] transition-colors leading-none" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {Number(currentPhotoRemaining).toLocaleString('en-IN')}
+                    </span>
+                    <span className="text-xs sm:text-sm text-slate-400 font-bold font-mono tracking-wide">
+                      / {credits?.photos?.totalLimit ? Number(credits.photos.totalLimit).toLocaleString('en-IN') : '---'}
+                    </span>
+                  </div>
+
+                  {pendingPhotosCount > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono font-bold text-amber-300/90 pt-0.5">
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                        ⚡ -{pendingPhotosCount} on Save
+                      </span>
+                      <span className="text-slate-300 flex items-center gap-1">
+                        → <strong className="text-white font-black bg-white/10 px-1.5 py-0.5 rounded">{Number(projectedPhotoRemaining).toLocaleString('en-IN')}</strong> Remaining
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                {/* Animated Progress Bar */}
+                {/* High-Tech Animated Progress Bar */}
                 <div className="space-y-1.5">
-                  <div className="w-full bg-black/40 group-hover/card:bg-black/60 rounded-full h-1.5 overflow-hidden shadow-inner transition-colors duration-300 relative">
+                  <div className="relative w-full bg-black/60 rounded-full h-2 p-[1px] overflow-hidden border border-white/10 shadow-inner">
                     <div 
-                      className="bg-gradient-to-r from-[#c5a880] via-[#dfc49c] to-[#e6d0a7] h-full rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(197,168,128,0.5)] group-hover/card:shadow-[0_0_15px_rgba(197,168,128,0.8)] relative overflow-hidden"
+                      className="bg-gradient-to-r from-[#9c7c56] via-[#c5a880] to-[#fde68a] h-full rounded-full transition-all duration-700 ease-out relative overflow-hidden animate-progress-stripe shadow-[0_0_10px_rgba(197,168,128,0.5)]"
                       style={{ 
                         width: (credits?.photos?.used || 0) > 0 
                           ? `${Math.min(100, Math.max(2, credits?.photos?.percentUsed || 0))}%` 
                           : '0%' 
                       }}
                     >
-                      <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.4)_50%,transparent_100%)] w-[200%] animate-[shimmer_2s_infinite] opacity-0 group-hover/card:opacity-100" />
+                      {/* Sweeping Shimmer Highlight */}
+                      <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-credit-shimmer" />
                     </div>
                   </div>
-                  <div className="flex justify-between text-[9px] font-mono tracking-wide text-slate-400 group-hover/card:text-slate-300 transition-colors">
-                    <span>
+                  
+                  <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-mono tracking-wide text-slate-400">
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#c5a880]" />
                       {(credits?.photos?.used || 0) > 0 ? `${credits.photos.used} Used (${(credits.photos.percentUsed || 0) < 0.01 ? '0.01%' : `${credits.photos.percentUsed}%`})` : '0 Used'}
                     </span>
+                    {pendingPhotosCount > 0 ? (
+                      <span className="text-amber-400 font-bold flex items-center gap-1 animate-pulse">
+                        +{pendingPhotosCount} queued
+                      </span>
+                    ) : (
+                      <span className="text-slate-500 group-hover/card:text-slate-400 transition-colors">
+                        {100 - Math.min(100, Math.round(credits?.photos?.percentUsed || 0))}% Available
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Video Credits Card */}
-              <div className="bg-[#121214]/60 hover:bg-[#18181b] rounded-xl p-4 border border-white/5 hover:border-[#c5a880]/50 space-y-4 backdrop-blur-md transition-all duration-500 group/card relative overflow-hidden shadow-sm hover:shadow-[0_8px_25px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(197,168,128,0.3)] hover:-translate-y-1">
-                <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-[#c5a880]/0 to-transparent group-hover/card:via-[#c5a880] transition-all duration-500 opacity-0 group-hover/card:opacity-100" />
+              <div className={`relative rounded-2xl p-3.5 sm:p-4 bg-gradient-to-b from-white/[0.06] via-white/[0.02] to-transparent border transition-all duration-300 group/card shadow-md hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col justify-between space-y-3 ${pendingVideosCount > 0 ? 'border-amber-500/50 ring-1 ring-amber-500/30' : 'border-white/10 hover:border-[#c5a880]/50'}`}>
+                {/* Glowing top line highlight */}
+                <div className={`absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent ${pendingVideosCount > 0 ? 'via-amber-400 opacity-100' : 'via-[#c5a880]/40 group-hover/card:via-[#c5a880] opacity-70 group-hover/card:opacity-100'} transition-all duration-500`} />
                 
+                {/* Card Top Row */}
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-[11px] font-bold text-slate-300 group-hover/card:text-white transition-colors duration-300">
-                    <div className="w-6 h-6 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-[#c5a880] group-hover/card:bg-[#c5a880]/15 group-hover/card:border-[#c5a880]/40 group-hover/card:scale-110 transition-all duration-300">
-                      <Video className="w-3 h-3 group-hover/card:text-[#e6d0a7]" />
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#c5a880]/20 to-[#c5a880]/5 border border-[#c5a880]/30 flex items-center justify-center text-[#e6d0a7] shadow-[0_0_10px_rgba(197,168,128,0.15)]">
+                      <Video className="w-3 h-3" />
                     </div>
-                    <span className="tracking-wide uppercase">Videos</span>
+                    <span className="text-xs font-bold text-slate-300 group-hover/card:text-white transition-colors tracking-wider uppercase">
+                      Videos
+                    </span>
                   </div>
-                  <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-md border transition-all duration-300 ${isVideoLimitReached ? 'text-red-400 bg-red-500/10 border-red-500/20 group-hover/card:border-red-500/50' : 'text-[#e6d0a7] bg-[#c5a880]/10 border-[#c5a880]/20 group-hover/card:bg-[#c5a880]/20 group-hover/card:border-[#c5a880]/50'}`}>
-                    {credits?.videos ? `${Number(credits.videos.remaining)} Left` : 'Active'}
-                  </span>
+
+                  {pendingVideosCount > 0 ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border text-amber-300 bg-amber-500/20 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)] animate-pulse">
+                      ⏳ {pendingVideosCount} Pending Save
+                    </span>
+                  ) : (
+                    <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border transition-all duration-300 ${isVideoLimitReached ? 'text-red-400 bg-red-500/15 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'text-[#f5deb3] bg-[#c5a880]/15 border-[#c5a880]/30 shadow-[0_0_10px_rgba(197,168,128,0.12)] group-hover/card:border-[#c5a880]/60'}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+                      {credits?.videos ? `${Number(currentVideoRemaining)} Left` : 'Active'}
+                    </span>
+                  )}
                 </div>
 
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-white tracking-tighter font-mono group-hover/card:text-[#fef3c7] transition-colors duration-300" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {credits?.videos?.remaining !== undefined ? Number(credits.videos.remaining) : '---'}
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-bold font-mono tracking-wider group-hover/card:text-slate-400 transition-colors">
-                    / {credits?.videos?.totalLimit ? Number(credits.videos.totalLimit) : '---'}
-                  </span>
+                {/* Primary Numbers */}
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl sm:text-3xl font-black text-white tracking-tight font-mono group-hover/card:text-[#fef3c7] transition-colors leading-none" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {Number(currentVideoRemaining)}
+                    </span>
+                    <span className="text-xs sm:text-sm text-slate-400 font-bold font-mono tracking-wide">
+                      / {credits?.videos?.totalLimit ? Number(credits.videos.totalLimit) : '---'}
+                    </span>
+                  </div>
+
+                  {pendingVideosCount > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono font-bold text-amber-300/90 pt-0.5">
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                        ⚡ -{pendingVideosCount} on Save
+                      </span>
+                      <span className="text-slate-300 flex items-center gap-1">
+                        → <strong className="text-white font-black bg-white/10 px-1.5 py-0.5 rounded">{Number(projectedVideoRemaining)}</strong> Remaining
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                {/* Animated Progress Bar */}
+                {/* High-Tech Animated Progress Bar */}
                 <div className="space-y-1.5">
-                  <div className="w-full bg-black/40 group-hover/card:bg-black/60 rounded-full h-1.5 overflow-hidden shadow-inner transition-colors duration-300 relative">
+                  <div className="relative w-full bg-black/60 rounded-full h-2 p-[1px] overflow-hidden border border-white/10 shadow-inner">
                     <div 
-                      className="bg-gradient-to-r from-[#c5a880] via-[#dfc49c] to-[#e6d0a7] h-full rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(197,168,128,0.5)] group-hover/card:shadow-[0_0_15px_rgba(197,168,128,0.8)] relative overflow-hidden"
+                      className="bg-gradient-to-r from-[#9c7c56] via-[#c5a880] to-[#fde68a] h-full rounded-full transition-all duration-700 ease-out relative overflow-hidden animate-progress-stripe shadow-[0_0_10px_rgba(197,168,128,0.5)]"
                       style={{ 
                         width: (credits?.videos?.used || 0) > 0 
                           ? `${Math.min(100, Math.max(2, credits?.videos?.percentUsed || 0))}%` 
                           : '0%' 
                       }}
                     >
-                      <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.4)_50%,transparent_100%)] w-[200%] animate-[shimmer_2s_infinite] opacity-0 group-hover/card:opacity-100" />
+                      {/* Sweeping Shimmer Highlight */}
+                      <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-credit-shimmer" />
                     </div>
                   </div>
-                  <div className="flex justify-between text-[9px] font-mono tracking-wide text-slate-400 group-hover/card:text-slate-300 transition-colors">
-                    <span>
+                  
+                  <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-mono tracking-wide text-slate-400">
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#c5a880]" />
                       {(credits?.videos?.used || 0) > 0 ? `${credits.videos.used} Used (${(credits.videos.percentUsed || 0) < 0.01 ? '0.01%' : `${credits.videos.percentUsed}%`})` : '0 Used'}
                     </span>
+                    {pendingVideosCount > 0 ? (
+                      <span className="text-amber-400 font-bold flex items-center gap-1 animate-pulse">
+                        +{pendingVideosCount} queued
+                      </span>
+                    ) : (
+                      <span className="text-slate-500 group-hover/card:text-slate-400 transition-colors">
+                        {100 - Math.min(100, Math.round(credits?.videos?.percentUsed || 0))}% Available
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
 
             </div>
+          </div>
         </div>
 
         {/* 2-Column Content Layout (Upload Media & Media Files on Left, Edit Event Details on Right - level with each other!) */}
@@ -592,6 +721,43 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 <Link href="/dashboard/plans-billing" className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold uppercase tracking-wider transition-colors shrink-0">
                   Upgrade
                 </Link>
+              </div>
+            )}
+
+            {/* Pending Save Alert Banner */}
+            {(pendingPhotosCount > 0 || pendingVideosCount > 0) && (
+              <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-transparent border border-amber-400/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm backdrop-blur-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center shrink-0 text-amber-600 shadow-inner">
+                    <Sparkles className="w-5 h-5 animate-pulse text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                      <span>
+                        {pendingPhotosCount > 0 && `${pendingPhotosCount} Photo${pendingPhotosCount > 1 ? 's' : ''}`}
+                        {pendingPhotosCount > 0 && pendingVideosCount > 0 && ' & '}
+                        {pendingVideosCount > 0 && `${pendingVideosCount} Video${pendingVideosCount > 1 ? 's' : ''}`} Uploaded
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 font-mono font-bold">
+                        Pending Save
+                      </span>
+                    </p>
+                    <p className="text-[11px] text-slate-600 font-medium mt-0.5">
+                      Your credit balance will deduct <strong className="text-slate-900 font-bold">{pendingPhotosCount > 0 ? `-${pendingPhotosCount} photo credit${pendingPhotosCount > 1 ? 's' : ''}` : ''}</strong> once you click <strong>Save Event Details</strong>.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const btn = document.getElementById('save-event-button');
+                    btn?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    btn?.focus();
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-[#c5a880] hover:bg-[#b69970] text-[#09090b] text-[11px] font-black uppercase tracking-wider transition-all shadow-md hover:shadow-lg shrink-0 self-end sm:self-auto cursor-pointer"
+                >
+                  Save Event Details →
+                </button>
               </div>
             )}
 
@@ -957,8 +1123,22 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 const res = await apiClient.put(`/event/${eventId}`, payload);
                 if (res.data.event) {
                   setEvent(res.data.event);
-                  toast.success('Event updated successfully!');
                   setHasSavedDetails(true);
+                  if (res.data.credits) {
+                    setCredits(res.data.credits);
+                  }
+                  window.dispatchEvent(new Event('studio_plan_updated'));
+                  await fetchEventDetails();
+                  await fetchCredits();
+
+                  if (res.data.deductedPhotos > 0) {
+                    toast.success(
+                      `🎉 Event saved! ${res.data.deductedPhotos} photo credit${res.data.deductedPhotos > 1 ? 's' : ''} deducted. Remaining: ${Number(res.data.credits?.photos?.remaining ?? 0).toLocaleString('en-IN')} credits.`,
+                      { duration: 6000 }
+                    );
+                  } else {
+                    toast.success('Event updated successfully!');
+                  }
                 }
               } catch (err) {
                 toast.error('Error updating event');
@@ -1018,16 +1198,41 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                   />
                 </div>
                 <div>
-                  <label className="edit-label">Event Type</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="edit-label !mb-0">Event Type</label>
+                    <span className="text-[10px] font-bold text-[#c5a880] uppercase tracking-wider bg-[#c5a880]/10 px-2 py-0.5 rounded-md border border-[#c5a880]/20">
+                      {formData.type || 'WEDDING'}
+                    </span>
+                  </div>
                   <select 
-                    className="edit-input" 
-                    value={formData.type}
-                    onChange={e => setFormData({...formData, type: e.target.value})}
+                    className="edit-input font-bold" 
+                    value={EVENT_TYPES.includes(formData.type) ? formData.type : 'CUSTOM'}
+                    onChange={e => {
+                      if (e.target.value === 'CUSTOM') {
+                        setIsCustomType(true);
+                      } else {
+                        setIsCustomType(false);
+                        setFormData({...formData, type: e.target.value});
+                      }
+                    }}
                   >
                     {EVENT_TYPES.map(type => (
                       <option key={type} value={type}>{type}</option>
                     ))}
+                    <option value="CUSTOM">+ CUSTOM EVENT TYPE</option>
                   </select>
+                  {(!EVENT_TYPES.includes(formData.type) || isCustomType) && (
+                    <div className="mt-2 relative animate-fade-in">
+                      <input 
+                        type="text" 
+                        className="edit-input border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-bold" 
+                        value={formData.type}
+                        onChange={e => setFormData({...formData, type: e.target.value})}
+                        autoFocus
+                      />
+                      <p className="text-[10px] text-slate-500 mt-1 font-medium">Whatever you type will be saved as this event&apos;s type</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1338,8 +1543,24 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
               )}
 
               <div className="flex items-center gap-3 pt-2">
-                <button type="submit" disabled={saving} className="flex-1 flex justify-center items-center bg-[#c5a880] hover:bg-[#b59a72] text-[#09090b] font-bold py-3 rounded-xl text-sm transition-colors disabled:opacity-50">
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Event Details'}
+                <button 
+                  id="save-event-button"
+                  type="submit" 
+                  disabled={saving} 
+                  className="flex-1 flex justify-center items-center gap-2 bg-[#c5a880] hover:bg-[#b59a72] text-[#09090b] font-black py-3 rounded-xl text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 cursor-pointer"
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <span>Save Event Details</span>
+                      {pendingPhotosCount > 0 && (
+                        <span className="text-[10px] font-mono font-black bg-[#09090b] text-[#e6d0a7] px-2 py-0.5 rounded-full border border-[#c5a880]/30 shadow-xs">
+                          -{pendingPhotosCount} Credit{pendingPhotosCount > 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </button>
                 <button 
                   type="button" 

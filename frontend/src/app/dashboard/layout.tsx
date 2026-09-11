@@ -13,6 +13,7 @@ import { DashboardProvider, useDashboard } from './DashboardContext';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import { useAuth } from '../../lib/AuthContext';
 import ChatbotWidget from '../../components/ChatbotWidget';
+import toast from 'react-hot-toast';
 
 const NAV_ITEMS = [
   {
@@ -51,6 +52,7 @@ const NAV_ITEMS = [
       { href: '/dashboard/queries', label: 'Queries', icon: HelpCircle },
       { href: '/dashboard/studio-settings', label: 'Studio Settings', icon: Settings },
       { href: '/dashboard/studio-branding', label: 'Studio Branding', icon: Settings },
+      { href: '/dashboard/face-index', label: 'Face Index', icon: ScanLine },
       { href: '/dashboard/plans-billing', label: 'Plans & Billing', icon: CreditCard },
       { href: '/dashboard/support-help', label: 'Support Help', icon: HelpCircle },
     ],
@@ -71,11 +73,41 @@ function SidebarContent({
   const { studio } = useDashboard();
   const logoUrl = studio?.logoUrl || '/logo.png';
   
+  const isBasicPlan = studio?.subscriptionPlan?.toLowerCase() === 'basic';
+  const allowedBasicRoutes = [
+    '/dashboard',
+    '/dashboard/team',
+    '/dashboard/profile',
+    '/dashboard/queries',
+    '/dashboard/plans-billing',
+    '/dashboard/support-help'
+  ];
+
+  const handleLinkClick = (e: React.MouseEvent, href: string) => {
+    if (isBasicPlan && !allowedBasicRoutes.includes(href)) {
+      e.preventDefault();
+      toast.error('Please upgrade your plan from Basic to access this feature.', {
+        duration: 3000,
+        icon: '🔒'
+      });
+      return;
+    }
+    if (onLinkClick) {
+      onLinkClick();
+    }
+  };
+
   const linkClass = (href: string) => {
     const isActive = href === '/dashboard' 
       ? pathname === href 
       : (pathname === href || pathname.startsWith(`${href}/`));
     
+    const isDisabled = isBasicPlan && !allowedBasicRoutes.includes(href);
+    
+    if (isDisabled) {
+      return `flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs transition-all duration-300 relative group overflow-hidden opacity-50 cursor-not-allowed text-slate-500 bg-transparent`;
+    }
+
     return `flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs transition-all duration-300 relative group overflow-hidden ${
       isActive 
         ? 'bg-[#c5a880]/10 text-[#c5a880]' 
@@ -100,7 +132,7 @@ function SidebarContent({
               prefetch={true}
               href={href}
               className={linkClass(href)}
-              onClick={onLinkClick}
+              onClick={(e) => handleLinkClick(e, href)}
             >
               <Icon className="h-4 w-4 shrink-0" /> {label}
             </Link>
@@ -110,7 +142,7 @@ function SidebarContent({
           <Link
             href="/dashboard/generate-qr"
             className={linkClass('/dashboard/generate-qr')}
-            onClick={onLinkClick}
+            onClick={(e) => handleLinkClick(e, '/dashboard/generate-qr')}
           >
             <ScanLine className="h-4 w-4 shrink-0" />
             Generate QR Code
@@ -197,14 +229,14 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
         <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-[#0c0c0e] border-b border-white/5 sticky top-0 z-30">
           <button
             onClick={() => setMobileOpen(true)}
-            className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            className="p-2 shrink-0 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
           >
-            <Menu className="h-5 w-5" />
+            <Menu className="h-6 w-6" />
           </button>
-          <Link href="/dashboard">
-            <img src={logoUrl} alt="Studio Logo" className={`h-7 w-auto object-contain ${!studio?.logoUrl ? 'filter invert' : ''}`} />
+          <Link href="/dashboard" className="flex-1 flex justify-center overflow-hidden px-2">
+            <img src={logoUrl} alt="Studio Logo" className={`h-8 w-auto max-w-full object-contain ${!studio?.logoUrl ? 'filter invert' : ''}`} />
           </Link>
-          <div className="w-9" /> {/* spacer */}
+          <div className="w-10 shrink-0" /> {/* spacer to balance the menu button */}
         </header>
 
         {/* Page Content */}

@@ -941,7 +941,8 @@ export default function HomePage() {
       {/* ── CINEMATIC HERO SECTION ── */}
       <CinematicHero />
 
-
+      {/* ── All content after hero: scrolls OVER the fixed hero canvas ── */}
+      <div style={{ position: 'relative', zIndex: 10, background: '#faf9f6' }}>
 
       {/* ── FEATURES ── */}
       <section className="features-section">
@@ -1109,6 +1110,7 @@ export default function HomePage() {
         </div>
       </section>
 
+      </div>{/* end hero-content-wrapper */}
       </main>
     </PublicWrapper>
   );

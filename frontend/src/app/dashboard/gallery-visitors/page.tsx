@@ -64,9 +64,9 @@ export default function GalleryVisitorsPage() {
   };
 
   return (
-    <div className="flex-1 bg-[#f8f7f4] text-slate-900 flex overflow-hidden">
+    <div className="flex-1 bg-[#f8f7f4] text-slate-900 flex flex-col md:flex-row overflow-hidden">
       {/* Left Pane - Event List */}
-      <div className="w-80 bg-white border-r border-slate-200 flex flex-col h-full shrink-0">
+      <div className="w-full md:w-80 h-1/2 md:h-full bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col shrink-0">
         <div className="p-6 border-b border-slate-200">
           <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
             <Users className="h-5 w-5 text-[#c5a880]" />

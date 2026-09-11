@@ -386,7 +386,37 @@ export const updateEvent = async (req: AuthRequest, res: Response) => {
       }, 0);
     }
 
-    return res.json({ message: 'Event updated successfully', event });
+    // Deduct credits for any uncredited media uploaded for this event upon saving
+    const { Media } = await import('../models');
+    const uncreditedMedia = await Media.find({ eventId: event._id, creditDeducted: { $ne: true } });
+    const photosToDeduct = uncreditedMedia.filter(m => m.type === 'PHOTO').length;
+    const videosToDeduct = uncreditedMedia.filter(m => m.type === 'VIDEO').length;
+
+    if (photosToDeduct > 0 || videosToDeduct > 0) {
+      await Studio.findByIdAndUpdate(event.studioId, {
+        $inc: {
+          'usage.photosUploaded': photosToDeduct,
+          'usage.videosUploaded': videosToDeduct
+        }
+      });
+
+      await Media.updateMany(
+        { _id: { $in: uncreditedMedia.map(m => m._id) } },
+        { $set: { creditDeducted: true } }
+      );
+    }
+
+    const { calculateStudioCredits } = await import('./studioController');
+    const updatedStudio = await Studio.findById(event.studioId).lean();
+    const credits = updatedStudio ? await calculateStudioCredits(updatedStudio._id, updatedStudio.subscriptionPlan, updatedStudio) : null;
+
+    return res.json({ 
+      message: 'Event updated successfully', 
+      event,
+      deductedPhotos: photosToDeduct,
+      deductedVideos: videosToDeduct,
+      credits
+    });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

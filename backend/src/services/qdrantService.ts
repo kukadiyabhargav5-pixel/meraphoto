@@ -16,8 +16,9 @@ const COLLECTION_NAME = 'mara_faces';
 
 export const isQdrantAvailable = async (): Promise<boolean> => {
   try {
-    const health = await qdrantClient.api('cluster').clusterStatus();
-    return health?.status === 'ok';
+    // Simple health check - just try to list collections
+    await qdrantClient.getCollections();
+    return true;
   } catch (err) {
     return false;
   }
@@ -87,12 +88,12 @@ export const insertFaceEmbedding = async (
 export const searchFaces = async (
   eventId: string,
   queryEmbedding: number[],
-  limit: number = 20,
+  limit: number = 10000, // No arbitrary cap — search entire indexed gallery
   minScore: number = 0.5
 ) => {
   try {
-    const searchResult = await qdrantClient.search(COLLECTION_NAME, {
-      vector: queryEmbedding,
+    const searchResult = await qdrantClient.query(COLLECTION_NAME, {
+      query: queryEmbedding,
       limit,
       score_threshold: minScore,
       filter: {
@@ -107,7 +108,7 @@ export const searchFaces = async (
       }
     });
     
-    return searchResult;
+    return searchResult.points || [];
   } catch (error) {
     console.error('[Qdrant] Error searching faces:', error);
     throw error;
@@ -118,7 +119,7 @@ export const searchFaces = async (
 export const localCosineSearch = async (
   eventId: string,
   queryEmbedding: number[],
-  limit: number = 20,
+  limit: number = 10000, // No arbitrary cap — search entire indexed gallery
   minScore: number = 0.5
 ) => {
   const { FaceEmbedding } = await import('../models');

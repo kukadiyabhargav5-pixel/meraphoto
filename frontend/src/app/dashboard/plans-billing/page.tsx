@@ -4,10 +4,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useDashboard } from '../DashboardContext';
 import { useAuth } from '@/lib/AuthContext';
 import { apiClient } from '@/lib/api';
+import { motion, AnimatePresence } from 'framer-motion';
+import confetti from 'canvas-confetti';
 import {
   Shield, Zap, Sparkles, Crown, Check, CheckCircle2,
   Lock, ArrowRight, RefreshCw, AlertCircle, HelpCircle,
-  Calendar, Flame
+  Calendar, Flame, CreditCard, Loader2, PartyPopper
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -161,6 +163,8 @@ export default function PlansBillingPage() {
   const [loadingPlanKey, setLoadingPlanKey] = useState<string | null>(null);
   const [loadingCancel, setLoadingCancel] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [upgradedPlanName, setUpgradedPlanName] = useState('');
 
   // Active studio plan key
   const activePlanKey = (studio?.subscriptionPlan?.toUpperCase() || authStudio?.subscriptionPlan?.toUpperCase() || 'BASIC') as PlanTier['key'];
@@ -317,7 +321,34 @@ export default function PlansBillingPage() {
                 context.refreshCredits();
               }
 
-              setSuccessMsg(`🎉 Success! Your studio has been upgraded to the ${plan.name} Plan.`);
+              setUpgradedPlanName(plan.name);
+              setShowSuccessModal(true);
+              
+              // Trigger confetti
+              const end = Date.now() + 3 * 1000;
+              const colors = ['#c5a880', '#e3d8c8', '#a07c4c', '#ffffff'];
+              
+              (function frame() {
+                confetti({
+                  particleCount: 5,
+                  angle: 60,
+                  spread: 55,
+                  origin: { x: 0 },
+                  colors: colors
+                });
+                confetti({
+                  particleCount: 5,
+                  angle: 120,
+                  spread: 55,
+                  origin: { x: 1 },
+                  colors: colors
+                });
+              
+                if (Date.now() < end) {
+                  requestAnimationFrame(frame);
+                }
+              }());
+
             } else {
               throw new Error(verifyRes.data.error || 'Payment signature verification failed');
             }
@@ -365,221 +396,255 @@ export default function PlansBillingPage() {
     }
   };
 
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+  };
+  
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 100 } }
+  };
+
   return (
-    <div className="flex-1 overflow-y-auto bg-[#faf9f6] text-slate-900 p-4 sm:p-6 md:p-10 flex flex-col min-h-full font-poppins">
+    <div className="flex-1 overflow-y-auto bg-gradient-to-b from-[#faf9f6] to-[#f4f2eb] text-slate-900 p-4 sm:p-6 md:p-10 flex flex-col min-h-full font-poppins relative">
       
-      {/* Decorative Glows */}
+      {/* Premium Decorative Background Glows */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden select-none z-0">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-[#c5a880]/15 rounded-full blur-[120px]" />
-        <div className="absolute top-1/2 -left-40 w-96 h-96 bg-[#e3d8c8]/25 rounded-full blur-[140px]" />
+        <div className="absolute top-[-20%] right-[-10%] w-[800px] h-[800px] bg-[#c5a880]/10 rounded-full blur-[120px] mix-blend-multiply" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[600px] h-[600px] bg-[#e3d8c8]/20 rounded-full blur-[140px] mix-blend-multiply" />
       </div>
 
-      <div className="max-w-7xl mx-auto w-full space-y-10 pb-16 relative z-10">
+      <div className="max-w-7xl mx-auto w-full space-y-12 pb-16 relative z-10">
 
         {/* 1. Header Section */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-slate-200/80">
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-slate-200/60">
           <div>
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-[#a07c4c] bg-[#c5a880]/15 px-3.5 py-1.5 rounded-full border border-[#c5a880]/30 shadow-xs">
-                PRO STUDIO TIERS
+            <div className="flex items-center gap-3 mb-4">
+              <span className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-[#a07c4c] bg-white px-4 py-2 rounded-full border border-[#c5a880]/30 shadow-sm">
+                <CreditCard className="w-3.5 h-3.5" /> Pro Studio Tiers
               </span>
             </div>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-slate-950 tracking-tight font-serif-luxury mt-2">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight font-serif-luxury">
               Plans & Billing
             </h1>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1.5 max-w-xl">
-              Scale your photography studio with cloud storage, watermark protection, and instant digital album delivery.
+            <p className="text-sm text-slate-500 font-medium mt-3 max-w-xl">
+              Scale your photography studio with cloud storage, advanced watermark protection, and instant digital album delivery.
             </p>
           </div>
 
-          <div className="flex items-center gap-3 self-start sm:self-auto">
-            <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 shadow-sm text-xs font-bold text-slate-700">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Active Plan: <strong className="text-slate-900">{activePlanKey}</strong></span>
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 backdrop-blur-md border border-slate-200 shadow-sm text-xs font-bold text-slate-700">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+              </span>
+              <span>Active Plan: <strong className="text-slate-950 uppercase tracking-wide ml-1">{activePlanKey}</strong></span>
             </div>
             <Link
               href="/dashboard/support-help"
-              className="p-3 rounded-2xl bg-white border border-slate-200 text-slate-500 hover:text-[#c5a880] hover:border-[#c5a880]/40 transition-all duration-300 shadow-sm hover:rotate-6"
+              className="p-3.5 rounded-2xl bg-white/80 backdrop-blur-md border border-slate-200 text-slate-500 hover:text-[#c5a880] hover:border-[#c5a880]/50 transition-all duration-300 shadow-sm hover:shadow-md hover:scale-105"
               title="Billing Support"
             >
-              <HelpCircle className="w-4 h-4" />
+              <HelpCircle className="w-5 h-5" />
             </Link>
           </div>
-        </div>
+        </motion.div>
 
         {/* Success / Error Messages */}
-        {successMsg && (
-          <div className="p-4 rounded-2xl bg-emerald-50/90 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-between shadow-sm animate-fade-in backdrop-blur-md">
-            <div className="flex items-center gap-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>{successMsg}</span>
-            </div>
-            <button onClick={() => setSuccessMsg('')} className="text-emerald-600 hover:text-emerald-900 cursor-pointer font-black text-sm">✕</button>
-          </div>
-        )}
+        <AnimatePresence>
+          {successMsg && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+              <div className="mb-6 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-bold flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <span>{successMsg}</span>
+                </div>
+                <button onClick={() => setSuccessMsg('')} className="text-emerald-600 hover:text-emerald-900 font-black">✕</button>
+              </div>
+            </motion.div>
+          )}
 
-        {errorMsg && (
-          <div className="p-4 rounded-2xl bg-rose-50/90 border border-rose-200 text-rose-800 text-xs font-bold flex items-center justify-between shadow-sm animate-fade-in backdrop-blur-md">
-            <div className="flex items-center gap-2.5">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>{errorMsg}</span>
-            </div>
-            <button onClick={() => setErrorMsg('')} className="text-rose-600 hover:text-rose-900 cursor-pointer font-black text-sm">✕</button>
-          </div>
-        )}
+          {errorMsg && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+              <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-bold flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+                <button onClick={() => setErrorMsg('')} className="text-rose-600 hover:text-rose-900 font-black">✕</button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* 2. Active Subscription Card */}
-        <div className="bg-gradient-to-br from-white via-white to-slate-50 rounded-[2rem] border border-slate-200/90 shadow-[0_10px_35px_rgba(0,0,0,0.03)] p-6 sm:p-8 relative overflow-hidden group hover:border-[#c5a880]/50 hover:shadow-xl transition-all duration-500">
-          <div className="absolute top-0 right-0 w-80 h-80 bg-[#c5a880]/10 rounded-full blur-3xl pointer-events-none group-hover:bg-[#c5a880]/15 transition-all duration-700" />
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }} className="bg-slate-900 rounded-[2.5rem] p-8 sm:p-10 relative overflow-hidden group shadow-2xl">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-[#c5a880]/20 to-transparent rounded-full blur-[80px] pointer-events-none transition-all duration-700 group-hover:scale-110" />
+          <div className="absolute bottom-0 left-0 w-80 h-80 bg-gradient-to-tr from-white/5 to-transparent rounded-full blur-[60px] pointer-events-none" />
 
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 relative z-10">
             <div>
-              <div className="flex items-center gap-2.5">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#c5a880] bg-[#c5a880]/10 px-3.5 py-1.5 rounded-full border border-[#c5a880]/25">
+              <div className="flex items-center gap-3 mb-6">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#c5a880] bg-[#c5a880]/10 px-4 py-1.5 rounded-full border border-[#c5a880]/20">
                   Current Studio Tier
                 </span>
-                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-3 py-1.5 rounded-full border border-emerald-400/20 uppercase tracking-wider">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   {studio?.subscriptionStatus || 'ACTIVE'}
                 </span>
               </div>
 
-              <div className="flex items-baseline gap-3 mt-4">
-                <h3 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight font-serif-luxury">
+              <div className="flex items-baseline gap-4 mt-2">
+                <h3 className="text-4xl sm:text-5xl font-black text-white tracking-tight font-serif-luxury">
                   {activePlanKey} Plan
                 </h3>
-                <span className="text-sm font-bold text-slate-500">
+                <span className="text-sm font-bold text-slate-400 bg-white/5 px-3 py-1 rounded-xl">
                   {PLANS_DATA.find(p => p.key === activePlanKey)?.displayPrice || '₹3,500'} / year
                 </span>
               </div>
 
-              <p className="text-xs text-slate-500 font-medium mt-2 max-w-xl">
+              <p className="text-sm text-slate-400 font-medium mt-3 max-w-xl">
                 {PLANS_DATA.find(p => p.key === activePlanKey)?.tagline || 'Studio Plan active on Mara Photo'}
               </p>
             </div>
 
             {/* Right Meta Info */}
-            <div className="flex flex-wrap sm:flex-nowrap items-center gap-6 text-xs border-t lg:border-t-0 lg:border-l border-slate-200/80 pt-4 lg:pt-0 lg:pl-8">
-              <div className="space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Next Renewal</span>
-                <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-[#c5a880]" /> {renewalDate}
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-8 text-xs border-t lg:border-t-0 lg:border-l border-white/10 pt-6 lg:pt-0 lg:pl-10">
+              <div className="space-y-2">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Next Renewal</span>
+                <span className="font-bold text-white flex items-center gap-2 text-sm">
+                  <Calendar className="w-4 h-4 text-[#c5a880]" /> {renewalDate}
                 </span>
               </div>
 
-              <div className="space-y-1 sm:pl-6 sm:border-l border-slate-200/80">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Payment Security</span>
-                <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-emerald-600" /> Razorpay Secured
-                </span>
-              </div>
 
-              {activePlanKey !== 'BASIC' && (
-                <div className="sm:pl-6 sm:border-l border-slate-200/80">
-                  <button
-                    onClick={() => setShowCancelModal(true)}
-                    className="px-4 py-2.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all duration-300 hover:scale-105 cursor-pointer shadow-xs"
-                  >
-                    Cancel Plan
-                  </button>
-                </div>
-              )}
+
+              <div className="sm:pl-8 sm:border-l border-white/10">
+                <button
+                  onClick={() => setShowCancelModal(true)}
+                  className="px-5 py-3 rounded-xl text-xs font-bold text-rose-400 bg-rose-400/10 hover:bg-rose-400/20 border border-rose-400/20 transition-all duration-300 hover:scale-105 cursor-pointer"
+                >
+                  Cancel Plan
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* 3. Pricing Plans Grid */}
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+        <div className="space-y-8 pt-8">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 text-center sm:text-left">
             <div>
-              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight font-serif-luxury">
-                Choose Your Plan
+              <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight font-serif-luxury">
+                Upgrade Your Studio
               </h2>
-              <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
-                Click any plan to open direct Razorpay checkout and upgrade your studio instantly.
+              <p className="text-sm text-slate-500 font-medium mt-2">
+                Select the perfect plan to handle more events and deliver stunning digital albums.
               </p>
             </div>
-            <span className="text-xs font-bold text-slate-400 font-mono">
-              Annual Billing (12 Months)
-            </span>
+            <div className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-slate-900 text-white shadow-md mx-auto sm:mx-0">
+              <span className="text-xs font-bold font-mono tracking-widest">ANNUAL BILLING</span>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
+          <motion.div 
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 pt-4 items-stretch"
+          >
             {PLANS_DATA.map((plan) => {
               const isCurrent = activePlanKey === plan.key;
               const isLoading = loadingPlanKey === plan.key;
               const Icon = plan.icon;
 
               return (
-                <div
+                <motion.div
+                  variants={itemVariants}
                   key={plan.key}
+                  whileHover={!isCurrent ? { y: -8, scale: 1.02 } : undefined}
                   onClick={() => !isLoading && !isCurrent && handleSelectPlan(plan)}
-                  className={`relative rounded-[2rem] p-6 sm:p-7 flex flex-col justify-between transition-all duration-500 ${
+                  className={`relative rounded-[2rem] p-8 flex flex-col justify-between transition-all duration-300 ease-out flex-1 backdrop-blur-sm ${
                     isCurrent
-                      ? 'bg-white/95 border-2 border-emerald-500/50 shadow-md'
+                      ? 'bg-white/90 border-2 border-emerald-500 shadow-[0_20px_50px_-12px_rgba(16,185,129,0.3)] scale-[1.02] z-10'
                       : plan.popular
-                        ? 'bg-white border-2 border-slate-900 shadow-xl hover:shadow-2xl ring-1 ring-slate-900/10 cursor-pointer hover:-translate-y-2.5'
-                        : 'bg-white/95 border border-slate-200/90 shadow-sm hover:border-[#c5a880] hover:shadow-xl cursor-pointer hover:-translate-y-2.5'
+                        ? 'bg-slate-900/95 border border-[#c5a880]/30 text-white shadow-[0_20px_50px_-12px_rgba(197,168,128,0.2)] cursor-pointer z-10 hover:border-[#c5a880]'
+                        : 'bg-white/70 border border-slate-200/80 shadow-lg cursor-pointer hover:border-[#c5a880]/50 hover:shadow-[0_20px_40px_-12px_rgba(197,168,128,0.15)]'
                   }`}
                 >
+                  {/* Background Glows for Dark Card */}
+                  {plan.popular && !isCurrent && (
+                    <div className="absolute inset-0 bg-gradient-to-b from-[#c5a880]/10 to-transparent rounded-[2rem] pointer-events-none" />
+                  )}
+
                   {/* Popular Badge */}
                   {plan.popular && !isCurrent && (
-                    <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-slate-950 text-white text-[9px] font-black uppercase tracking-widest px-4 py-1 rounded-full shadow-md whitespace-nowrap z-10 flex items-center gap-1.5 border border-white/20">
-                      <Flame className="w-3 h-3 text-[#c5a880] fill-[#c5a880]" /> MOST POPULAR
-                    </span>
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#c5a880] to-[#a07c4c] text-white text-[10px] font-black uppercase tracking-widest px-5 py-1.5 rounded-full shadow-lg whitespace-nowrap flex items-center gap-1.5 border border-white/20">
+                      <Flame className="w-3.5 h-3.5 fill-white" /> MOST POPULAR
+                    </div>
                   )}
 
                   {isCurrent && (
-                    <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-emerald-600 text-white text-[9px] font-black uppercase tracking-widest px-4 py-1 rounded-full shadow-md whitespace-nowrap z-10 font-bold">
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest px-5 py-1.5 rounded-full shadow-lg whitespace-nowrap border border-white/20">
                       ACTIVE PLAN
-                    </span>
+                    </div>
                   )}
 
-                  <div>
+                  <div className="relative z-10 flex-1">
                     {/* Header */}
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center justify-between mb-6">
                       <div>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-[#a07c4c]">
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${isCurrent ? 'text-emerald-600' : plan.popular ? 'text-[#c5a880]' : 'text-[#a07c4c]'}`}>
                           {plan.badge}
                         </span>
-                        <h3 className="text-lg font-black text-slate-900 tracking-tight group-hover:text-[#a07c4c] transition-colors">
+                        <h3 className={`text-2xl font-black tracking-tight mt-1 ${plan.popular && !isCurrent ? 'text-white' : 'text-slate-900'}`}>
                           {plan.name}
                         </h3>
                       </div>
-                      <div className="w-11 h-11 rounded-2xl bg-slate-100 text-slate-600 group-hover:bg-[#c5a880] group-hover:text-white group-hover:shadow-lg group-hover:rotate-6 transition-all duration-300 flex items-center justify-center">
-                        <Icon className="w-5 h-5" />
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 ${
+                        isCurrent ? 'bg-emerald-50 text-emerald-600' : 
+                        plan.popular ? 'bg-white/10 text-[#c5a880] backdrop-blur-md' : 
+                        'bg-slate-50 text-slate-400 group-hover:bg-[#c5a880]/10 group-hover:text-[#c5a880]'
+                      }`}>
+                        <Icon className="w-6 h-6" />
                       </div>
                     </div>
 
                     {/* Price */}
-                    <div className="flex items-baseline gap-1 my-3">
-                      <span className="text-3xl sm:text-4xl font-black text-slate-950 tracking-tight font-serif-luxury">
+                    <div className="flex items-baseline gap-1.5 mb-4">
+                      <span className={`text-4xl font-black tracking-tight font-serif-luxury ${plan.popular && !isCurrent ? 'text-white' : 'text-slate-950'}`}>
                         {plan.displayPrice}
                       </span>
-                      <span className="text-xs font-bold text-slate-400">
+                      <span className={`text-xs font-bold ${plan.popular && !isCurrent ? 'text-slate-400' : 'text-slate-500'}`}>
                         {plan.period}
                       </span>
                     </div>
 
-                    <p className="text-[11px] text-slate-500 font-medium leading-relaxed pb-4 border-b border-slate-100">
+                    <p className={`text-xs font-medium leading-relaxed pb-6 border-b ${plan.popular && !isCurrent ? 'text-slate-300 border-white/10' : 'text-slate-500 border-slate-100'}`}>
                       {plan.tagline}
                     </p>
 
                     {/* Features List */}
-                    <ul className="space-y-3 my-6">
+                    <ul className="space-y-4 my-8">
                       {plan.features.map((feat, i) => (
-                        <li key={i} className="flex items-start gap-2.5 text-xs text-slate-700 font-medium group-hover:text-slate-900 transition-colors">
-                          <div className="w-4 h-4 rounded-full bg-slate-100 group-hover:bg-[#c5a880]/20 text-slate-500 group-hover:text-[#a07c4c] flex items-center justify-center shrink-0 mt-0.5 transition-all">
-                            <Check className="w-2.5 h-2.5 stroke-[3]" />
+                        <li key={i} className={`flex items-start gap-3 text-xs font-bold ${plan.popular && !isCurrent ? 'text-slate-200' : 'text-slate-700'}`}>
+                          <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                            isCurrent ? 'bg-emerald-50 text-emerald-500' : 
+                            plan.popular ? 'bg-[#c5a880]/20 text-[#c5a880]' : 
+                            'bg-[#c5a880]/10 text-[#c5a880]'
+                          }`}>
+                            <Check className="w-3 h-3 stroke-[3]" />
                           </div>
-                          <span>{feat}</span>
+                          <span className="leading-tight pt-0.5">{feat}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
 
                   {/* Choose Plan CTA */}
-                  <div className="mt-4 pt-4 border-t border-slate-100">
+                  <div className={`mt-auto pt-6 border-t ${plan.popular && !isCurrent ? 'border-white/10' : 'border-slate-100'}`}>
                     <button
                       type="button"
                       disabled={isLoading || isCurrent}
@@ -587,71 +652,114 @@ export default function PlansBillingPage() {
                         e.stopPropagation();
                         if (!isCurrent) handleSelectPlan(plan);
                       }}
-                      className={`w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2 ${
+                      className={`group w-full py-4 px-2 rounded-2xl text-[8px] sm:text-[9px] font-black uppercase tracking-wide transition-all duration-300 flex items-center justify-center gap-1 ${
                         isCurrent
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default'
+                          ? 'bg-emerald-50 text-emerald-700 cursor-default'
                           : isLoading
-                            ? 'bg-slate-900 text-white cursor-wait opacity-80'
+                            ? 'bg-slate-200 text-slate-500 cursor-wait opacity-80'
                             : plan.popular
-                              ? 'bg-slate-950 hover:bg-[#c5a880] text-white hover:text-slate-950 shadow-md hover:shadow-lg cursor-pointer'
-                              : 'bg-slate-900 hover:bg-[#c5a880] text-white hover:text-slate-950 shadow-sm cursor-pointer'
+                              ? 'bg-[#c5a880] hover:bg-white text-slate-900 shadow-xl shadow-[#c5a880]/20 cursor-pointer hover:-translate-y-1 hover:shadow-2xl'
+                              : 'bg-slate-900 hover:bg-[#c5a880] text-white shadow-lg shadow-slate-900/10 cursor-pointer hover:-translate-y-1 hover:shadow-2xl'
                       }`}
                     >
                       {isCurrent ? (
                         <>
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Current Active Plan</span>
+                          <CheckCircle2 className="w-3 h-3 shrink-0" />
+                          <span className="whitespace-nowrap">Current Plan</span>
                         </>
                       ) : isLoading ? (
                         <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Opening Razorpay...</span>
+                          <RefreshCw className="w-3 h-3 animate-spin shrink-0" />
+                          <span className="whitespace-nowrap">Processing...</span>
                         </>
                       ) : (
                         <>
-                          <span>Choose {plan.name}</span>
-                          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1.5 transition-transform" />
+                          <span className="whitespace-nowrap">Choose {plan.name}</span>
+                          <ArrowRight className="w-3 h-3 shrink-0 transition-transform duration-300 group-hover:translate-x-1" />
                         </>
                       )}
                     </button>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
-          </div>
+          </motion.div>
         </div>
 
       </div>
 
       {/* Downgrade Confirmation Modal */}
-      {showCancelModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-100 text-center space-y-4 animate-fade-in-up">
-            <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center mx-auto">
-              <AlertCircle className="w-7 h-7" />
-            </div>
-            <h3 className="text-xl font-black text-slate-900">Downgrade to Basic?</h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Your subscription will be downgraded to the Basic plan.
-            </p>
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                onClick={() => setShowCancelModal(false)}
-                className="flex-1 py-3.5 rounded-2xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-all cursor-pointer"
-              >
-                Keep Current Plan
-              </button>
-              <button
-                onClick={handleConfirmCancel}
-                disabled={loadingCancel}
-                className="flex-1 py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-all cursor-pointer shadow-md"
-              >
-                {loadingCancel ? 'Downgrading...' : 'Yes, Downgrade'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {showCancelModal && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+              className="w-full max-w-md bg-white rounded-[2rem] p-8 shadow-2xl border border-slate-100 text-center"
+            >
+              <div className="w-16 h-16 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center mx-auto mb-6">
+                <AlertCircle className="w-8 h-8" />
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Downgrade to Basic?</h3>
+              <p className="text-sm text-slate-500 leading-relaxed mb-8">
+                Your studio will lose access to premium features, advanced storage, and digital albums. Your subscription will revert to the Basic starter tier.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <button
+                  onClick={() => setShowCancelModal(false)}
+                  className="w-full py-4 rounded-xl border-2 border-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider hover:bg-slate-50 transition-all cursor-pointer"
+                >
+                  Keep Current Plan
+                </button>
+                <button
+                  onClick={handleConfirmCancel}
+                  disabled={loadingCancel}
+                  className="w-full py-4 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center justify-center"
+                >
+                  {loadingCancel ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Yes, Downgrade'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Upgrade Success Modal */}
+      <AnimatePresence>
+        {showSuccessModal && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.8, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.8, y: 30 }}
+              transition={{ type: "spring", duration: 0.6 }}
+              className="w-full max-w-lg bg-white rounded-[2rem] p-10 shadow-2xl border border-slate-100 text-center relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-[60px] pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#c5a880]/10 rounded-full blur-[60px] pointer-events-none" />
+              
+              <div className="relative z-10">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-500/30">
+                  <PartyPopper className="w-10 h-10" />
+                </div>
+                <h3 className="text-3xl font-black text-slate-900 tracking-tight mb-2 font-serif-luxury">Congratulations!</h3>
+                <p className="text-base text-slate-500 leading-relaxed mb-8">
+                  Your studio has successfully been upgraded to the <strong className="text-emerald-600 uppercase tracking-widest text-xs ml-1 mr-1">{upgradedPlanName}</strong> Plan. You now have access to all the premium features!
+                </p>
+                <button
+                  onClick={() => setShowSuccessModal(false)}
+                  className="w-full py-4 rounded-xl bg-slate-900 hover:bg-[#c5a880] text-white font-bold text-xs uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-slate-900/20 hover:shadow-[#c5a880]/30 hover:-translate-y-1"
+                >
+                  Start Using New Features
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

@@ -6,7 +6,7 @@
 .hero-scroll-container {
   position: relative;
   width: 100%;
-  /* height set dynamically via inline style based on frame count */
+  background: #09090b; /* Prevent white gaps on scroll */
 }
 
 /* ── Sticky Viewport ── */
@@ -14,7 +14,7 @@
   position: sticky;
   top: 80px; /* match pt-20 */
   height: calc(100vh - 80px); /* fallback */
-  height: calc(100svh - 80px); /* modern mobile */
+  height: calc(100dvh - 80px); /* dynamic mobile viewport */
   width: 100%;
   overflow: hidden;
   background: #09090b;

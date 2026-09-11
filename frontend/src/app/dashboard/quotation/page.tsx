@@ -627,8 +627,8 @@ export default function QuotationPage() {
                     <div className="flex flex-col gap-5">
                       {newQuoteItems.map((item, index) => (
                         <div key={index} className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-3 relative group">
-                          <div className="flex items-center gap-4">
-                            <div className="flex-1 flex flex-col gap-1">
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 w-full">
+                            <div className="w-full sm:flex-1 flex flex-col gap-1">
                               <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Item Name *</label>
                               <input 
                                 type="text" 
@@ -638,7 +638,7 @@ export default function QuotationPage() {
                                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]" 
                               />
                             </div>
-                            <div className="w-36 flex flex-col gap-1">
+                            <div className="w-full sm:w-36 flex flex-col gap-1">
                               <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Price (₹) *</label>
                               <input 
                                 type="number" 

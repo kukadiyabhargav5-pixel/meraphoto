@@ -13,28 +13,33 @@ export const PLAN_STORAGE_LIMITS: Record<string, { photos: number; videos: numbe
   ENTERPRISE: { photos: 750000, videos: 500, name: 'Premium' },
 };
 
-export const calculateStudioCredits = async (studioId: any, plan: string) => {
+export const calculateStudioCredits = async (studioId: any, plan: string, cachedStudio?: any) => {
   const planKey = (plan || 'BASIC').toUpperCase();
   const limits = PLAN_STORAGE_LIMITS[planKey] || PLAN_STORAGE_LIMITS.BASIC;
 
-  const studio = await Studio.findById(studioId);
-  const activePhotos = await Media.countDocuments({ studioId, type: 'PHOTO' });
-  const activeVideos = await Media.countDocuments({ studioId, type: 'VIDEO' });
+  const [studio, [creditedPhotos, creditedVideos, pendingPhotos, pendingVideos]] = await Promise.all([
+    cachedStudio ? Promise.resolve(cachedStudio) : Studio.findById(studioId).select('usage').lean(),
+    Promise.all([
+      Media.countDocuments({ studioId, type: 'PHOTO', creditDeducted: true }),
+      Media.countDocuments({ studioId, type: 'VIDEO', creditDeducted: true }),
+      Media.countDocuments({ studioId, type: 'PHOTO', creditDeducted: false }),
+      Media.countDocuments({ studioId, type: 'VIDEO', creditDeducted: false })
+    ])
+  ]);
 
   // Consumed quota:
-  // Uploads deduct quota permanently.
-  // Deleting media does NOT restore credits!
+  // Uploads deduct quota permanently once event is saved.
   let consumedPhotos = studio?.usage?.photosUploaded ?? 0;
   let consumedVideos = studio?.usage?.videosUploaded ?? 0;
 
-  // Initialize if never tracked or if behind active media count
-  if (consumedPhotos < activePhotos) {
-    consumedPhotos = activePhotos;
-    await Studio.findByIdAndUpdate(studioId, { $set: { 'usage.photosUploaded': activePhotos } });
+  // Initialize if never tracked or if behind credited media count
+  if (consumedPhotos < creditedPhotos) {
+    consumedPhotos = creditedPhotos;
+    await Studio.findByIdAndUpdate(studioId, { $set: { 'usage.photosUploaded': creditedPhotos } });
   }
-  if (consumedVideos < activeVideos) {
-    consumedVideos = activeVideos;
-    await Studio.findByIdAndUpdate(studioId, { $set: { 'usage.videosUploaded': activeVideos } });
+  if (consumedVideos < creditedVideos) {
+    consumedVideos = creditedVideos;
+    await Studio.findByIdAndUpdate(studioId, { $set: { 'usage.videosUploaded': creditedVideos } });
   }
 
   const totalPhotosUsed = consumedPhotos;
@@ -50,6 +55,8 @@ export const calculateStudioCredits = async (studioId: any, plan: string) => {
       totalLimit: limits.photos,
       used: totalPhotosUsed,
       remaining: Math.max(0, limits.photos - totalPhotosUsed),
+      pendingSave: pendingPhotos,
+      projectedRemaining: Math.max(0, limits.photos - totalPhotosUsed - pendingPhotos),
       percentUsed: Number(photoPercent.toFixed(2)),
       rawPercent: photoPercent
     },
@@ -57,6 +64,8 @@ export const calculateStudioCredits = async (studioId: any, plan: string) => {
       totalLimit: limits.videos,
       used: totalVideosUsed,
       remaining: Math.max(0, limits.videos - totalVideosUsed),
+      pendingSave: pendingVideos,
+      projectedRemaining: Math.max(0, limits.videos - totalVideosUsed - pendingVideos),
       percentUsed: Number(videoPercent.toFixed(2)),
       rawPercent: videoPercent
     }
@@ -101,7 +110,7 @@ export const getMyStudio = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const credits = await calculateStudioCredits(studio._id, studio.subscriptionPlan);
+    const credits = await calculateStudioCredits(studio._id, studio.subscriptionPlan, studio);
 
     return res.json({ studio, credits });
   } catch (err: any) {
@@ -117,10 +126,10 @@ export const getStudioCredits = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
-    const studio = await Studio.findOne({ ownerId: req.user._id });
+    const studio = await Studio.findOne({ ownerId: req.user._id }).select('name subscriptionPlan usage').lean();
     if (!studio) return res.status(404).json({ error: 'Studio profile not found' });
 
-    const credits = await calculateStudioCredits(studio._id, studio.subscriptionPlan);
+    const credits = await calculateStudioCredits(studio._id, studio.subscriptionPlan, studio);
     return res.json({ credits, studio: { name: studio.name, subscriptionPlan: studio.subscriptionPlan } });
   } catch (err: any) {
     console.error('getStudioCredits error:', err);

@@ -15,6 +15,9 @@ export interface IMedia extends Document {
   duration?: number; // in seconds (for videos)
   uploadedBy: mongoose.Types.ObjectId;
   processedStatus: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  faceIndexStatus?: 'PENDING' | 'INDEXED' | 'NO_FACE' | 'FAILED';
+  faceCount?: number;
+  creditDeducted: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -37,7 +40,14 @@ const MediaSchema = new Schema<IMedia>({
     type: String, 
     enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'], 
     default: 'PENDING' 
-  }
+  },
+  faceIndexStatus: {
+    type: String,
+    enum: ['PENDING', 'INDEXED', 'NO_FACE', 'FAILED'],
+    default: 'PENDING'
+  },
+  faceCount: { type: Number, default: 0 },
+  creditDeducted: { type: Boolean, default: false, index: true }
 }, {
   timestamps: true
 });

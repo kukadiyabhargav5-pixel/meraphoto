@@ -286,18 +286,23 @@ export const processPhoto = async (mediaId: string, studioId: string) => {
     const { url: thumbnailUrl } = await uploadFile(thumbnailImage, thumbFolder);
 
     const formData = new FormData();
-    // Send the high-res 1600px gallery image to AI service to detect tiny faces in group photos
-    const fileBlob = new Blob([new Uint8Array(galleryImage)], { type: 'image/jpeg' });
+    // CRITICAL: Send ORIGINAL high-res image to AI service for best face detection
+    // Previously sent the watermarked 1600px gallery image which missed small/covered faces
+    const fileBlob = new Blob([new Uint8Array(originalBuffer)], { type: 'image/jpeg' });
     formData.append('file', fileBlob, 'image.jpg');
 
     let faces = [];
+    let faceIndexStatus: 'INDEXED' | 'NO_FACE' | 'FAILED' = 'NO_FACE';
     try {
       const aiResponse = await axios.post(`${AI_SERVICE_URL}/detect-faces`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000, // 60 second timeout for large images
       });
       faces = aiResponse.data.faces || [];
+      faceIndexStatus = faces.length > 0 ? 'INDEXED' : 'NO_FACE';
     } catch (aiErr: any) {
       console.warn(`[AI Warning]: AI Face Service offline. Skipping face detection for photo ${mediaId}:`, aiErr.message);
+      faceIndexStatus = 'FAILED';
     }
     console.log(`Detected ${faces.length} faces in photo ${mediaId}`);
 
@@ -309,6 +314,11 @@ export const processPhoto = async (mediaId: string, studioId: string) => {
         embedding: face.embedding,
         bbox: face.bbox,
         faceThumbnailUrl: `data:image/jpeg;base64,${face.thumbnail}`,
+        detectionConfidence: face.det_score || 0,
+        faceQuality: face.quality || 0,
+        modelVersion: 'buffalo_l_v1',
+        imageWidth: width,
+        imageHeight: height,
       });
       
       try {
@@ -331,9 +341,9 @@ export const processPhoto = async (mediaId: string, studioId: string) => {
       compressedUrl,
       width,
       height,
+      faceIndexStatus,
+      faceCount: faces.length,
     });
-
-    await Studio.findByIdAndUpdate(studioId, { $inc: { 'usage.photosUploaded': 1 } });
   } catch (err: any) {
     console.error(`Failed to process photo ${mediaId}:`, err);
     await Media.findByIdAndUpdate(mediaId, { processedStatus: 'FAILED' });

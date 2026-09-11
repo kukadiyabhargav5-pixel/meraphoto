@@ -3,6 +3,9 @@ import io
 import uvicorn
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Optional
+import base64
 
 # Force UTF-8 encoding for stdout to prevent crash on Windows when DeepFace prints emojis
 if sys.platform == "win32":
@@ -48,10 +51,13 @@ def health():
         "engine_ready": engine.ready if engine else False,
     }
 
+# ================================================================
+# ORIGINAL ENDPOINT — backward compatible
+# ================================================================
 @app.post("/detect-faces")
 async def detect_faces(file: UploadFile = File(...)):
     """
-    Accepts an image upload, detects all faces, and returns embeddings + thumbnails.
+    Accepts an image upload, detects all faces, and returns embeddings + thumbnails + quality metadata.
     Used by both:
       1. Upload pipeline (when photos are uploaded to an event)
       2. Selfie search (when a guest uploads their selfie to find matching photos)
@@ -79,5 +85,60 @@ async def detect_faces(file: UploadFile = File(...)):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Face detection failed: {str(e)}")
 
+
+# ================================================================
+# MULTI-FRAME QUERY ENDPOINT — for multi-capture face search
+# ================================================================
+@app.post("/extract-query-embeddings")
+async def extract_query_embeddings(files: List[UploadFile] = File(...)):
+    """
+    Accept multiple selfie frames, extract the best quality face embedding from each.
+    Returns multiple embeddings for multi-frame matching which dramatically improves recall.
+    
+    The backend uses MAX(similarity) across all returned embeddings to reduce false negatives
+    caused by a single blurry or poorly-lit webcam frame.
+    """
+    if not engine:
+        raise HTTPException(status_code=503, detail="AI engine is not initialized yet. Please wait.")
+
+    all_embeddings = []
+
+    for file in files:
+        try:
+            contents = await file.read()
+            if len(contents) == 0:
+                continue
+
+            faces = engine.extract_faces(contents)
+            if faces:
+                # Use the best quality face from each frame
+                best = max(faces, key=lambda f: f.get("quality", 0))
+                all_embeddings.append({
+                    "embedding": best["embedding"],
+                    "quality": best.get("quality", 0),
+                    "det_score": best.get("det_score", 0),
+                })
+        except Exception as e:
+            print(f"[AI Service] Warning: Failed to process frame: {e}")
+            continue
+
+    if not all_embeddings:
+        raise HTTPException(
+            status_code=400,
+            detail="No face detected in any uploaded frame. Please ensure your face is clearly visible."
+        )
+
+    # Sort by quality descending, return up to 4 best embeddings
+    all_embeddings.sort(key=lambda x: x["quality"], reverse=True)
+    best_embeddings = all_embeddings[:4]
+
+    return {
+        "embeddings": best_embeddings,
+        "count": len(best_embeddings),
+        "total_frames_processed": len(files),
+    }
+
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+

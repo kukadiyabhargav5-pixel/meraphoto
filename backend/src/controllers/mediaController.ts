@@ -94,6 +94,7 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
           size: finalSize,
           uploadedBy: req.user?._id,
           processedStatus: 'PENDING',
+          creditDeducted: false, // Deducted upon saving event
         });
 
         // Enqueue job or process synchronously
@@ -136,18 +137,6 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
       }
     }
     uploadedMediaList.push(...results);
-
-    // Increment consumed credits permanently
-    const uploadedPhotosCount = uploadedMediaList.filter(m => m && m.type === 'PHOTO').length;
-    const uploadedVideosCount = uploadedMediaList.filter(m => m && m.type === 'VIDEO').length;
-    if (uploadedPhotosCount > 0 || uploadedVideosCount > 0) {
-      await Studio.findByIdAndUpdate(event.studioId, {
-        $inc: {
-          'usage.photosUploaded': uploadedPhotosCount,
-          'usage.videosUploaded': uploadedVideosCount,
-        }
-      });
-    }
 
     if (offlineQueue.length > 0) {
       console.log(`[Upload] Redis offline. Processing ${offlineQueue.length} media items in background batches of 5.`);
@@ -399,17 +388,22 @@ export const bulkCreateMedia = async (req: AuthRequest, res: Response) => {
       const newPhotosCount = mediaList.filter(m => (m.type || 'PHOTO') === 'PHOTO').length;
       const newVideosCount = mediaList.filter(m => m.type === 'VIDEO').length;
 
-      const currentPhotos = await Media.countDocuments({ studioId: studio._id, type: 'PHOTO' });
-      const currentVideos = await Media.countDocuments({ studioId: studio._id, type: 'VIDEO' });
+      const currentPhotos = studio.usage?.photosUploaded || 0;
+      const currentVideos = studio.usage?.videosUploaded || 0;
+      const pendingPhotos = await Media.countDocuments({ studioId: studio._id, type: 'PHOTO', creditDeducted: false });
+      const pendingVideos = await Media.countDocuments({ studioId: studio._id, type: 'VIDEO', creditDeducted: false });
 
-      if (newPhotosCount > 0 && currentPhotos + newPhotosCount > planLimit.photos) {
+      const totalPhotos = currentPhotos + pendingPhotos;
+      const totalVideos = currentVideos + pendingVideos;
+
+      if (newPhotosCount > 0 && totalPhotos + newPhotosCount > planLimit.photos) {
         return res.status(403).json({ 
-          error: `Photo storage limit exceeded. Your ${planKey} plan allows up to ${planLimit.photos.toLocaleString('en-IN')} photos (${Math.max(0, planLimit.photos - currentPhotos)} remaining). Please upgrade your plan.` 
+          error: `Photo storage limit exceeded. Your ${planKey} plan allows up to ${planLimit.photos.toLocaleString('en-IN')} photos (${Math.max(0, planLimit.photos - totalPhotos)} remaining). Please upgrade your plan.` 
         });
       }
-      if (newVideosCount > 0 && currentVideos + newVideosCount > planLimit.videos) {
+      if (newVideosCount > 0 && totalVideos + newVideosCount > planLimit.videos) {
         return res.status(403).json({ 
-          error: `Video storage limit exceeded. Your ${planKey} plan allows up to ${planLimit.videos} videos (${Math.max(0, planLimit.videos - currentVideos)} remaining). Please upgrade your plan.` 
+          error: `Video storage limit exceeded. Your ${planKey} plan allows up to ${planLimit.videos} videos (${Math.max(0, planLimit.videos - totalVideos)} remaining). Please upgrade your plan.` 
         });
       }
     }
@@ -426,22 +420,11 @@ export const bulkCreateMedia = async (req: AuthRequest, res: Response) => {
       height: item.height,
       uploadedBy: req.user!._id,
       processedStatus: 'PENDING',
+      creditDeducted: false, // Will be deducted when event is saved
     }));
 
     // Insert all documents at once
     const insertedMedia = await Media.insertMany(newMediaDocs);
-
-    // Increment consumed credits permanently (Never refunded on delete)
-    const newPhotosCount = newMediaDocs.filter(m => m.type === 'PHOTO').length;
-    const newVideosCount = newMediaDocs.filter(m => m.type === 'VIDEO').length;
-    if (newPhotosCount > 0 || newVideosCount > 0) {
-      await Studio.findByIdAndUpdate(event.studioId, {
-        $inc: {
-          'usage.photosUploaded': newPhotosCount,
-          'usage.videosUploaded': newVideosCount,
-        }
-      });
-    }
 
     const offlineQueue: any[] = [];
 

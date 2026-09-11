@@ -138,21 +138,21 @@ export default function DashboardOverview() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <button
               onClick={() => fetchStats(true)}
               disabled={refreshing}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 border border-white/10
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-white/10 border border-white/10
                 text-white text-xs font-bold hover:bg-white/20 transition-all disabled:opacity-50 backdrop-blur-sm"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </button>
             <Link href="/dashboard/studio-settings">
-              <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl
+              <button className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl
                 bg-gradient-to-r from-[#c5a880] to-[#a07c4c] text-white text-xs font-black
                 shadow-lg shadow-[#c5a880]/20 hover:shadow-xl hover:shadow-[#c5a880]/30 hover:-translate-y-0.5 transition-all">
-                <Settings className="w-3.5 h-3.5" /> Manage Studio
+                <Settings className="w-3.5 h-3.5" /> <span className="hidden xs:inline">Manage</span> Studio
               </button>
             </Link>
           </div>
@@ -195,7 +195,7 @@ export default function DashboardOverview() {
                   key={card.id}
                   variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } } }}
                   onClick={() => router.push(card.link)}
-                  className="bg-white rounded-2xl border border-slate-100 p-5 relative overflow-hidden cursor-pointer
+                  className="bg-white rounded-2xl border border-slate-100 p-3 sm:p-5 relative overflow-hidden cursor-pointer
                     hover:border-slate-200 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-1
                     transition-all duration-300 group"
                 >
@@ -237,14 +237,14 @@ export default function DashboardOverview() {
           <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Quick Actions</span>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {quickLinks.map((ql, i) => (
             <Link key={ql.href} href={ql.href}>
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.35 + i * 0.06 }}
-                className="bg-white rounded-2xl border border-slate-100 p-5 flex items-center gap-3.5 cursor-pointer
+                className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5 flex items-center gap-3 sm:gap-3.5 cursor-pointer
                   hover:border-slate-200 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-0.5
                   transition-all duration-300 group"
               >

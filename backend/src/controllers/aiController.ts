@@ -32,8 +32,9 @@ const cosineSimilarity = (vecA: number[], vecB: number[]): number => {
  * Flow:
  *   1. Send selfie to AI service → get face embedding(s)
  *   2. Fetch all face embeddings for the event from DB
- *   3. Compare using cosine similarity
+ *   3. Compare using cosine similarity (no arbitrary limit)
  *   4. Return matched media sorted by similarity score
+ *   5. Include indexing status for transparency
  */
 export const searchBySelfie = async (req: Request, res: Response) => {
   const { eventId } = req.params;
@@ -53,7 +54,7 @@ export const searchBySelfie = async (req: Request, res: Response) => {
 
       const aiResponse = await axios.post(`${AI_SERVICE_URL}/detect-faces`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 30000, // 30 second timeout for AI processing
+        timeout: 30000,
       });
 
       faces = aiResponse.data.faces || [];
@@ -79,7 +80,7 @@ export const searchBySelfie = async (req: Request, res: Response) => {
     // Use the first (usually largest/most prominent) detected face
     const queryEmbedding = faces[0].embedding;
 
-    // 2. Fetch all face embeddings for this event
+    // 2. Fetch ALL face embeddings for this event (no limit)
     const eventEmbeddings = await FaceEmbedding.find({ eventId });
 
     if (eventEmbeddings.length === 0) {
@@ -89,7 +90,7 @@ export const searchBySelfie = async (req: Request, res: Response) => {
       });
     }
 
-    // 3. Compute similarities against all stored embeddings
+    // 3. Compute similarities against ALL stored embeddings (no arbitrary limit)
     const matches: { mediaId: string; timestamp?: number; similarity: number }[] = [];
     
     for (const item of eventEmbeddings) {
@@ -124,23 +125,20 @@ export const searchBySelfie = async (req: Request, res: Response) => {
       const group = mediaGroups[match.mediaId];
       group.matchCount++;
       
-      // Track highest similarity for this media item
       if (match.similarity > group.bestSimilarity) {
         group.bestSimilarity = match.similarity;
       }
       
-      // Track video timestamps
       if (match.timestamp !== undefined) {
         group.timestamps.push(match.timestamp);
       }
     }
 
-    // Sort timestamps for video matches
     for (const mId in mediaGroups) {
       mediaGroups[mId].timestamps.sort((a, b) => a - b);
     }
 
-    // 5. Populate Media details
+    // 5. Populate Media details — ALL matches, no limit
     const matchedMediaIds = Object.keys(mediaGroups);
     const mediaDetails = await Media.find({ _id: { $in: matchedMediaIds } });
 
@@ -151,13 +149,12 @@ export const searchBySelfie = async (req: Request, res: Response) => {
         ...media.toObject(),
         similarity: parseFloat(group.bestSimilarity.toFixed(4)),
         similarityPercent,
-        confidence: group.bestSimilarity >= HIGH_CONFIDENCE_THRESHOLD ? 'HIGH' : 'MEDIUM',
+        confidence: group.bestSimilarity >= HIGH_CONFIDENCE_THRESHOLD ? 'HIGH' : group.bestSimilarity >= 0.50 ? 'MEDIUM' : 'LOW',
         matchCount: group.matchCount,
         timestamps: group.timestamps,
       };
     });
 
-    // Sort by similarity score (highest first)
     results.sort((a, b) => b.similarity - a.similarity);
 
     // Increment AI search usage
@@ -166,14 +163,24 @@ export const searchBySelfie = async (req: Request, res: Response) => {
       await Studio.findByIdAndUpdate(firstMedia.studioId, { $inc: { 'usage.aiSearchesCount': 1 } });
     }
 
+    // 6. Get indexing status
+    const totalMedia = await Media.countDocuments({ eventId, type: 'PHOTO' });
+    const pendingMedia = await Media.countDocuments({
+      eventId, type: 'PHOTO',
+      faceIndexStatus: { $in: ['PENDING', null] },
+    });
+
     console.log(`[AI Search] Found ${results.length} matching media items for event ${eventId}`);
 
     return res.json({ 
       matches: results,
       totalSearched: eventEmbeddings.length,
+      indexingStatus: { total: totalMedia, pending: pendingMedia },
       message: results.length > 0 
         ? `Found ${results.length} photo(s)/video(s) matching your face!`
-        : 'No matching photos found. The event photos may not have been processed yet.',
+        : pendingMedia > 0
+          ? `No matching photos found. ${pendingMedia} photos are still being indexed.`
+          : 'No matching photos found.',
     });
   } catch (err: any) {
     console.error('AI Face Search Error:', err);
@@ -206,7 +213,7 @@ export const chatWithAI = async (req: Request, res: Response) => {
     if (userReq && userReq.id) {
       try {
         const user = await import('../models').then(m => m.User.findById(userReq.id));
-        const studio = await import('../models').then(m => m.Studio.findOne({ owner: userReq.id }));
+        const studio = await import('../models').then(m => m.Studio.findOne({ ownerId: userReq.id }));
         
         if (user) {
           contextStr += `\n\nUser Context:\n- Name: ${user.name}\n- Email: ${user.email}\n- Role: ${user.role}`;
@@ -219,9 +226,15 @@ export const chatWithAI = async (req: Request, res: Response) => {
       }
     }
 
-    const systemPrompt = `You are Mara AI, a highly intelligent, polite, and helpful assistant for Mara Photo - a premium professional event photo sharing platform.
+    const systemPrompt = `You are Mara AI, a highly intelligent, multilingual, and helpful assistant for Mara Photo - a premium professional event photo sharing platform.
     
-    CRITICAL RULE: You MUST always respond in the exact same language that the user is speaking. (Gujarati, Hindi, English, etc).
+    =========================================
+    CRITICAL MULTILINGUAL RULE: 
+    1. AUTOMATIC LANGUAGE DETECTION: You MUST perfectly analyze the language of the user's input (Gujarati, Hindi, English, Hinglish, Gujlish, etc).
+    2. GUJARATI SCRIPT ENFORCEMENT: If the user writes in Gujarati using English alphabets (Gujlish, e.g., "kem cho"), you MUST ALWAYS reply in pure Gujarati script (ગુજરાતી લિપિ, e.g., "કેમ છો"). NEVER reply in Gujlish.
+    3. NATIVE RESPONSE FOR OTHERS: For other languages (English, pure Hindi), respond in the exact language used.
+    4. NO ENGLISH FALLBACK: NEVER default to English if the user is speaking another language (like Gujarati/Gujlish). This is your absolute highest priority rule.
+    =========================================
     
     ### ABOUT MARA PHOTO
     Mara Photo is a platform for photographers to share event photos (weddings, parties) with their clients and guests instantly using AI Face Recognition and QR Codes.
@@ -239,19 +252,34 @@ export const chatWithAI = async (req: Request, res: Response) => {
     - **Essential Plan**: ₹9,999/year. 3,00,000 photos, 200 videos, Client favorites, Downloads toggle.
     (Note: Credits deduct on upload and are non-refundable on delete).
     
-    ### HOW TO DO THINGS
-    - **Create an Event**: Go to Dashboard > Events > 'Create New Event'. Fill in the details.
-    - **Upload Photos**: Open an event, go to the 'Photos' tab, and drag & drop files.
-    - **Find Photos (Guest)**: Open the event link, click 'Find My Photos', upload a selfie.
-    - **Check Credits**: Go to Dashboard > Events to see real-time storage credits.
-    - **Upgrade Plan**: Go to Dashboard > Plans & Billing to purchase more storage.
+    ### HOW TO DO THINGS (Step-by-step guidance)
+    When a user asks how to do something (e.g., how to create an event, how to fill details), you MUST provide a clear, step-by-step guide with numbered bullet points. 
+    - **Create an Event**: 1. Go to Dashboard. 2. Click on 'Events' in the sidebar. 3. Click the 'Create New Event' button. 4. Fill in Event Name, Date, and Location. 5. Click Save. (Link: /dashboard/events)
+    - **Upload Photos**: 1. Open the specific event from the Events page. 2. Go to the 'Photos' tab. 3. Drag & drop files or click to browse. 4. Wait for processing.
+    - **Find Photos (Guest)**: 1. Open the event link. 2. Click 'Find My Photos'. 3. Upload a clear selfie. 4. Wait for the AI to find matches.
+    - **Check Credits**: 1. Go to the Dashboard Overview or Events page to see real-time storage credits. (Link: /dashboard/overview)
+    - **Upgrade Plan**: 1. Go to Plans & Billing. 2. Choose a new plan. 3. Complete payment. (Link: /dashboard/plans-billing)
+    - **Profile/Settings**: 1. Go to Profile in the sidebar. (Link: /dashboard/profile)
+
+    ### LINK PROVISION RULE
+    If the user asks for a link to a specific page or if you are guiding them to a page, you MUST provide the exact clickable link to that page using markdown format: [Page Name](/path). 
+    Here are the absolute paths you must use:
+    - [Events Page](/dashboard/events)
+    - [Plans & Billing](/dashboard/plans-billing)
+    - [Profile](/dashboard/profile)
+    - [Overview](/dashboard/overview)
+    - [Team](/dashboard/team)
+    - [Queries & Support](/dashboard/queries)
     
     ### SUPPORT
-    If they face technical issues, tell them to email maraphoto303@gmail.com or contact support.
+    If they face technical issues, tell them to email maraphoto303@gmail.com or contact support via [Help & Support](/dashboard/queries).
     
     ${contextStr}
     
-    Your goal is to answer any question perfectly based on the knowledge above. If they ask about something not covered, answer to the best of your ability as a helpful assistant. Keep formatting clean with bold text and bullet points.`;
+    Your goal is to answer any question perfectly based on the knowledge above. 
+    - ALWAYS provide step-by-step numbered lists when explaining "how" to do something.
+    - ALWAYS include direct markdown links to the pages you mention.
+    - If they ask about something not covered, answer to the best of your ability as a helpful assistant. Keep formatting clean with bold text and bullet points.`;
 
     // Format messages for OpenRouter (role: 'system'|'user'|'assistant')
     const formattedMessages = [

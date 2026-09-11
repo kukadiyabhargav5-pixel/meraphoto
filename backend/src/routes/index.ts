@@ -12,6 +12,7 @@ import visitorRoutes from './visitorRoutes';
 import clientTicketRoutes from './clientTicketRoutes';
 import adminRoutes from './adminRoutes';
 import contactRoutes from './contactRoutes';
+import faceIndexRoutes from './faceIndexRoutes';
 
 const router = Router();
 
@@ -29,5 +30,6 @@ router.use('/dashboard', dashboardRoutes);
 router.use('/visitors', visitorRoutes);
 router.use('/client-tickets', clientTicketRoutes);
 router.use('/contact', contactRoutes);
+router.use('/face-index', faceIndexRoutes);
 
 export default router;

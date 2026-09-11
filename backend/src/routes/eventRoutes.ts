@@ -25,7 +25,7 @@ router.post('/code/:code/request-otp', requestEventOtp);
 router.post('/code/:code/verify-otp', verifyEventOtp);
 router.get('/code/:code/qr', getEventQRCode);
 
-// Face search route
-router.post('/:eventId/face-search', upload.single('file'), faceSearch);
+// Face search route — accepts multiple selfie frames for multi-query matching
+router.post('/:eventId/face-search', upload.array('file', 5), faceSearch);
 
 export default router;

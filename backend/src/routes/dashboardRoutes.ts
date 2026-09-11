@@ -69,8 +69,8 @@ router.get('/stats', async (req: AuthRequest, res) => {
     const userId = req.user?._id;
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    // Find the studio for this user
-    const studio = await Studio.findOne({ ownerId: userId });
+    // Find the studio for this user with lean projection
+    const studio = await Studio.findOne({ ownerId: userId }).select('name subscriptionPlan _id').lean();
     if (!studio) {
       return res.json({ events: 0, photos: 0, customers: 0 });
     }
@@ -104,9 +104,10 @@ router.get('/stats', async (req: AuthRequest, res) => {
 // --- CUSTOMERS ---
 router.get('/customers', async (req: AuthRequest, res) => {
   try {
-    const studio = await Studio.findOne({ ownerId: req.user!._id });
+    const studio = await Studio.findOne({ ownerId: req.user!._id }).select('_id').lean();
     if (!studio) return res.json([]);
-    const data = await Customer.find({ studioId: studio._id }).sort({ createdAt: -1 });
+    const limit = parseInt(req.query.limit as string) || 100;
+    const data = await Customer.find({ studioId: studio._id }).sort({ createdAt: -1 }).limit(limit).lean();
     res.json(data);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -146,9 +147,10 @@ router.put('/customers/:id', async (req: AuthRequest, res) => {
 // --- TEAM ---
 router.get('/team', async (req: AuthRequest, res) => {
   try {
-    const studio = await Studio.findOne({ ownerId: req.user!._id });
+    const studio = await Studio.findOne({ ownerId: req.user!._id }).select('_id').lean();
     if (!studio) return res.json([]);
-    const data = await Team.find({ studioId: studio._id }).sort({ createdAt: -1 });
+    const limit = parseInt(req.query.limit as string) || 100;
+    const data = await Team.find({ studioId: studio._id }).sort({ createdAt: -1 }).limit(limit).lean();
     res.json(data);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -195,9 +197,10 @@ router.put('/team/:id', async (req: AuthRequest, res) => {
 // --- BOOKINGS ---
 router.get('/bookings', async (req: AuthRequest, res) => {
   try {
-    const studio = await Studio.findOne({ ownerId: req.user!._id });
+    const studio = await Studio.findOne({ ownerId: req.user!._id }).select('_id').lean();
     if (!studio) return res.json([]);
-    const data = await Booking.find({ studioId: studio._id }).sort({ createdAt: -1 });
+    const limit = parseInt(req.query.limit as string) || 100;
+    const data = await Booking.find({ studioId: studio._id }).sort({ createdAt: -1 }).limit(limit).lean();
     res.json(data);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -228,9 +231,10 @@ router.delete('/bookings/:id', async (req: AuthRequest, res) => {
 // --- QUOTATIONS ---
 router.get('/quotations', async (req: AuthRequest, res) => {
   try {
-    const studio = await Studio.findOne({ ownerId: req.user!._id });
+    const studio = await Studio.findOne({ ownerId: req.user!._id }).select('_id').lean();
     if (!studio) return res.json([]);
-    const data = await Quotation.find({ studioId: studio._id }).sort({ createdAt: -1 });
+    const limit = parseInt(req.query.limit as string) || 100;
+    const data = await Quotation.find({ studioId: studio._id }).sort({ createdAt: -1 }).limit(limit).lean();
     res.json(data);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -274,9 +278,10 @@ router.put('/quotations/:id', async (req: AuthRequest, res) => {
 // --- BILLS ---
 router.get('/bills', async (req: AuthRequest, res) => {
   try {
-    const studio = await Studio.findOne({ ownerId: req.user!._id });
+    const studio = await Studio.findOne({ ownerId: req.user!._id }).select('_id').lean();
     if (!studio) return res.json([]);
-    const data = await Bill.find({ studioId: studio._id }).sort({ createdAt: -1 });
+    const limit = parseInt(req.query.limit as string) || 100;
+    const data = await Bill.find({ studioId: studio._id }).sort({ createdAt: -1 }).limit(limit).lean();
     res.json(data);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -316,9 +321,10 @@ router.put('/bills/:id', async (req: AuthRequest, res) => {
 // --- SHOOTS (Calendar) ---
 router.get('/shoots', async (req: AuthRequest, res) => {
   try {
-    const studio = await Studio.findOne({ ownerId: req.user!._id });
+    const studio = await Studio.findOne({ ownerId: req.user!._id }).select('_id').lean();
     if (!studio) return res.json([]);
-    const data = await ShootLog.find({ studioId: studio._id }).sort({ date: 1 });
+    const limit = parseInt(req.query.limit as string) || 100;
+    const data = await ShootLog.find({ studioId: studio._id }).sort({ date: 1 }).limit(limit).lean();
     res.json(data);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -388,7 +394,7 @@ router.post('/event-cover', uploadMiddleware.single('image'), async (req: AuthRe
 // Get user's event covers
 router.get('/event-cover', async (req: AuthRequest, res) => {
   try {
-    const covers = await EventCover.find({ userId: req.user!._id }).sort({ createdAt: -1 });
+    const covers = await EventCover.find({ userId: req.user!._id }).sort({ createdAt: -1 }).limit(50).lean();
     return res.json({ success: true, covers });
   } catch (error: any) {
     return res.status(500).json({ error: error.message || 'Failed to fetch event covers' });

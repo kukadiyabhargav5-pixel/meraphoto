@@ -19,7 +19,7 @@ class FaceEngine:
             print(f"[FaceEngine] Initializing InsightFace buffalo_l model...")
             try:
                 # Initialize the FaceAnalysis app
-                # Increased det_size to 1280x1280 to detect very small faces in large group photos
+                # det_size 1280x1280 for detecting small faces in large group photos
                 self.app = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider'])
                 self.app.prepare(ctx_id=0, det_size=(1280, 1280))
                 self.ready = True
@@ -32,8 +32,8 @@ class FaceEngine:
 
     def extract_faces(self, image_bytes: bytes) -> list:
         """
-        Detect all faces in an image and return their embeddings + thumbnails.
-        Returns a list of dicts: { bbox, embedding, thumbnail }
+        Detect all faces in an image and return their embeddings + thumbnails + quality metadata.
+        Returns a list of dicts: { bbox, embedding, thumbnail, det_score, quality, landmarks }
         """
         # Decode image from bytes
         nparr = np.frombuffer(image_bytes, np.uint8)
@@ -48,6 +48,7 @@ class FaceEngine:
         try:
             # Detect & embed all faces in image using InsightFace
             faces = self.app.get(img)
+            img_h, img_w = img.shape[:2]
 
             for face in faces:
                 embedding = face.embedding.tolist()
@@ -64,6 +65,22 @@ class FaceEngine:
 
                 bbox = [float(x1), float(y1), float(x2), float(y2)]
 
+                # Detection confidence score from InsightFace
+                det_score = float(face.det_score) if hasattr(face, 'det_score') else 0.0
+
+                # Composite face quality score based on:
+                # - detection confidence (60% weight)
+                # - face pixel area relative to 112x112 reference (40% weight)
+                face_area = w * h
+                reference_area = 112 * 112  # ArcFace alignment target size
+                size_quality = min(1.0, face_area / reference_area)
+                quality = det_score * 0.6 + size_quality * 0.4
+
+                # Facial landmarks (5-point keypoints) for alignment verification
+                landmarks = []
+                if hasattr(face, 'kps') and face.kps is not None:
+                    landmarks = face.kps.tolist()
+
                 # Crop face thumbnail with generous padding for a nicer crop
                 thumbnail_b64 = self._crop_face_thumbnail(img, x1, y1, w, h)
 
@@ -71,9 +88,12 @@ class FaceEngine:
                     "bbox": bbox,
                     "embedding": embedding,
                     "thumbnail": thumbnail_b64,
+                    "det_score": round(det_score, 4),
+                    "quality": round(quality, 4),
+                    "landmarks": landmarks,
                 })
 
-            print(f"[FaceEngine] Detected {len(results)} face(s) in image.")
+            print(f"[FaceEngine] Detected {len(results)} face(s) in image ({img_w}x{img_h}).")
 
         except Exception as e:
             print(f"[FaceEngine] Face detection error: {e}")
@@ -115,4 +135,7 @@ class FaceEngine:
             "bbox": [50.0, 50.0, 150.0, 150.0],
             "embedding": dummy_embedding,
             "thumbnail": dummy_thumbnail,
+            "det_score": 0.99,
+            "quality": 0.95,
+            "landmarks": [],
         }]

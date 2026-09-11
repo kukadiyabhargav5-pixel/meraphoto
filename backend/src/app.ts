@@ -50,14 +50,28 @@ app.use('/api', limiter);
 // Register API Routes
 app.use('/api', apiRouter);
 
-// Global Health Check
-app.get('/health', (req: Request, res: Response) => {
+// Global Health & Anti-Sleep Keep-Alive Check
+const handleHealthCheck = async (req: Request, res: Response) => {
+  let dbStatus = 'disconnected';
+  try {
+    if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
+      await mongoose.connection.db.command({ ping: 1 });
+      dbStatus = 'connected_active';
+    }
+  } catch (e: any) {
+    dbStatus = 'error: ' + (e?.message || 'unknown');
+  }
+
   res.json({
     status: 'healthy',
-    timestamp: new Date(),
+    database: dbStatus,
+    timestamp: new Date().toISOString(),
     uptime: process.uptime(),
   });
-});
+};
+
+app.get('/health', handleHealthCheck);
+app.get('/api/health', handleHealthCheck);
 
 // Mock WhatsApp receiver for local testing redirection
 app.post('/api/mock/whatsapp', (req: Request, res: Response) => {
