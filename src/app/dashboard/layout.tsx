@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Calendar, Settings, CreditCard, HelpCircle,
   LogOut, Plus,
   Users, Users2, FileText, QrCode, User, BookOpen, Receipt, Briefcase,
-  Menu, X, UserPlus, ScanLine
+  Menu, X, UserPlus, ScanLine, Lock
 } from 'lucide-react';
 import { DashboardProvider, useDashboard } from './DashboardContext';
 import ProtectedRoute from '../../components/ProtectedRoute';
@@ -70,26 +70,29 @@ function SidebarContent({
   onLogout: () => void;
   onLinkClick?: () => void;
 }) {
+  const router = useRouter();
   const { studio } = useDashboard();
-  const logoUrl = studio?.logoUrl || '/logo.png';
+  const { studio: authStudio } = useAuth();
+  const logoUrl = studio?.logoUrl || authStudio?.logoUrl || '/logo.png';
   
-  const isBasicPlan = studio?.subscriptionPlan?.toLowerCase() === 'basic';
+  const currentPlan = (studio?.subscriptionPlan || authStudio?.subscriptionPlan || 'BASIC').toUpperCase();
+  const isBasicPlan = currentPlan === 'BASIC' || currentPlan === 'STARTER';
+
+  // When Basic Plan is active: ONLY Overview and Plans & Billing are accessible!
   const allowedBasicRoutes = [
     '/dashboard',
-    '/dashboard/team',
-    '/dashboard/profile',
-    '/dashboard/queries',
-    '/dashboard/plans-billing',
-    '/dashboard/support-help'
+    '/dashboard/plans-billing'
   ];
 
   const handleLinkClick = (e: React.MouseEvent, href: string) => {
     if (isBasicPlan && !allowedBasicRoutes.includes(href)) {
       e.preventDefault();
+      router.push('/dashboard/plans-billing');
       toast.error('Please upgrade your plan from Basic to access this feature.', {
-        duration: 3000,
+        duration: 3500,
         icon: '🔒'
       });
+      if (onLinkClick) onLinkClick();
       return;
     }
     if (onLinkClick) {
@@ -105,7 +108,7 @@ function SidebarContent({
     const isDisabled = isBasicPlan && !allowedBasicRoutes.includes(href);
     
     if (isDisabled) {
-      return `flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs transition-all duration-300 relative group overflow-hidden opacity-50 cursor-not-allowed text-slate-500 bg-transparent`;
+      return `flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs transition-all duration-300 relative group overflow-hidden opacity-40 cursor-not-allowed text-slate-500 bg-transparent select-none`;
     }
 
     return `flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs transition-all duration-300 relative group overflow-hidden ${
@@ -126,27 +129,38 @@ function SidebarContent({
       {/* Nav */}
       <div className="flex-1 overflow-y-auto pr-1 pb-4 scrollbar-thin scrollbar-thumb-white/10 flex flex-col justify-start">
         <nav className="flex flex-col gap-1">
-          {NAV_ITEMS.flatMap((section) => section.links).map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              prefetch={true}
-              href={href}
-              className={linkClass(href)}
-              onClick={(e) => handleLinkClick(e, href)}
-            >
-              <Icon className="h-4 w-4 shrink-0" /> {label}
-            </Link>
-          ))}
+          {NAV_ITEMS.flatMap((section) => section.links).map(({ href, label, icon: Icon }) => {
+            const isLocked = isBasicPlan && !allowedBasicRoutes.includes(href);
+            return (
+              <Link
+                key={href}
+                prefetch={!isLocked}
+                href={isLocked ? '/dashboard/plans-billing' : href}
+                className={linkClass(href)}
+                onClick={(e) => handleLinkClick(e, href)}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="flex-1 truncate">{label}</span>
+                {isLocked && <Lock className="h-3 w-3 text-amber-400/70 shrink-0 ml-auto" />}
+              </Link>
+            );
+          })}
 
           {/* Generate QR Code Link */}
-          <Link
-            href="/dashboard/generate-qr"
-            className={linkClass('/dashboard/generate-qr')}
-            onClick={(e) => handleLinkClick(e, '/dashboard/generate-qr')}
-          >
-            <ScanLine className="h-4 w-4 shrink-0" />
-            Generate QR Code
-          </Link>
+          {(() => {
+            const isLocked = isBasicPlan && !allowedBasicRoutes.includes('/dashboard/generate-qr');
+            return (
+              <Link
+                href={isLocked ? '/dashboard/plans-billing' : '/dashboard/generate-qr'}
+                className={linkClass('/dashboard/generate-qr')}
+                onClick={(e) => handleLinkClick(e, '/dashboard/generate-qr')}
+              >
+                <ScanLine className="h-4 w-4 shrink-0" />
+                <span className="flex-1 truncate">Generate QR Code</span>
+                {isLocked && <Lock className="h-3 w-3 text-amber-400/70 shrink-0 ml-auto" />}
+              </Link>
+            );
+          })()}
         </nav>
       </div>
 
@@ -175,14 +189,32 @@ function SidebarContent({
 function DashboardSidebar({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, studio: authStudio } = useAuth();
   const { studio } = useDashboard();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const logoUrl = studio?.logoUrl || '/logo.png';
+  const logoUrl = studio?.logoUrl || authStudio?.logoUrl || '/logo.png';
+
+  const currentPlan = (studio?.subscriptionPlan || authStudio?.subscriptionPlan || 'BASIC').toUpperCase();
+  const isBasicPlan = currentPlan === 'BASIC' || currentPlan === 'STARTER';
+
+  const allowedBasicRoutes = [
+    '/dashboard',
+    '/dashboard/plans-billing'
+  ];
+
+  // Auto-redirect to /dashboard/plans-billing if user navigates to any disabled route on Basic plan
+  useEffect(() => {
+    if (isBasicPlan && !allowedBasicRoutes.includes(pathname)) {
+      router.replace('/dashboard/plans-billing');
+      toast.error('Please upgrade your plan from Basic to access this feature.', {
+        duration: 3500,
+        icon: '🔒'
+      });
+    }
+  }, [isBasicPlan, pathname, router]);
 
   const handleLogout = async () => {
     await logout();
-    router.push('/auth/login');
   };
 
   return (

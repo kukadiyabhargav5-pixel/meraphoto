@@ -18,9 +18,31 @@ import { LoadingManager, LoadingState } from '../LoadingManager';
  */
 export function useApplicationLoader() {
   const router = useRouter();
-  const [state, setState] = useState<LoadingState>(() => LoadingManager.getState());
+  const [state, setState] = useState<LoadingState>(() => {
+    if (typeof window !== 'undefined') {
+      const isHome = window.location.pathname === '/' || window.location.pathname === '';
+      if (!isHome) {
+        return {
+          currentPhase: 5,
+          progress: 100,
+          status: 'Website Ready',
+          error: null,
+          isCriticalFailed: false,
+          applicationReady: true,
+        };
+      }
+    }
+    return LoadingManager.getState();
+  });
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isHome = window.location.pathname === '/' || window.location.pathname === '';
+      if (!isHome) {
+        return;
+      }
+    }
+
     // Provide Next.js router.prefetch to the LoadingManager
     LoadingManager.setRouterPrefetch((href: string) => {
       try {
@@ -35,7 +57,7 @@ export function useApplicationLoader() {
       setState(newState);
     });
 
-    // Start loading (no-op if already started or session-flagged)
+    // Start loading on home page
     LoadingManager.startLoading();
 
     return unsubscribe;

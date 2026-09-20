@@ -1,12 +1,13 @@
 'use client';
 import React, { useEffect, useState, useCallback } from 'react';
 import { useDashboard } from './DashboardContext';
-import { Calendar, Image as ImageIcon, Users, Heart, UsersRound, RefreshCw, ExternalLink, Settings, Camera, TrendingUp, ArrowUpRight, Sparkles, Clock } from 'lucide-react';
+import { Calendar, Image as ImageIcon, Users, Heart, UsersRound, RefreshCw, ExternalLink, Settings, Camera, TrendingUp, ArrowUpRight, Sparkles, Clock, Lock } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
+import toast from 'react-hot-toast';
 
 interface Stats {
   events: number;
@@ -82,6 +83,24 @@ export default function DashboardOverview() {
     return 'Good Evening';
   })();
 
+  const studio = context?.studio || authStudio;
+  const currentPlan = (stats.subscriptionPlan || studio?.subscriptionPlan || authStudio?.subscriptionPlan || 'BASIC').toUpperCase();
+  const isBasicPlan = currentPlan === 'BASIC' || currentPlan === 'STARTER';
+
+  const handleBlockClick = (targetLink?: string) => {
+    if (isBasicPlan) {
+      toast.error('Please upgrade your plan from Basic to access this feature.', {
+        duration: 3500,
+        icon: '🔒'
+      });
+      router.push('/dashboard/plans-billing');
+      return;
+    }
+    if (targetLink) {
+      router.push(targetLink);
+    }
+  };
+
   const statCards = [
     { id: 'events', label: 'Events', value: stats.events, icon: Calendar, color: '#6366f1', bg: '#eef2ff', link: '/dashboard/events' },
     { id: 'media', label: 'Uploads', value: stats.media, icon: ImageIcon, color: '#8b5cf6', bg: '#f5f3ff', link: '/dashboard/events' },
@@ -143,21 +162,56 @@ export default function DashboardOverview() {
               onClick={() => fetchStats(true)}
               disabled={refreshing}
               className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-white/10 border border-white/10
-                text-white text-xs font-bold hover:bg-white/20 transition-all disabled:opacity-50 backdrop-blur-sm"
+                text-white text-xs font-bold hover:bg-white/20 transition-all disabled:opacity-50 backdrop-blur-sm cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </button>
-            <Link href="/dashboard/studio-settings">
-              <button className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl
+            <button
+              onClick={() => handleBlockClick('/dashboard/studio-settings')}
+              className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl
                 bg-gradient-to-r from-[#c5a880] to-[#a07c4c] text-white text-xs font-black
-                shadow-lg shadow-[#c5a880]/20 hover:shadow-xl hover:shadow-[#c5a880]/30 hover:-translate-y-0.5 transition-all">
-                <Settings className="w-3.5 h-3.5" /> <span className="hidden xs:inline">Manage</span> Studio
-              </button>
-            </Link>
+                shadow-lg shadow-[#c5a880]/20 hover:shadow-xl hover:shadow-[#c5a880]/30 hover:-translate-y-0.5 transition-all cursor-pointer"
+            >
+              {isBasicPlan ? <Lock className="w-3.5 h-3.5" /> : <Settings className="w-3.5 h-3.5" />}
+              <span className="hidden xs:inline">{isBasicPlan ? 'Upgrade Plan' : 'Manage Studio'}</span>
+            </button>
           </div>
         </div>
       </motion.div>
+
+      {/* ═══ Basic Plan Upgrade Banner ═══ */}
+      {isBasicPlan && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={() => handleBlockClick()}
+          className="mb-8 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all group"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
+              <Lock className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-sm font-black text-slate-900 flex items-center gap-2">
+                Active Plan: BASIC
+                <span className="text-[10px] uppercase font-black tracking-wider bg-amber-500/20 text-amber-800 px-2.5 py-0.5 rounded-full">
+                  Limited Access
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Your studio is on the Basic Plan. Click any block or button below to upgrade your plan and unlock Events, Face Recognition, Team, and Invoicing.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleBlockClick(); }}
+            className="shrink-0 px-4 py-2 rounded-xl bg-gradient-to-r from-[#c5a880] to-[#a07c4c] text-white text-xs font-black shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 group-hover:translate-x-0.5 cursor-pointer"
+          >
+            Upgrade Studio Plan <ArrowUpRight className="w-4 h-4" />
+          </button>
+        </motion.div>
+      )}
 
       {/* ═══ Stat Cards ═══ */}
       <div className="mb-8">
@@ -194,7 +248,7 @@ export default function DashboardOverview() {
                 <motion.div
                   key={card.id}
                   variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } } }}
-                  onClick={() => router.push(card.link)}
+                  onClick={() => handleBlockClick(card.link)}
                   className="bg-white rounded-2xl border border-slate-100 p-3 sm:p-5 relative overflow-hidden cursor-pointer
                     hover:border-slate-200 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-1
                     transition-all duration-300 group"
@@ -209,15 +263,26 @@ export default function DashboardOverview() {
                       style={{ background: card.bg }}>
                       <card.icon className="w-5 h-5" style={{ color: card.color }} />
                     </div>
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{card.label}</div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center justify-between">
+                      <span>{card.label}</span>
+                      {isBasicPlan && <Lock className="w-3 h-3 text-amber-500/70" />}
+                    </div>
                     <div className="text-2xl font-black text-slate-900 tracking-tighter flex items-baseline gap-1">
                       <AnimatedCount value={card.value} />
                     </div>
                   </div>
 
-                  {/* Arrow */}
-                  <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0">
-                    <ArrowUpRight className="w-4 h-4 text-slate-400" />
+                  {/* Arrow or Lock Badge */}
+                  <div className="absolute top-4 right-4">
+                    {isBasicPlan ? (
+                      <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600">
+                        <Lock className="w-3.5 h-3.5" />
+                      </div>
+                    ) : (
+                      <div className="opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0">
+                        <ArrowUpRight className="w-4 h-4 text-slate-400" />
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               ))}
@@ -239,26 +304,37 @@ export default function DashboardOverview() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {quickLinks.map((ql, i) => (
-            <Link key={ql.href} href={ql.href}>
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.35 + i * 0.06 }}
-                className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5 flex items-center gap-3 sm:gap-3.5 cursor-pointer
-                  hover:border-slate-200 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-0.5
-                  transition-all duration-300 group"
-              >
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110"
-                  style={{ background: `${ql.accent}12` }}>
-                  <ql.icon className="w-5 h-5" style={{ color: ql.accent }} />
+            <motion.div
+              key={ql.href}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 + i * 0.06 }}
+              onClick={() => handleBlockClick(ql.href)}
+              className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5 flex items-center gap-3 sm:gap-3.5 cursor-pointer
+                hover:border-slate-200 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-0.5
+                transition-all duration-300 group"
+            >
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110"
+                style={{ background: `${ql.accent}12` }}>
+                <ql.icon className="w-5 h-5" style={{ color: ql.accent }} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors flex items-center gap-1.5 truncate">
+                  <span>{ql.label}</span>
+                  {isBasicPlan && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
                 </div>
-                <div>
-                  <div className="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors">{ql.label}</div>
-                  <div className="text-[10px] font-medium text-slate-400">Go to {ql.label.toLowerCase()}</div>
+                <div className="text-[10px] font-medium text-slate-400 truncate">
+                  {isBasicPlan ? 'Click to upgrade plan' : `Go to ${ql.label.toLowerCase()}`}
                 </div>
+              </div>
+              {isBasicPlan ? (
+                <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0 ml-auto group-hover:bg-amber-500/20 transition-colors">
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </div>
+              ) : (
                 <ArrowUpRight className="w-4 h-4 text-slate-300 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
-              </motion.div>
-            </Link>
+              )}
+            </motion.div>
           ))}
         </div>
       </motion.div>

@@ -89,22 +89,18 @@ export default function CinematicHero() {
         }
       }
 
-      // 2. Load remaining 34 frames in fast parallel batches
-      const BATCH = 12;
-      for (let start = 1; start < TOTAL_FRAMES && !cancelled; start += BATCH) {
-        const end = Math.min(start + BATCH, TOTAL_FRAMES);
-        const promises: Promise<void>[] = [];
-        for (let i = start; i < end; i++) {
-          promises.push(
-            loadImage(i).then(() => {
-              loadedCount++;
-              const prog = Math.floor((loadedCount / TOTAL_FRAMES) * 100);
-              window.dispatchEvent(new CustomEvent('hero-loading', { detail: { progress: prog } }));
-            })
-          );
-        }
-        await Promise.all(promises);
+      // 2. Load remaining 34 frames in fast parallel
+      const promises: Promise<void>[] = [];
+      for (let i = 1; i < TOTAL_FRAMES && !cancelled; i++) {
+        promises.push(
+          loadImage(i).then(() => {
+            loadedCount++;
+            const prog = Math.floor((loadedCount / TOTAL_FRAMES) * 100);
+            window.dispatchEvent(new CustomEvent('hero-loading', { detail: { progress: prog } }));
+          })
+        );
       }
+      await Promise.all(promises);
       if (cancelled) return;
       setIsLoaded(true);
       window.dispatchEvent(new Event('hero-loaded'));

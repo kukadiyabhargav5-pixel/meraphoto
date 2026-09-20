@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { startKeepAlive } from '../lib/keepAlive';
 import { useApplicationLoader } from '../lib/hooks/useApplicationLoader';
@@ -152,6 +153,9 @@ const LoaderErrorState = ({ error, onRetry }: { error: string; onRetry: () => vo
 // GLOBAL PRELOADER — ONE-TIME loader with full CSS animation
 // ═══════════════════════════════════════════════════════════════════════
 export default function GlobalLoader() {
+  const pathname = usePathname();
+  const isHome = pathname === '/' || pathname === '';
+
   const { progress, status, isReady, error, isCriticalFailed, retry } = useApplicationLoader();
 
   const [displayProgress, setDisplayProgress] = useState(1);
@@ -161,9 +165,9 @@ export default function GlobalLoader() {
   const currentValRef = useRef(1);
   const keepAliveStartedRef = useRef(false);
 
-  // Lock body scroll while loader is visible — background page stays completely hidden & unscrollable
+  // Lock body scroll while loader is visible on home page
   useEffect(() => {
-    if (!isDismissed) {
+    if (isHome && !isDismissed) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -171,7 +175,7 @@ export default function GlobalLoader() {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isDismissed]);
+  }, [isDismissed, isHome]);
 
   // Start keep-alive once
   useEffect(() => {
@@ -181,24 +185,14 @@ export default function GlobalLoader() {
     }
   }, []);
 
-  // When reset is called explicitly
+  // Smooth progress animation from 1% to 100% fast & responsive (2-3s cadence)
   useEffect(() => {
-    if (!isReady && progress <= 1 && isDismissed) {
-      setIsDismissed(false);
-      setIsFlashing(false);
-      setDisplayProgress(1);
-      currentValRef.current = 1;
-    }
-  }, [isReady, progress, isDismissed]);
-
-  // Smooth progress animation from 1% to 100% fast & responsive
-  useEffect(() => {
-    if (isDismissed) return;
+    if (!isHome || isDismissed) return;
     const animate = () => {
       const target = Math.max(1, Math.min(100, progress));
       if (currentValRef.current < target) {
         const diff = target - currentValRef.current;
-        const step = Math.max(1.2, diff * 0.20);
+        const step = diff < 1.5 ? diff : Math.max(1.8, diff * 0.28);
         currentValRef.current = Math.min(target, currentValRef.current + step);
         setDisplayProgress(Math.min(100, Math.round(currentValRef.current)));
       } else if (currentValRef.current >= 100) {
@@ -208,25 +202,34 @@ export default function GlobalLoader() {
     };
     animRef.current = requestAnimationFrame(animate);
     return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
-  }, [progress, isDismissed]);
+  }, [progress, isDismissed, isHome]);
 
-  // Flash + dismiss ONLY after displayProgress reaches 100% AND isReady is true!
+  // Flash + dismiss right after displayProgress reaches 100% AND isReady is true
   useEffect(() => {
-    if (!isReady || isDismissed || displayProgress < 100) return;
+    if (!isHome || isDismissed) return;
 
-    // Must visibly be 100%
-    const holdTimer = setTimeout(() => {
-      setIsFlashing(true);
-      const dismissTimer = setTimeout(() => {
-        setIsDismissed(true);
-      }, 400);
-      return () => clearTimeout(dismissTimer);
-    }, 180);
+    if (isReady && displayProgress >= 100) {
+      const holdTimer = setTimeout(() => {
+        setIsFlashing(true);
+        const dismissTimer = setTimeout(() => {
+          setIsDismissed(true);
+        }, 300);
+        return () => clearTimeout(dismissTimer);
+      }, 100);
+      return () => clearTimeout(holdTimer);
+    }
+  }, [isReady, displayProgress, isDismissed, isHome]);
 
-    return () => clearTimeout(holdTimer);
-  }, [isReady, displayProgress, isDismissed]);
+  // Safety fallback: if isReady is true for 600ms, force dismiss so it can NEVER get stuck
+  useEffect(() => {
+    if (!isHome || isDismissed || !isReady) return;
+    const forceTimer = setTimeout(() => {
+      setIsDismissed(true);
+    }, 600);
+    return () => clearTimeout(forceTimer);
+  }, [isReady, isDismissed, isHome]);
 
-  if (isDismissed) return null;
+  if (!isHome || isDismissed) return null;
 
   const completionReady = isReady && displayProgress >= 100;
 

@@ -14,7 +14,7 @@ export const DashboardProvider = ({ children }: { children: React.ReactNode }) =
   const [bills, setBills] = useState([]);
   const [studio, setStudio] = useState<any>(authStudio || { 
     name: 'Mara Photo', 
-    subscriptionPlan: 'Professional', 
+    subscriptionPlan: 'BASIC', 
     branding: { color: '#c5a880', watermarkEnabled: false } 
   });
   const [credits, setCredits] = useState<any>(null);
@@ -38,7 +38,7 @@ export const DashboardProvider = ({ children }: { children: React.ReactNode }) =
       setStudio((prev: any) => ({
         ...prev,
         ...authStudio,
-        subscriptionPlan: authStudio.subscriptionPlan || prev?.subscriptionPlan || 'PREMIUM'
+        subscriptionPlan: authStudio.subscriptionPlan || prev?.subscriptionPlan || 'BASIC'
       }));
     }
   }, [authStudio]);
