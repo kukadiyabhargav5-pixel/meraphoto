@@ -13,10 +13,10 @@ body {
   min-width: 0;
 }
 
-/* All images responsive by default */
-img,
-video,
-svg {
+/* All images responsive by default (do not override explicit heights) */
+img:not([class*="h-"]):not([style*="height"]),
+video:not([class*="h-"]):not([style*="height"]),
+svg:not([class*="h-"]):not([style*="height"]) {
   max-width: 100%;
   height: auto;
 }

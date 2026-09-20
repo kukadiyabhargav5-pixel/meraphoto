@@ -586,23 +586,28 @@ export default function EventPhotosPage() {
       {/* Header */}
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl border-b border-slate-200 shadow-sm">
         <div className="max-w-[1800px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <img 
-              src={event?.studioId?.logoUrl || '/studio-gold-icon.png'} 
-              alt="Logo" 
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src = '/studio-gold-icon.png';
-              }}
-              className="h-8 max-w-[120px] object-contain rounded drop-shadow-sm" 
-            />
-            <div className="flex items-center gap-2">
-              <div className="bg-[#FF6B00] p-1.5 rounded-lg hidden sm:block">
-                <Camera className="h-4 w-4 text-white" />
-              </div>
-              <span className="text-xs font-extrabold text-[#FF6B00] uppercase tracking-wider">
-                {event?.studioId?.name || 'Gallery'}
-              </span>
+          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+            <div className="h-8 max-w-[130px] flex items-center justify-start shrink-0 overflow-hidden">
+              <img 
+                src={event?.studioId?.logoUrl || '/studio-gold-icon.png'} 
+                alt="Logo" 
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/studio-gold-icon.png';
+                }}
+                style={{
+                  maxHeight: '32px',
+                  maxWidth: '130px',
+                  width: 'auto',
+                  height: 'auto',
+                  objectFit: 'contain',
+                  display: 'block'
+                }}
+                className="max-h-8 w-auto max-w-[130px] object-contain rounded drop-shadow-sm" 
+              />
             </div>
+            <span className="text-xs font-extrabold text-[#c5a880] uppercase tracking-wider truncate max-w-[130px]">
+              {event?.studioId?.name || 'Gallery'}
+            </span>
             <span className="hidden sm:block h-4 w-px bg-slate-300" />
             <h1 className="text-sm font-bold text-slate-800 truncate max-w-[120px] sm:max-w-none">{event?.name}</h1>
           </div>

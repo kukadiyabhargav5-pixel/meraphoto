@@ -461,15 +461,25 @@ export default function DedicatedFaceScanPage() {
           </Link>
 
           {/* Event & Studio Logo/Title */}
-          <div className="flex items-center gap-3">
-            <img
-              src={event?.studioId?.logoUrl || '/studio-gold-icon.png'}
-              alt="Studio Logo"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src = '/studio-gold-icon.png';
-              }}
-              className="h-8 sm:h-9 max-w-[120px] object-contain rounded drop-shadow-sm"
-            />
+          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+            <div className="h-8 sm:h-9 max-w-[120px] flex items-center justify-start shrink-0 overflow-hidden">
+              <img
+                src={event?.studioId?.logoUrl || '/studio-gold-icon.png'}
+                alt="Studio Logo"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/studio-gold-icon.png';
+                }}
+                style={{
+                  maxHeight: '34px',
+                  maxWidth: '120px',
+                  width: 'auto',
+                  height: 'auto',
+                  objectFit: 'contain',
+                  display: 'block'
+                }}
+                className="max-h-8 sm:max-h-9 w-auto max-w-[120px] object-contain rounded drop-shadow-sm"
+              />
+            </div>
             <div className="text-right sm:text-left">
               <h1 className="text-xs sm:text-sm font-extrabold text-white truncate max-w-[160px] sm:max-w-xs">
                 {event?.name || 'Private Event'}

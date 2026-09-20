@@ -704,19 +704,31 @@ export default function ClientGallery() {
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col relative selection:bg-orange-500 selection:text-white">
       {/* Whitelabel Header */}
       <header className="sticky top-0 z-40 glass-panel border-b border-slate-200 bg-white/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img 
-              src={event?.studioId?.logoUrl || '/studio-gold-icon.png'} 
-              alt={event?.studioId?.name || "Studio Logo"} 
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src = '/studio-gold-icon.png';
-              }}
-              className="h-9 sm:h-12 max-w-[120px] sm:max-w-[200px] object-contain transition-all hover:opacity-95 drop-shadow-md rounded" 
-            />
-            <span className="font-extrabold text-sm sm:text-base tracking-widest text-[#c5a880] uppercase ml-1 sm:ml-2">
-              {event?.studioId?.name}
-            </span>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+            <div className="h-9 sm:h-10 max-w-[130px] sm:max-w-[170px] flex items-center justify-start shrink-0 overflow-hidden">
+              <img 
+                src={event?.studioId?.logoUrl || '/studio-gold-icon.png'} 
+                alt={event?.studioId?.name || "Studio Logo"} 
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/studio-gold-icon.png';
+                }}
+                style={{
+                  maxHeight: '38px',
+                  maxWidth: '140px',
+                  width: 'auto',
+                  height: 'auto',
+                  objectFit: 'contain',
+                  display: 'block'
+                }}
+                className="max-h-9 sm:max-h-10 w-auto max-w-[130px] sm:max-w-[170px] object-contain rounded drop-shadow-sm" 
+              />
+            </div>
+            {event?.studioId?.name && (
+              <span className="font-extrabold text-xs sm:text-sm tracking-widest text-[#c5a880] uppercase truncate max-w-[130px] sm:max-w-[200px]">
+                {event?.studioId?.name}
+              </span>
+            )}
           </div>
           
           <div className="flex items-center gap-3 sm:gap-4">
