@@ -21,27 +21,36 @@ const limiter = rateLimit({
 });
 
 // Middlewares
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-].filter(Boolean) as string[];
-
-app.use(cors({
+const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    const isAllowed = allowedOrigins.indexOf(origin) !== -1 || 
-                     origin.endsWith('.vercel.app') || 
-                     origin.includes('localhost') ||
-                     origin.includes('127.0.0.1') ||
-                     origin.includes('techaarambh');
+    const frontendUrl = process.env.FRONTEND_URL;
+    const clientUrl = process.env.CLIENT_URL;
+    const isAllowed = 
+      origin.includes('localhost') || 
+      origin.includes('127.0.0.1') ||
+      origin.includes('10.') ||
+      origin.includes('192.168.') ||
+      origin.includes('172.') ||
+      origin.endsWith('.vercel.app') || 
+      (Boolean(frontendUrl) && origin === frontendUrl) ||
+      (Boolean(clientUrl) && origin === clientUrl) ||
+      origin.includes('techaarambh') ||
+      process.env.NODE_ENV !== 'production';
+
     if (isAllowed) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(null, false);
     }
   },
   credentials: true,
-}));
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
@@ -88,6 +97,7 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 });
 
 import { initializeQdrant } from './services/qdrantService';
+import { startEventRetentionScheduler } from './services/eventRetentionService';
 
 // Connect to MongoDB & Start Server
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/maraphoto';
@@ -97,6 +107,7 @@ mongoose
   .then(async () => {
     console.log('Connected to MongoDB Database successfully.');
     await initializeQdrant();
+    startEventRetentionScheduler();
     app.listen(PORT, () => {
       console.log(`Backend server running on port ${PORT}`);
     });

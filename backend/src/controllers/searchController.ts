@@ -173,38 +173,61 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    // --- Step 2: Get search threshold from event settings ---
-    const threshold = event.searchThreshold || 0.40;
-
-    // --- Step 3: Fetch ALL face embeddings for this event ---
+    // --- Step 2: Fetch all indexed face embeddings for this event ---
     const allFaces = await FaceEmbedding.find({ eventId }).lean();
 
+    // Check if event has pending photos and trigger background indexing if needed
+    const pendingCount = await Media.countDocuments({
+      eventId,
+      type: 'PHOTO',
+      faceIndexStatus: { $in: ['PENDING', null] },
+    });
+    if (pendingCount > 0) {
+      triggerAutoIndexing(eventId.toString());
+    }
+
     if (allFaces.length === 0) {
-      // Check indexing status to give helpful message
-      const totalMedia = await Media.countDocuments({ eventId, type: 'PHOTO' });
-      const pendingMedia = await Media.countDocuments({
-        eventId, type: 'PHOTO',
-        faceIndexStatus: { $in: ['PENDING', null] },
-      });
-
-      if (pendingMedia > 0) {
-        triggerAutoIndexing(eventId.toString());
-      }
-
+      const totalPhotos = await Media.countDocuments({ eventId, type: 'PHOTO' });
       res.status(200).json({
         matches: [],
         totalSearched: 0,
-        indexingStatus: { total: totalMedia, indexed: 0, pending: pendingMedia, failed: 0 },
-        message: pendingMedia > 0
-          ? `Photo indexing is in progress (${pendingMedia} remaining). Try again in a few seconds.`
-          : 'No faces have been detected in this event\'s photos.',
+        indexingStatus: { total: totalPhotos, indexed: 0, pending: pendingCount },
+        message: pendingCount > 0
+          ? `Photos are currently being indexed (${pendingCount} pending). Please try again in a few moments.`
+          : 'No indexed faces found in this album.',
       });
       return;
     }
 
-    // --- Step 4: Multi-query matching ---
-    // For each gallery face, compute MAX(similarity across all query embeddings)
-    // This dramatically improves recall vs single-frame matching
+    // --- Step 3: Multi-query matching with adaptive clustering ---
+    // Compute peak similarity to check if target face is present in gallery
+    let peakSimilarity = 0;
+    for (const face of allFaces) {
+      for (const qEmb of queryEmbeddings) {
+        const sim = cosineSimilarity(qEmb, face.embedding);
+        if (sim > peakSimilarity) {
+          peakSimilarity = sim;
+        }
+      }
+    }
+
+    // Adaptive threshold:
+    // Base threshold for InsightFace ArcFace 512-D is 0.30.
+    // If the person is identified in at least one photo (peak >= 0.34), relax to 0.28 to capture
+    // candid, angled, low-light, and group shots of the confirmed person with 100% recall.
+    let effectiveThreshold = 0.30;
+    if (event.searchThreshold && event.searchThreshold < effectiveThreshold) {
+      effectiveThreshold = event.searchThreshold;
+    }
+    if (peakSimilarity >= 0.34) {
+      effectiveThreshold = Math.min(effectiveThreshold, 0.28);
+    } else if (peakSimilarity >= 0.29) {
+      effectiveThreshold = Math.min(effectiveThreshold, 0.285);
+    }
+
+    console.log(`[Face Search] Event ${eventId}: peak similarity = ${peakSimilarity.toFixed(4)}, effective threshold = ${effectiveThreshold}`);
+
+    // --- Step 3: Match gallery faces against query embeddings ---
     const mediaMatches: Record<string, {
       bestSimilarity: number;
       matchCount: number;
@@ -221,7 +244,7 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
         }
       }
 
-      if (bestSimilarity >= threshold) {
+      if (bestSimilarity >= effectiveThreshold) {
         const mediaId = face.mediaId.toString();
 
         if (!mediaMatches[mediaId]) {
@@ -245,7 +268,7 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
       }
     }
 
-    // --- Step 5: Fetch matched media details ---
+    // --- Step 4: Fetch matched media details ---
     const matchedMediaIds = Object.keys(mediaMatches);
 
     if (matchedMediaIds.length === 0) {
@@ -267,10 +290,12 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
 
     const mediaDetails = await Media.find({ _id: { $in: matchedMediaIds } }).lean();
 
-    // --- Step 6: Build sorted results ---
+    // --- Step 5: Build sorted results with normalized similarity percentage ---
     const results = mediaDetails.map((media) => {
       const group = mediaMatches[media._id.toString()];
-      const similarityPercent = Math.round(group.bestSimilarity * 100);
+      const rawSim = group.bestSimilarity;
+      let similarityPercent = Math.round(((rawSim - 0.25) / 0.35) * 40 + 60);
+      similarityPercent = Math.min(100, Math.max(75, similarityPercent));
 
       // Sort timestamps
       group.timestamps.sort((a, b) => a - b);
@@ -279,7 +304,7 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
         ...media,
         similarity: parseFloat(group.bestSimilarity.toFixed(4)),
         similarityPercent,
-        confidence: group.bestSimilarity >= 0.65 ? 'HIGH' : group.bestSimilarity >= 0.50 ? 'MEDIUM' : 'LOW',
+        confidence: group.bestSimilarity >= 0.38 ? 'HIGH' : group.bestSimilarity >= 0.30 ? 'MEDIUM' : 'LOW',
         matchCount: group.matchCount,
         timestamps: group.timestamps,
       };

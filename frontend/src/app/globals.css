@@ -235,21 +235,180 @@ body {
   animation: biometric-glow 2.2s ease-in-out infinite;
 }
 
+@keyframes laser-sweep-high-tech {
+  0% { top: 3%; opacity: 0.8; filter: drop-shadow(0 0 12px #c5a880); }
+  50% { top: 95%; opacity: 1; filter: drop-shadow(0 0 20px #e3d8c8); }
+  100% { top: 3%; opacity: 0.8; filter: drop-shadow(0 0 12px #c5a880); }
+}
+
+.animate-laser-sweep {
+  animation: laser-sweep-high-tech 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes cyber-hologram-pulse {
+  0%, 100% {
+    box-shadow: 0 0 30px rgba(197, 168, 128, 0.25), inset 0 0 20px rgba(197, 168, 128, 0.15);
+    border-color: rgba(197, 168, 128, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 50px rgba(197, 168, 128, 0.6), inset 0 0 35px rgba(197, 168, 128, 0.3);
+    border-color: rgba(227, 216, 200, 0.9);
+  }
+}
+
+.animate-cyber-hologram {
+  animation: cyber-hologram-pulse 2.8s ease-in-out infinite;
+}
+
+@keyframes telemetry-wave {
+  0% { transform: scaleX(0.9) scaleY(0.95); opacity: 0.7; }
+  50% { transform: scaleX(1.05) scaleY(1.03); opacity: 1; }
+  100% { transform: scaleX(0.9) scaleY(0.95); opacity: 0.7; }
+}
+
+.animate-telemetry-wave {
+  animation: telemetry-wave 3s ease-in-out infinite;
+}
+
 .biometric-grid-overlay {
-  background-size: 20px 20px;
+  background-size: 24px 24px;
   background-image: 
-    linear-gradient(to right, rgba(197, 168, 128, 0.07) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(197, 168, 128, 0.07) 1px, transparent 1px);
+    linear-gradient(to right, rgba(197, 168, 128, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(197, 168, 128, 0.08) 1px, transparent 1px);
+}
+
+.biometric-scanline {
+  background: linear-gradient(
+    to bottom,
+    rgba(255,255,255,0),
+    rgba(255,255,255,0) 50%,
+    rgba(0, 0, 0, 0.3) 50%,
+    rgba(0, 0, 0, 0.3)
+  );
+  background-size: 100% 4px;
 }
 
 
 /* glass-panel kept for dashboard compatibility */
 .glass-panel {
-  background: rgba(12, 12, 14, 0.95) !important;
+  background: rgba(255, 255, 255, 0.92) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  box-shadow: 0 4px 24px 0 rgba(0, 0, 0, 0.06) !important;
+}
+
+/* ============================================================
+   WHITE THEME — Professional Animation Utilities
+   ============================================================ */
+
+@keyframes modalSlideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes gentlePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.03); }
+}
+
+@keyframes borderGlow {
+  0%, 100% { border-color: rgba(197, 168, 128, 0.25); box-shadow: 0 0 0 rgba(197,168,128,0); }
+  50% { border-color: rgba(197, 168, 128, 0.5); box-shadow: 0 0 20px rgba(197,168,128,0.12); }
+}
+
+@keyframes progressShine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.animate-modal-slide-up {
+  animation: modalSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-modal-fade-in {
+  animation: modalFadeIn 0.35s ease-out forwards;
+}
+
+.animate-gentle-pulse {
+  animation: gentlePulse 2.5s ease-in-out infinite;
+}
+
+.animate-border-glow {
+  animation: borderGlow 3s ease-in-out infinite;
+}
+
+.animate-progress-shine {
+  animation: progressShine 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* White theme card with subtle hover lift */
+.white-card-hover {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.white-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+}
+
+/* ============================================================
+   ULTRA-SMOOTH PHOTO HOVER ZOOM IN / ZOOM OUT EFFECT
+   Smoothly zooms in when arrow/cursor hovers, and smoothly eases out on leave
+   ============================================================ */
+.smooth-photo-zoom-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.5rem;
+  background-color: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  cursor: pointer;
+  transform: translateZ(0);
+  transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1), 
+              box-shadow 0.55s cubic-bezier(0.16, 1, 0.3, 1), 
+              border-color 0.4s ease;
+  will-change: transform, box-shadow;
+}
+
+.smooth-photo-zoom-card:hover {
+  transform: translateY(-8px) translateZ(0);
+  border-color: #c5a880;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.18), 0 0 25px rgba(197, 168, 128, 0.25);
+}
+
+.smooth-photo-zoom-card .smooth-zoom-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1) translateZ(0);
+  transform-origin: center center;
+  transition: transform 0.75s cubic-bezier(0.2, 0.9, 0.25, 1), 
+              filter 0.55s ease;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.smooth-photo-zoom-card:hover .smooth-zoom-img {
+  transform: scale(1.14) translateZ(0);
+  filter: brightness(1.03) contrast(1.02);
+}
+
+.smooth-photo-zoom-card .photo-card-overlay {
+  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), 
+              transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.smooth-photo-zoom-card:hover .photo-card-overlay {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 

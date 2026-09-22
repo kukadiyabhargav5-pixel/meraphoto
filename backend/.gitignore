@@ -1,5 +1,9 @@
-node_modules
+node_modules/
 mongodb_data/
 uploads/
 dist/
 .env
+*.jpg
+*.png
+*.jpeg
+!src/**/*.ts

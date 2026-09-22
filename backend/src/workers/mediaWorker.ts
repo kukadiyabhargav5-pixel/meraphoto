@@ -498,11 +498,85 @@ export const processVideo = async (mediaId: string, studioId: string) => {
       console.warn('[Video Proc] Thumbnail generation warning:', thumbErr);
     }
 
+    // ── Video Compression to strictly max 15-20MB (Target ~17.5MB) ──
+    let finalCompressedUrl = media.r2Url;
+    let finalSize = originalBuffer.length;
+
+    try {
+      const TARGET_MAX_BYTES = 18 * 1024 * 1024; // 18MB target size
+      const tempCompressedPath = path.join(tempDir, `comp_${mediaId}.mp4`);
+
+      // Compress if the video exceeds 18MB, or optimize for web streaming
+      if (originalBuffer.length > TARGET_MAX_BYTES) {
+        const safeDuration = Math.max(duration || 0, 5); // Minimum 5s
+        const totalTargetBits = TARGET_MAX_BYTES * 8; // ~150,994,944 bits
+        const audioBitrateBps = 128 * 1000; // 128 kbps audio
+        const totalAudioBits = audioBitrateBps * safeDuration;
+        const availableVideoBits = Math.max(totalTargetBits - totalAudioBits, totalTargetBits * 0.85);
+        const rawVideoBitrateBps = Math.floor(availableVideoBits / safeDuration);
+
+        // Clamp video bitrate between 500kbps and 3200kbps
+        const targetBitrateKbps = Math.max(500, Math.min(3200, Math.floor(rawVideoBitrateBps / 1000)));
+        const maxRateKbps = Math.floor(targetBitrateKbps * 1.15);
+        const bufSizeKbps = Math.floor(targetBitrateKbps * 1.8);
+
+        // Adaptive resolution: 1080p max for <= 90s, 720p for longer videos
+        const scaleFilter = safeDuration <= 90
+          ? 'scale=w=min(1920\\,iw):h=min(1080\\,ih):force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2'
+          : 'scale=w=min(1280\\,iw):h=min(720\\,ih):force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2';
+
+        console.log(`[Video Proc] Compressing video ${mediaId} (${(originalBuffer.length / (1024 * 1024)).toFixed(2)}MB, duration: ${safeDuration}s) to target 15-20MB with bitrate ${targetBitrateKbps}kbps...`);
+
+        await new Promise<void>((resolve) => {
+          ffmpeg(tempVideoPath)
+            .outputOptions([
+              '-c:v', 'libx264',
+              '-preset', 'fast',
+              '-b:v', `${targetBitrateKbps}k`,
+              '-maxrate', `${maxRateKbps}k`,
+              '-bufsize', `${bufSizeKbps}k`,
+              '-vf', scaleFilter,
+              '-c:a', 'aac',
+              '-b:a', '128k',
+              '-pix_fmt', 'yuv420p',
+              '-movflags', '+faststart',
+            ])
+            .output(tempCompressedPath)
+            .on('end', () => resolve())
+            .on('error', (err) => {
+              console.warn(`[Video Proc] Video compression warning for ${mediaId}:`, err.message);
+              resolve();
+            })
+            .run();
+        });
+
+        if (fs.existsSync(tempCompressedPath)) {
+          const compStats = fs.statSync(tempCompressedPath);
+          console.log(`[Video Proc] Video ${mediaId} compression result: ${(originalBuffer.length / (1024 * 1024)).toFixed(2)}MB -> ${(compStats.size / (1024 * 1024)).toFixed(2)}MB`);
+
+          if (compStats.size > 0 && compStats.size < originalBuffer.length) {
+            const compBuffer = fs.readFileSync(tempCompressedPath);
+            const compFolder = `events/${media.eventId}/videos/compressed`;
+            const { url: compUrl } = await uploadFile(compBuffer, compFolder);
+            if (compUrl) {
+              finalCompressedUrl = compUrl;
+              finalSize = compStats.size;
+            }
+          }
+        }
+      } else {
+        console.log(`[Video Proc] Video ${mediaId} is already ${(originalBuffer.length / (1024 * 1024)).toFixed(2)}MB (<= 18MB), within 15-20MB limit.`);
+      }
+    } catch (compErr) {
+      console.warn(`[Video Proc] Compression step failed for ${mediaId}:`, compErr);
+    }
+
     // Always mark as COMPLETED so video is fully playable!
     await Media.findByIdAndUpdate(mediaId, {
       processedStatus: 'COMPLETED',
       thumbnailUrl: thumbnailUrl || (media.r2Url.includes('imagekit.io') ? `${media.r2Url}/ik-thumbnail.jpg` : media.r2Url),
-      compressedUrl: media.r2Url,
+      compressedUrl: finalCompressedUrl,
+      size: finalSize,
       duration,
     });
 
@@ -533,6 +607,43 @@ export const processMediaLocal = async (mediaId: string, type: 'PHOTO' | 'VIDEO'
     await processVideo(mediaId, studioId);
   }
 };
+
+/**
+ * Super-fast re-watermarking:
+ * Skips AI face detection and vector indexing (since faces already exist).
+ * Regenerates the 1600px gallery view with the updated watermark and uploads to storage.
+ */
+export const reapplyWatermarkToPhoto = async (mediaId: string, studioId: string, eventId: string) => {
+  try {
+    const media = await Media.findById(mediaId);
+    if (!media) return;
+
+    const sourceUrl = media.r2Url;
+    if (!sourceUrl) return;
+
+    const originalBuffer = await downloadUrlToBuffer(sourceUrl);
+
+    let galleryImage = await sharp(originalBuffer)
+      .rotate()
+      .resize({ width: 1600, withoutEnlargement: true })
+      .jpeg({ quality: 95 })
+      .toBuffer();
+
+    galleryImage = await applyWatermark(galleryImage, studioId, eventId);
+
+    const folderForCloudinary = `events/${eventId}/photos/gallery`;
+    const { url: compressedUrl } = await uploadFile(galleryImage, folderForCloudinary);
+
+    await Media.findByIdAndUpdate(mediaId, {
+      compressedUrl,
+      processedStatus: 'COMPLETED'
+    });
+    console.log(`[Watermark Fast-Lane] Photo ${mediaId} re-watermarked successfully.`);
+  } catch (err: any) {
+    console.error(`[Watermark Fast-Lane] Failed for photo ${mediaId}:`, err.message);
+  }
+};
+
 
 // Initialize BullMQ workers only when Redis is available
 function initWorkers() {

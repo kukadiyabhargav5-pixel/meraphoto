@@ -70,12 +70,26 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
         let finalSize = file.size;
 
         if (type === 'PHOTO') {
-          // Compress all photos to max 3840px (4K) to save Cloudinary storage and bypass limits
+          // Strict Maximum 2MB compression for photos
+          const TWO_MB = 2 * 1024 * 1024;
           finalBuffer = await sharp(file.buffer)
-            .resize({ width: 3840, height: 3840, fit: 'inside', withoutEnlargement: true })
+            .resize({ width: 2560, height: 2560, fit: 'inside', withoutEnlargement: true })
             .jpeg({ quality: 85, mozjpeg: true })
             .withMetadata() // Preserve EXIF data (orientation, etc)
             .toBuffer();
+
+          if (finalBuffer.length > TWO_MB) {
+            finalBuffer = await sharp(file.buffer)
+              .resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true })
+              .jpeg({ quality: 75, mozjpeg: true })
+              .toBuffer();
+          }
+          if (finalBuffer.length > TWO_MB) {
+            finalBuffer = await sharp(file.buffer)
+              .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
+              .jpeg({ quality: 65, mozjpeg: true })
+              .toBuffer();
+          }
           finalSize = finalBuffer.length;
         }
 

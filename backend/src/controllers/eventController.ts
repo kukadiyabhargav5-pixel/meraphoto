@@ -95,24 +95,35 @@ export const createEvent = async (req: AuthRequest, res: Response) => {
       watermark: watermark || { isActive: false, type: 'LOGO', position: 'BOTTOM_RIGHT', width: 20, height: 20, opacity: 0.5 },
     });
 
-    // Auto-sync client to Customers directory
+    // Auto-sync client to Customers directory with permanent Event details
     try {
-      let customer = await Customer.findOne({ 
-        studioId: studio._id, 
-        $or: [ { phone: clientMobile }, { email: clientEmail } ]
-      });
+      const queryConditions: any[] = [];
+      if (clientMobile) queryConditions.push({ phone: clientMobile });
+      if (clientEmail) queryConditions.push({ email: clientEmail });
+
+      let customer = null;
+      if (queryConditions.length > 0) {
+        customer = await Customer.findOne({ 
+          studioId: studio._id, 
+          $or: queryConditions
+        });
+      }
 
       if (!customer) {
         await Customer.create({
           studioId: studio._id,
           name: clientName,
-          phone: clientMobile,
-          email: clientEmail,
+          phone: clientMobile || '',
+          email: clientEmail || '',
+          eventName: name,
+          eventDate: new Date(date),
           totalEvents: 1,
           status: 'Active'
         });
       } else {
         customer.totalEvents = (customer.totalEvents || 0) + 1;
+        if (!(customer as any).eventName) (customer as any).eventName = name;
+        if (!(customer as any).eventDate) (customer as any).eventDate = new Date(date);
         await customer.save();
       }
     } catch (custErr) {
@@ -147,11 +158,25 @@ export const getMyEvents = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
+    // Clean up any events older than 30 days
+    const { cleanupExpiredEvents } = await import('../services/eventRetentionService');
+    await cleanupExpiredEvents().catch(err => console.error('Auto cleanup error:', err));
+
     const studio = await Studio.findOne({ ownerId: req.user._id });
     if (!studio) {
       if (isSuperAdmin(req.user)) {
         const events = await Event.find().sort({ date: -1 });
-        return res.json({ events });
+        const now = new Date();
+        const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const enrichedEvents = events.map(ev => {
+          const evObj = ev.toObject();
+          const baseDate = ev.date ? new Date(ev.date) : new Date(ev.createdAt || ev._id.getTimestamp());
+          const baseMidnight = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()).getTime();
+          const diffDays = Math.floor((todayMidnight - baseMidnight) / (1000 * 60 * 60 * 24));
+          const daysLeft = diffDays <= 0 ? 30 : Math.max(0, 30 - diffDays);
+          return { ...evObj, daysLeft, autoDeleteAt: new Date(baseMidnight + 30 * 24 * 60 * 60 * 1000) };
+        });
+        return res.json({ events: enrichedEvents });
       }
       return res.json({ events: [] });
     }
@@ -162,7 +187,18 @@ export const getMyEvents = async (req: AuthRequest, res: Response) => {
     }
 
     const events = await Event.find(query).sort({ date: -1 });
-    return res.json({ events });
+    const now = new Date();
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const enrichedEvents = events.map(ev => {
+      const evObj = ev.toObject();
+      const baseDate = ev.date ? new Date(ev.date) : new Date(ev.createdAt || ev._id.getTimestamp());
+      const baseMidnight = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()).getTime();
+      const diffDays = Math.floor((todayMidnight - baseMidnight) / (1000 * 60 * 60 * 24));
+      const daysLeft = diffDays <= 0 ? 30 : Math.max(0, 30 - diffDays);
+      return { ...evObj, daysLeft, autoDeleteAt: new Date(baseMidnight + 30 * 24 * 60 * 60 * 1000) };
+    });
+
+    return res.json({ events: enrichedEvents });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
@@ -344,44 +380,27 @@ export const updateEvent = async (req: AuthRequest, res: Response) => {
 
     await event.save();
 
-    // If watermark settings changed, re-process all photos for this event in the background
+    // If watermark settings changed, re-process all photos for this event fast in the background
     if (shouldRewatermark) {
       setTimeout(async () => {
         try {
-          console.log(`[Watermark] Settings changed for event ${event._id}. Re-queuing all photos...`);
+          console.log(`[Watermark] Settings changed for event ${event._id}. Fast re-watermarking all photos...`);
           const { Media } = await import('../models');
-          const { photoQueue, processMediaLocal, isRedisAvailable } = await import('../workers/mediaWorker');
+          const { reapplyWatermarkToPhoto } = await import('../workers/mediaWorker');
           
           const mediaList = await Media.find({ eventId: event._id, type: 'PHOTO' });
-          
-          // Helper to process in batches to prevent Out Of Memory errors
-          const processInBatches = async (items: any[], batchSize: number) => {
-            for (let i = 0; i < items.length; i += batchSize) {
-              const batch = items.slice(i, i + batchSize);
-              await Promise.all(batch.map(async (media) => {
-                media.processedStatus = 'PENDING';
-                await media.save();
+          console.log(`[Watermark] Starting fast-lane re-watermarking for ${mediaList.length} photos...`);
 
-                if (isRedisAvailable && photoQueue) {
-                  await photoQueue.add(`photo-job-${media._id}`, {
-                    mediaId: media._id,
-                    studioId: event.studioId,
-                  });
-                } else {
-                  try {
-                    await processMediaLocal(media._id.toString(), 'PHOTO', event.studioId.toString());
-                  } catch (e) {
-                    console.error(`Re-watermark failed for ${media._id}:`, e);
-                  }
-                }
-              }));
-            }
-          };
-
-          await processInBatches(mediaList, 5); // Process 5 photos at a time
-          console.log(`[Watermark] Successfully queued/processed ${mediaList.length} photos for re-watermarking.`);
+          const BATCH_SIZE = 8;
+          for (let i = 0; i < mediaList.length; i += BATCH_SIZE) {
+            const batch = mediaList.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map(media => 
+              reapplyWatermarkToPhoto(media._id.toString(), event.studioId.toString(), event._id.toString())
+            ));
+          }
+          console.log(`[Watermark] Successfully completed fast re-watermarking for ${mediaList.length} photos.`);
         } catch (err) {
-          console.error('[Watermark] Failed to re-queue photos:', err);
+          console.error('[Watermark] Failed to fast re-watermark photos:', err);
         }
       }, 0);
     }

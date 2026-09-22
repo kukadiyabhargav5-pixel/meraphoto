@@ -5,9 +5,11 @@ const customerSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String },
   phone: { type: String },
+  eventName: { type: String },
+  eventDate: { type: Date },
   totalEvents: { type: Number, default: 0 },
   totalSpent: { type: Number, default: 0 },
-  status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
+  status: { type: String, enum: ['Active', 'Inactive', 'Completed'], default: 'Active' },
   tags: [{ type: String }],
   lastActive: { type: Date, default: Date.now },
   createdAt: { type: Date, default: Date.now }

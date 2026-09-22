@@ -1,16 +1,22 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 
-const isLocalhost = typeof window !== 'undefined' && (
-  window.location.hostname === 'localhost' ||
-  window.location.hostname === '127.0.0.1' ||
-  window.location.hostname.startsWith('192.168.') ||
-  window.location.hostname.startsWith('10.') ||
-  window.location.hostname.startsWith('172.')
-);
+const getApiBaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host.startsWith('192.168.') ||
+      host.startsWith('10.') ||
+      host.startsWith('172.')
+    ) {
+      return `http://${host}:5000/api`;
+    }
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+};
 
-const API_BASE_URL = isLocalhost
-  ? `http://${window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname}:5000/api`
-  : (process.env.NEXT_PUBLIC_API_URL || 'https://meraphotoes.onrender.com/api');
+const API_BASE_URL = getApiBaseUrl();
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,

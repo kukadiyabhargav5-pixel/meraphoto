@@ -1,5 +1,5 @@
 import express from 'express';
-import { submitGalleryVisitor, getEventsWithVisitorCounts, getEventVisitors } from '../controllers/visitorController';
+import { submitGalleryVisitor, getEventsWithVisitorCounts, getEventVisitors, deleteEventVisitors } from '../controllers/visitorController';
 import { authenticateJWT } from '../middlewares/auth';
 
 const router = express.Router();
@@ -10,6 +10,7 @@ router.post('/event/code/:code', submitGalleryVisitor);
 // Protected routes for studio owners
 router.get('/events', authenticateJWT, getEventsWithVisitorCounts);
 router.get('/event/:eventId', authenticateJWT, getEventVisitors);
+router.delete('/event/:eventId', authenticateJWT, deleteEventVisitors);
 
 export default router;
 

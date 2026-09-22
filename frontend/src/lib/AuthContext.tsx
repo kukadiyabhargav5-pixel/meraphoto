@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { apiClient } from './api';
 import { LoadingManager } from './LoadingManager';
+import LogoutLoader from '../components/LogoutLoader';
 
 interface AuthUser {
   id: string;
@@ -30,6 +31,7 @@ interface AuthContextType {
   studio: AuthStudio | null;
   isAuthenticated: boolean;
   loading: boolean;
+  isLoggingOut: boolean;
   login: (email: string, password: string) => Promise<void>;
   googleLogin: (credential: string) => Promise<void>;
   register: (data: any) => Promise<void>;
@@ -40,9 +42,30 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [studio, setStudio] = useState<AuthStudio | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('user');
+        return saved ? JSON.parse(saved) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+  const [studio, setStudio] = useState<AuthStudio | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('studio');
+        return saved ? JSON.parse(saved) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
   const [loading, setLoading] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const isAuthenticated = !!user;
 
@@ -137,27 +160,41 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const logout = async () => {
-    try {
-      await apiClient.post('/auth/logout');
-    } catch (err) {
-      // Ignore errors during logout
-    }
-    
-    // Always clear local state
+    setIsLoggingOut(true);
+
+    // Immediately clear authentication credentials
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
     localStorage.removeItem('studio');
+
+    // Ensure session remembers the app has initialized so GlobalLoader NEVER appears after logout
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('app_initial_ready', 'true');
+    }
+
+    // Run backend logout notification with race timeout so it never hangs
+    const logoutNetworkCall = Promise.race([
+      apiClient.post('/auth/logout').catch(() => {}),
+      new Promise((r) => setTimeout(r, 1200))
+    ]);
+
+    // Display the logout page loader for exactly 1.35s
+    const displayTimer = new Promise((resolve) => setTimeout(resolve, 1350));
+
+    await Promise.all([logoutNetworkCall, displayTimer]);
+
     setUser(null);
     setStudio(null);
 
-    // Reset the LoadingManager so the preloader works on next page load
-    LoadingManager.reset();
+    // Navigate smoothly to /login without triggering any global loaders
+    window.location.replace('/login');
   };
 
   return (
-    <AuthContext.Provider value={{ user, studio, isAuthenticated, loading, login, googleLogin, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, studio, isAuthenticated, loading, isLoggingOut, login, googleLogin, register, logout, refreshUser }}>
       {children}
+      {isLoggingOut && <LogoutLoader />}
     </AuthContext.Provider>
   );
 };

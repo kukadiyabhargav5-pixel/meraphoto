@@ -80,38 +80,54 @@ class LoadingManagerClass {
    * Main entry point. Runs the loading pipeline.
    */
   public async startLoading(force = false) {
+    if (typeof window !== 'undefined') {
+      const isHome = window.location.pathname === '/' || window.location.pathname === '';
+      if (!isHome && !force) {
+        this.completeInstantly();
+        return;
+      }
+    }
+
     if (this.hasStarted && !force) return;
     this.hasStarted = true;
 
-    // Global safety timeout
+    // Safety timeout: force-complete at 3.5s ceiling so loader can never hang
     this.globalSafetyTimer = setTimeout(() => {
       if (!this.state.applicationReady) {
-        console.warn('[LoadingManager] Global safety timeout — forcing completion.');
+        console.warn('[LoadingManager] Safety timeout — forcing completion.');
         this.forceComplete();
       }
-    }, GLOBAL_SAFETY_TIMEOUT_MS);
+    }, 3500);
+
+    const startTime = Date.now();
 
     try {
       // ══════════════════════════════════════════════════
-      // PHASE 1 → APPLICATION CORE (0–15%)
+      // PHASE 1 → APPLICATION CORE (0–15%) [~100ms]
       // ══════════════════════════════════════════════════
-      this.update({ currentPhase: 1, status: 'Initializing Application...', error: null });
+      this.update({ currentPhase: 1, progress: 5, status: 'Initializing Application...', error: null });
       await this.runPhase1_AppCore();
       this.update({ progress: 15 });
 
       // ══════════════════════════════════════════════════
-      // PHASE 2 → HOME PAGE + HERO ELEMENT (15–95%)
-      // Fast parallel loading of 35 hero frames & assets
+      // PHASE 2 → HOME PAGE + HERO ELEMENT (15–90%) [~1.5s]
+      // High-speed parallel preloading of all hero frames & assets
       // ══════════════════════════════════════════════════
       this.update({ currentPhase: 2, status: 'Loading Home Page...' });
-      await this.runPhase2_HomePageWithHero();
-      this.update({ progress: 95, status: 'Home Page Ready' });
+      await this.runPhase2_HomePageWithHero(startTime);
+      this.update({ progress: 90, status: 'Home Page Ready' });
+
+      // Ensure high-speed, consistent 2.0-2.3s completion (per user requirement: 2-3 seconds total)
+      const elapsed = Date.now() - startTime;
+      if (elapsed < 2100) {
+        await new Promise((r) => setTimeout(r, 2100 - elapsed));
+      }
 
       // ══════════════════════════════════════════════════
-      // FINAL → READINESS & 100% COMPLETION (95–100%)
-      // Page loader reaches 100% immediately!
+      // FINAL → READINESS & 100% COMPLETION (90–100%)
+      // Page loader reaches 100% smoothly at ~2.1-2.3s!
       // ══════════════════════════════════════════════════
-      this.update({ currentPhase: 5, status: 'Welcome to Mara Photo' });
+      this.update({ currentPhase: 5, progress: 100, status: 'Welcome to Mara Photo' });
       await this.runFinalReadinessCheck();
 
       // ── Complete & Dismiss Page Loader Instantly ──
@@ -131,9 +147,9 @@ class LoadingManagerClass {
       // ══════════════════════════════════════════════════
       // BACKGROUND PIPELINE: High-Speed Route Prefetching
       // Home page is already displayed & interactive!
-      // 1. Login page (/login, /auth/login)
-      // 2. Register page (/signup, /auth/register)
-      // 3. All remaining pages at high speed
+      // Step 1: Login & Register pages
+      // Step 2: Dashboard pages
+      // Step 3: All Remaining pages
       // ══════════════════════════════════════════════════
       this.runBackgroundPrefetchPipeline();
     } catch (err: any) {
@@ -210,7 +226,7 @@ class LoadingManagerClass {
       })
     );
 
-    // Font readiness
+    // Font readiness (fast timeout)
     tasks.push(
       withTimeout(
         new Promise<void>((resolve) => {
@@ -220,29 +236,21 @@ class LoadingManagerClass {
             resolve();
           }
         }),
-        2000
+        350
       )
     );
 
-    // Backend health ping
-    tasks.push(
-      withTimeout(pingBackendAndDatabase().catch(() => false), TASK_TIMEOUT_MS)
-    );
+    // Non-blocking backend health check in background
+    pingBackendAndDatabase().catch(() => false);
 
     await Promise.all(tasks);
   }
 
   /**
-   * Phase 2: Home Page — logo + hero frames
-   *
-   * The CinematicHero component dispatches:
-   *   - 'hero-loading' CustomEvent with { detail: { progress: 0-100 } }
-   *   - 'hero-loaded' Event when all 240 frames are loaded
-   *
-   * We listen for these events and update progress between 10–70%.
-   * This phase does NOT complete until 'hero-loaded' fires OR timeout.
+   * Phase 2: Home Page — logo + hero frames (parallel high-speed)
+   * Drives progress smoothly from 20% to 95% within 1.5s
    */
-  private async runPhase2_HomePageWithHero(): Promise<void> {
+  private async runPhase2_HomePageWithHero(startTime: number): Promise<void> {
     // Preload critical images (logo, favicon) immediately
     const criticalImages = ['/logo.png', '/favicon.ico'];
     await Promise.all(
@@ -254,32 +262,53 @@ class LoadingManagerClass {
             img.src = src;
             img.onload = img.onerror = () => resolve();
           }),
-          3000
+          400
         )
       )
     );
 
-    // Now wait for the hero frames to load
-    // The CinematicHero component fires 'hero-loading' and 'hero-loaded' events
     if (typeof window === 'undefined') return;
 
     await new Promise<void>((resolve) => {
       let resolved = false;
-      const done = () => { if (!resolved) { resolved = true; resolve(); } };
+      let progressTimer: any = null;
+
+      const done = () => { 
+        if (!resolved) { 
+          resolved = true; 
+          if (progressTimer) clearInterval(progressTimer);
+          resolve(); 
+        } 
+      };
+
+      // Progressively advance progress smoothly from 15% to 90% over ~1.6s
+      progressTimer = setInterval(() => {
+        const timePassed = Date.now() - startTime;
+        const ratio = Math.min(1, timePassed / 1650);
+        const dynamicProgress = Math.min(90, Math.round(15 + ratio * 75));
+        
+        if (dynamicProgress > this.state.progress) {
+          this.update({ progress: dynamicProgress });
+        }
+
+        if (dynamicProgress >= 90) {
+          clearInterval(progressTimer);
+          cleanup();
+          done();
+        }
+      }, 35);
 
       // Listen for hero frame progress updates
       const onHeroProgress = (e: Event) => {
         const detail = (e as CustomEvent).detail;
         if (detail && typeof detail.progress === 'number') {
-          // Map hero 0-100% → loader 15-95%
           const heroProgress = Math.min(100, detail.progress);
-          const mappedProgress = 15 + Math.round((heroProgress / 100) * 80);
+          const mappedProgress = Math.min(90, Math.max(this.state.progress, 15 + Math.round((heroProgress / 100) * 75)));
           this.update({ progress: mappedProgress });
 
-          // Update status text based on hero progress
-          if (heroProgress < 35) {
+          if (heroProgress < 40) {
             this.update({ status: 'Loading Hero Frames...' });
-          } else if (heroProgress < 75) {
+          } else if (heroProgress < 85) {
             this.update({ status: 'Preparing Visual Experience...' });
           } else {
             this.update({ status: 'Home Page Ready...' });
@@ -289,11 +318,13 @@ class LoadingManagerClass {
 
       // Listen for hero fully loaded
       const onHeroLoaded = () => {
+        this.update({ progress: 90, status: 'Home Page Ready...' });
         cleanup();
         done();
       };
 
       const cleanup = () => {
+        if (progressTimer) clearInterval(progressTimer);
         window.removeEventListener('hero-loading', onHeroProgress);
         window.removeEventListener('hero-loaded', onHeroLoaded);
       };
@@ -303,32 +334,32 @@ class LoadingManagerClass {
       window.addEventListener('hero-loading', onHeroProgress);
       window.addEventListener('hero-loaded', onHeroLoaded);
 
-      // Safety: if hero doesn't start or doesn't finish in 6s, continue anyway
-      const heroTimeout = setTimeout(() => {
+      // Safety timeout: 1.8s max for Phase 2
+      setTimeout(() => {
         cleanup();
         done();
-      }, 6000);
+      }, 1800);
 
-      // Also check if hero-loaded already fired or on non-home page
+      // Quick check if on non-home page
       setTimeout(() => {
         if (typeof window !== 'undefined') {
           const path = window.location.pathname;
           if (path !== '/' && path !== '') {
-            clearTimeout(heroTimeout);
             cleanup();
             done();
           }
         }
-      }, 100);
+      }, 80);
     });
   }
 
   /**
    * Background High-Speed Prefetch Pipeline
-   * Runs immediately AFTER Home page is ready and preloader is dismissed.
-   * Priority 1: Login page (/login, /auth/login)
-   * Priority 2: Register page (/signup, /auth/register)
-   * Priority 3: Remaining pages at high speed in parallel batches
+   * Runs immediately AFTER Home page & hero elements are ready and preloader is dismissed.
+   * Order requested by user:
+   * 1. Login and Register pages
+   * 2. Dashboard pages
+   * 3. Remaining pages
    */
   private async runBackgroundPrefetchPipeline(): Promise<void> {
     if (typeof window === 'undefined' || !this.routerPrefetchFn) return;
@@ -336,34 +367,63 @@ class LoadingManagerClass {
     // Small yield to let home page render & animate cleanly
     await new Promise((r) => setTimeout(r, 120));
 
-    // ── Priority 1: Login page ──
+    // ── Priority 1: Login & Register pages ──
     try {
       await Promise.all([
         Promise.resolve(this.routerPrefetchFn('/login')).catch(() => {}),
         Promise.resolve(this.routerPrefetchFn('/auth/login')).catch(() => {}),
-      ]);
-    } catch {}
-
-    // ── Priority 2: Register page ──
-    try {
-      await Promise.all([
         Promise.resolve(this.routerPrefetchFn('/signup')).catch(() => {}),
         Promise.resolve(this.routerPrefetchFn('/auth/register')).catch(() => {}),
       ]);
     } catch {}
 
-    // ── Priority 3: Remaining pages at high speed ──
+    // Yield slightly before next batch
+    await new Promise((r) => setTimeout(r, 60));
+
+    // ── Priority 2: Dashboard pages & Studio Data ──
+    try {
+      const dashboardRoutes = [
+        '/dashboard',
+        '/dashboard/events',
+        '/dashboard/create-event',
+        '/dashboard/customers',
+        '/dashboard/portfolios',
+        '/dashboard/plans-billing',
+        '/admin-choice',
+      ];
+      await Promise.all(
+        dashboardRoutes.map((route) =>
+          withTimeout(Promise.resolve(this.routerPrefetchFn!(route)).catch(() => {}), 1500)
+        )
+      );
+
+      // Prefetch authenticated studio data if token exists
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        const res = await withTimeout(apiClient.get('/auth/me'), TASK_TIMEOUT_MS);
+        if (res && (res as any).data?.user) {
+          const data = (res as any).data;
+          if (data.studio) {
+            setCachedData('/studio/me', undefined, { studio: data.studio }, 300000);
+          }
+        }
+        await Promise.allSettled([
+          withTimeout(apiClient.get('/studio/me').catch(() => null), TASK_TIMEOUT_MS),
+          withTimeout(apiClient.get('/studio/credits').catch(() => null), TASK_TIMEOUT_MS),
+          withTimeout(apiClient.get('/dashboard/stats').catch(() => null), TASK_TIMEOUT_MS),
+        ]);
+      }
+    } catch {}
+
+    // Yield slightly before remaining routes
+    await new Promise((r) => setTimeout(r, 60));
+
+    // ── Priority 3: All remaining pages at high speed in parallel batches ──
     const remainingRoutes = [
       '/pricing',
       '/about',
       '/contact',
       '/blog',
-      '/dashboard',
-      '/dashboard/events',
-      '/dashboard/create-event',
-      '/dashboard/customers',
-      '/dashboard/portfolios',
-      '/dashboard/plans-billing',
       '/features/manage-event',
       '/features/event-qr-code-gallery',
       '/features/event-face-recognition',
@@ -386,25 +446,6 @@ class LoadingManagerClass {
         )
       );
       await new Promise((r) => setTimeout(r, 20));
-    }
-
-    // Prefetch authenticated studio data if token exists
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      try {
-        const res = await withTimeout(apiClient.get('/auth/me'), TASK_TIMEOUT_MS);
-        if (res && (res as any).data?.user) {
-          const data = (res as any).data;
-          if (data.studio) {
-            setCachedData('/studio/me', undefined, { studio: data.studio }, 300000);
-          }
-        }
-        await Promise.allSettled([
-          withTimeout(apiClient.get('/studio/me').catch(() => null), TASK_TIMEOUT_MS),
-          withTimeout(apiClient.get('/studio/credits').catch(() => null), TASK_TIMEOUT_MS),
-          withTimeout(apiClient.get('/dashboard/stats').catch(() => null), TASK_TIMEOUT_MS),
-        ]);
-      } catch {}
     }
   }
 

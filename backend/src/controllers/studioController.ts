@@ -163,7 +163,25 @@ export const updateMyStudio = async (req: AuthRequest, res: Response) => {
     }
 
     if (name) studio.name = name;
-    if (logoUrl !== undefined) studio.logoUrl = logoUrl;
+    if (logoUrl !== undefined) {
+      if (logoUrl && typeof logoUrl === 'string' && logoUrl.startsWith('data:image/')) {
+        try {
+          const parts = logoUrl.split(',');
+          const base64Data = parts[1];
+          const buffer = Buffer.from(base64Data, 'base64');
+          const { uploadFile } = await import('../services/storageService');
+          const { url } = await uploadFile(buffer, 'studios/logos');
+          studio.logoUrl = url;
+          if (studio.watermark) studio.watermark.logoUrl = url;
+        } catch (uploadErr) {
+          console.error('Failed to convert base64 logo to cloud URL, storing directly:', uploadErr);
+          studio.logoUrl = logoUrl;
+        }
+      } else {
+        studio.logoUrl = logoUrl;
+        if (studio.watermark && logoUrl) studio.watermark.logoUrl = logoUrl;
+      }
+    }
     if (instagramUrl !== undefined) studio.instagramUrl = instagramUrl;
     if (facebookUrl !== undefined) studio.facebookUrl = facebookUrl;
 
@@ -204,6 +222,51 @@ export const updateMyStudio = async (req: AuthRequest, res: Response) => {
     return res.json({ message: 'Studio updated successfully', studio });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * Direct file upload for Studio Logo
+ */
+export const uploadStudioLogo = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const file = req.file || (req.files && Array.isArray(req.files) ? req.files[0] : null);
+    if (!file) {
+      return res.status(400).json({ error: 'No logo image file uploaded' });
+    }
+
+    const { uploadFile } = await import('../services/storageService');
+    const { url } = await uploadFile(file.buffer, 'studios/logos');
+
+    let studio = await Studio.findOne({ ownerId: req.user._id });
+    if (!studio) {
+      studio = await Studio.create({
+        name: (req.user.name || 'Mara') + ' Studio',
+        ownerId: req.user._id,
+        logoUrl: url,
+        subscriptionPlan: 'BASIC',
+        subscriptionStatus: 'ACTIVE',
+      });
+    } else {
+      studio.logoUrl = url;
+      if (!studio.watermark) {
+        studio.watermark = { type: 'NONE', opacity: 0.5, size: 50, position: 'BOTTOM_RIGHT' };
+      }
+      studio.watermark.logoUrl = url;
+      await studio.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Studio logo uploaded and saved successfully',
+      logoUrl: url,
+      studio,
+    });
+  } catch (err: any) {
+    console.error('uploadStudioLogo error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to upload studio logo' });
   }
 };
 

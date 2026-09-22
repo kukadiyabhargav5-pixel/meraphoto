@@ -13,10 +13,10 @@ body {
   min-width: 0;
 }
 
-/* All images responsive by default */
-img,
-video,
-svg {
+/* All images responsive by default (do not override explicit heights) */
+img:not([class*="h-"]):not([style*="height"]),
+video:not([class*="h-"]):not([style*="height"]),
+svg:not([class*="h-"]):not([style*="height"]) {
   max-width: 100%;
   height: auto;
 }
@@ -171,7 +171,7 @@ main,
 
 /* ─── RESPONSIVE GRID HELPERS ─── */
 @media (max-width: 480px) {
-  .grid-cols-2 {
+  .mobile-stack-grid {
     grid-template-columns: 1fr !important;
   }
 }
@@ -185,11 +185,85 @@ main,
 /* ─── DROPDOWN CONTAINMENT ─── */
 @media (max-width: 767px) {
   [class*="absolute"][class*="top-full"] {
-    left: 0 !important;
-    right: 0 !important;
-    transform: none !important;
-    max-width: 100vw !important;
+    max-width: calc(100vw - 32px) !important;
   }
+}
+
+/* ─── TOUCH & TAP OPTIMIZATIONS ─── */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, a {
+  touch-action: manipulation;
+}
+
+/* ─── LUXURY BIOMETRIC SCANNER ANIMATIONS ─── */
+@keyframes shutterFlash {
+  0% { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+
+@keyframes scanLaser {
+  0% { transform: translateY(-80px); opacity: 0; }
+  25% { opacity: 1; }
+  75% { opacity: 1; }
+  100% { transform: translateY(80px); opacity: 0; }
+}
+
+@keyframes laserSweep {
+  0% { top: 0%; opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { top: 92%; opacity: 0; }
+}
+
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes spinReverseSlow {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes pulseSoft {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.85; }
+}
+
+@keyframes bounceSubtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.animate-shutter-flash {
+  animation: shutterFlash 0.35s ease-out forwards;
+}
+
+.animate-scan-laser {
+  animation: scanLaser 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-laser-sweep {
+  animation: laserSweep 2s ease-in-out infinite alternate;
+}
+
+.animate-spin-slow {
+  animation: spinSlow 14s linear infinite;
+}
+
+.animate-spin-reverse-slow {
+  animation: spinReverseSlow 10s linear infinite;
+}
+
+.animate-pulse-soft {
+  animation: pulseSoft 2.5s ease-in-out infinite;
+}
+
+.animate-bounce-subtle {
+  animation: bounceSubtle 3s ease-in-out infinite;
 }
 
 /* ─── PRINT RESPONSIVE ─── */
@@ -197,15 +271,17 @@ main,
   .no-print {
     display: none !important;
   }
-  
   body {
     overflow: visible !important;
   }
 }
 
-/* ─── SAFE AREA SUPPORT (Notched phones) ─── */
-@supports (padding: env(safe-area-inset-bottom)) {
-  .safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
+/* ─── SAFE AREA SUPPORT (Notched iPhones / Modern Android) ─── */
+.safe-bottom {
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
 }
+
+.safe-top {
+  padding-top: max(16px, env(safe-area-inset-top));
+}
+

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, use, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy, ChevronDown, LayoutGrid, Sparkles, Crown, ArrowRight, ShieldCheck, Flame, RefreshCw, ZoomIn, Play, X } from 'lucide-react';
+import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy, ChevronDown, LayoutGrid, Sparkles, Crown, ArrowRight, ShieldCheck, Flame, RefreshCw, ZoomIn, Play, X, Clock } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import toast from 'react-hot-toast';
 import CustomDatePicker from '../../../../components/CustomDatePicker';
@@ -158,34 +158,45 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
           const authParams = signatures[idx] || signatures[0];
 
           let fileToUpload: File | Blob = file;
-          const isVideo = file.type.startsWith('video/');
+          const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|avi|mkv|webm|m4v|3gp)$/i.test(file.name);
+          const isPhoto = !isVideo && (file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic|heif|bmp|tiff)$/i.test(file.name));
 
-          // Strict Maximum 2MB compression for photos with fast skip if already <= 2MB
-          if (!isVideo && file.type.startsWith('image/')) {
+          // ── Strict Maximum 2MB compression for photos ──
+          if (isPhoto) {
             const TWO_MB = 2 * 1024 * 1024;
             if (file.size > TWO_MB) {
               try {
-                const options = {
-                  maxSizeMB: 1.9, // Target 1.9MB to strictly guarantee <= 2MB
+                // Pass 1: Target 1.9MB (max 2560px, quality 0.85)
+                let compressedBlob = await imageCompression(file, {
+                  maxSizeMB: 1.9,
                   maxWidthOrHeight: 2560,
                   useWebWorker: true,
                   fileType: 'image/jpeg',
                   initialQuality: 0.85
-                };
-                let compressedBlob = await imageCompression(file, options);
-                // Extra safety check: if still above 2MB, run a fast second pass
+                });
+                // Pass 2: If still > 2MB, target 1.75MB (max 2048px, quality 0.75)
                 if (compressedBlob.size > TWO_MB) {
                   compressedBlob = await imageCompression(new File([compressedBlob], file.name, { type: 'image/jpeg' }), {
-                    maxSizeMB: 1.8,
+                    maxSizeMB: 1.75,
                     maxWidthOrHeight: 2048,
                     useWebWorker: true,
                     fileType: 'image/jpeg',
                     initialQuality: 0.75
                   });
                 }
+                // Pass 3: Strict guarantee <= 1.6MB if still over
+                if (compressedBlob.size > TWO_MB) {
+                  compressedBlob = await imageCompression(new File([compressedBlob], file.name, { type: 'image/jpeg' }), {
+                    maxSizeMB: 1.6,
+                    maxWidthOrHeight: 1920,
+                    useWebWorker: true,
+                    fileType: 'image/jpeg',
+                    initialQuality: 0.65
+                  });
+                }
                 fileToUpload = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' });
               } catch (compErr) {
-                console.warn('Compression fallback:', compErr);
+                console.warn('Photo compression fallback:', compErr);
               }
             }
           }
@@ -207,7 +218,22 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
             });
 
             if (!response.ok) {
-              throw new Error(`ImageKit upload failed with status ${response.status}`);
+              // Resilient fallback to backend endpoint if direct ImageKit upload fails
+              const backendForm = new FormData();
+              backendForm.append('file', fileToUpload, file.name);
+              if (file.webkitRelativePath) {
+                backendForm.append('folderPaths', file.webkitRelativePath);
+              }
+              const backendRes = await apiClient.post(`/media/event/${event._id}/upload`, backendForm, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+              });
+              if (backendRes.data && backendRes.data.media) {
+                mediaList.push(backendRes.data.media[0]);
+                successful++;
+                continue;
+              } else {
+                throw new Error(`Upload failed with status ${response.status}`);
+              }
             }
             const data = await response.json();
             mediaList.push({
@@ -239,7 +265,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
       if (failed > 0) {
         toast.error(`Uploaded ${successful}, failed ${failed}`);
       } else {
-        toast.success(`Successfully uploaded ${files.length} file${files.length > 1 ? 's' : ''}! Click "Save Event Details" to save & deduct credits.`, { duration: 6000 });
+        toast.success(`Successfully uploaded ${files.length} file${files.length > 1 ? 's' : ''}! Click "Save Event Details" to save & deduct credits.`, { duration: 5000 });
       }
       await fetchEventDetails();
       await fetchCredits();
@@ -282,11 +308,23 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
   const getPreviewPosition = (pos: string) => {
     switch (pos) {
-      case 'TOP_LEFT': return { top: '4%', left: '4%' };
-      case 'TOP_RIGHT': return { top: '4%', right: '4%' };
-      case 'BOTTOM_LEFT': return { bottom: '4%', left: '4%' };
-      case 'CENTER': return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
-      case 'BOTTOM_RIGHT': default: return { bottom: '4%', right: '4%' };
+      case 'TOP_LEFT':
+        return { top: '5%', left: '5%', right: 'auto', bottom: 'auto', transform: 'none' };
+      case 'TOP_RIGHT':
+        return { top: '5%', right: '5%', left: 'auto', bottom: 'auto', transform: 'none' };
+      case 'TOP':
+      case 'TOP_CENTER':
+        return { top: '5%', left: '50%', right: 'auto', bottom: 'auto', transform: 'translateX(-50%)' };
+      case 'BOTTOM_LEFT':
+        return { bottom: '5%', left: '5%', right: 'auto', top: 'auto', transform: 'none' };
+      case 'CENTER':
+        return { top: '50%', left: '50%', right: 'auto', bottom: 'auto', transform: 'translate(-50%, -50%)' };
+      case 'BOTTOM':
+      case 'BOTTOM_CENTER':
+        return { bottom: '5%', left: '50%', right: 'auto', top: 'auto', transform: 'translateX(-50%)' };
+      case 'BOTTOM_RIGHT':
+      default:
+        return { bottom: '5%', right: '5%', left: 'auto', top: 'auto', transform: 'none' };
     }
   };
 
@@ -435,7 +473,26 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
               <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
               <span>Back to Events</span>
             </Link>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 ml-2 border-l-2 border-slate-200 pl-4 tracking-tight">{event.name}</h1>
+            <div className="flex flex-wrap items-center gap-3 ml-2 border-l-2 border-slate-200 pl-4">
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{event.name}</h1>
+              {(() => {
+                const baseDateStr = event.date || event.createdAt;
+                if (!baseDateStr) return null;
+                const baseDate = new Date(baseDateStr);
+                const now = new Date();
+                const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+                const baseMidnight = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()).getTime();
+                const diffDays = Math.floor((todayMidnight - baseMidnight) / (1000 * 60 * 60 * 24));
+                const days = diffDays <= 0 ? 30 : Math.max(0, 30 - diffDays);
+                const label = days === 0 ? 'Expires today' : `${days} ${days === 1 ? 'day' : 'days'} left`;
+                return (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200/80 shadow-xs">
+                    <Clock className={`w-3.5 h-3.5 ${days <= 5 ? 'text-rose-500 animate-pulse' : 'text-[#c5a880]'}`} />
+                    <span>{label}</span>
+                  </span>
+                );
+              })()}
+            </div>
           </div>
           
           <div className="flex items-center gap-2 self-start sm:self-auto">
@@ -761,6 +818,35 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
               </div>
             )}
 
+            {/* Real-time Upload Progress Banner */}
+            {uploadingMedia && (
+              <div className="mb-6 p-5 rounded-2xl bg-white border-2 border-[#c5a880] shadow-xl animate-in fade-in zoom-in-95 duration-300">
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <Loader2 className="w-5 h-5 text-[#c5a880] animate-spin" />
+                    <span className="text-sm font-black text-slate-900">
+                      Uploading Media...
+                    </span>
+                  </div>
+                  <span className="text-xs font-mono font-bold bg-[#c5a880]/10 text-[#c5a880] border border-[#c5a880]/25 px-2.5 py-1 rounded-lg">
+                    {uploadProgress.total > 0 ? Math.round((uploadProgress.current / uploadProgress.total) * 100) : 0}%
+                  </span>
+                </div>
+                {/* Progress bar */}
+                <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mb-2.5 border border-slate-200">
+                  <div 
+                    className="h-full bg-gradient-to-r from-[#c5a880] to-[#b09672] transition-all duration-300 rounded-full relative"
+                    style={{ width: `${uploadProgress.total > 0 ? Math.round((uploadProgress.current / uploadProgress.total) * 100) : 0}%` }}
+                  >
+                    <div className="absolute inset-0 bg-white/30 animate-pulse" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-xs font-bold text-slate-500">
+                  <span>File {uploadProgress.current} of {uploadProgress.total}</span>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative">
               <input type="file" {...{ webkitdirectory: "true", directory: "true" }} multiple ref={folderInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'FOLDER')} />
               <input type="file" accept="image/*" multiple ref={photoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'PHOTO')} />
@@ -781,7 +867,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 }`}
               >
                 <FolderUp className={`h-8 w-8 mb-3 transition-colors ${isAllCreditsExhausted ? 'text-slate-300' : 'text-slate-400 group-hover:text-[#c5a880]'}`} />
-                <span className={`font-bold text-sm ${isAllCreditsExhausted ? 'text-slate-400' : 'text-slate-600'}`}>Entire Folder</span>
+                <span className={`font-bold text-sm ${isAllCreditsExhausted ? 'text-slate-400' : 'text-slate-700'}`}>Entire Folder</span>
                 {isAllCreditsExhausted && <span className="text-[10px] font-bold text-red-400 mt-1 uppercase">Credits Exhausted</span>}
               </div>
               <div 
@@ -799,7 +885,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 }`}
               >
                 <ImageIcon className={`h-8 w-8 mb-3 transition-colors ${isPhotoLimitReached ? 'text-slate-300' : 'text-slate-400 group-hover:text-[#c5a880]'}`} />
-                <span className={`font-bold text-sm ${isPhotoLimitReached ? 'text-slate-400' : 'text-slate-600'}`}>Photos</span>
+                <span className={`font-bold text-sm ${isPhotoLimitReached ? 'text-slate-400' : 'text-slate-700'}`}>Photos</span>
                 {isPhotoLimitReached && <span className="text-[10px] font-bold text-red-400 mt-1 uppercase">Credits Exhausted</span>}
               </div>
               <div 
@@ -817,7 +903,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 }`}
               >
                 <Video className={`h-8 w-8 mb-3 transition-colors ${isVideoLimitReached ? 'text-slate-300' : 'text-slate-400 group-hover:text-[#c5a880]'}`} />
-                <span className={`font-bold text-sm ${isVideoLimitReached ? 'text-slate-400' : 'text-slate-600'}`}>Videos</span>
+                <span className={`font-bold text-sm ${isVideoLimitReached ? 'text-slate-400' : 'text-slate-700'}`}>Videos</span>
                 {isVideoLimitReached && <span className="text-[10px] font-bold text-red-400 mt-1 uppercase">Credits Exhausted</span>}
               </div>
             </div>
@@ -1352,121 +1438,150 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                   />
                 </div>
 
-                {formData.customWatermark && (
-                  <div className="mt-6 space-y-6">
-                    <div>
-                      <label className="edit-label">Watermark Type</label>
-                      <select 
-                        className="edit-input font-bold tracking-wide"
-                        value={formData.watermarkType}
-                        onChange={e => setFormData({...formData, watermarkType: e.target.value as any})}
-                      >
-                        <option value="LOGO">LOGO WATERMARK</option>
-                        <option value="TEXT">TEXT WATERMARK</option>
-                      </select>
-                    </div>
+                {formData.customWatermark && (() => {
+                  const previewFontSize = Math.max(13, Math.round((Number(formData.watermarkWidth || 20) / 100) * 44 + 6));
 
-                    {formData.watermarkType === 'TEXT' ? (
+                  return (
+                    <div className="mt-6 space-y-6">
                       <div>
-                        <label className="edit-label">Watermark Text</label>
-                        <input 
-                          type="text" 
-                          className="edit-input" 
-                          
-                          value={formData.watermarkText}
-                          onChange={e => setFormData({...formData, watermarkText: e.target.value})}
-                        />
+                        <label className="edit-label">Watermark Type</label>
+                        <select 
+                          className="edit-input font-bold tracking-wide"
+                          value={formData.watermarkType}
+                          onChange={e => setFormData({...formData, watermarkType: e.target.value as any})}
+                        >
+                          <option value="LOGO">LOGO WATERMARK</option>
+                          <option value="TEXT">TEXT WATERMARK</option>
+                        </select>
                       </div>
-                    ) : (
-                      <div>
-                        <label className="edit-label">Watermark Logo Image</label>
-                        <div className="flex gap-4 items-center mt-1">
-                          <div className="w-[60px] h-[60px] rounded border border-dashed border-slate-300 flex items-center justify-center shrink-0 bg-[#f8f7f4] text-slate-900">
-                             {uploadingLogo ? <Loader2 className="h-5 w-5 animate-spin text-[#c5a880]" /> : (formData.watermarkLogoUrl ? <img src={formData.watermarkLogoUrl} className="max-w-[40px] max-h-[40px] object-contain" /> : <Camera className="h-5 w-5 text-slate-400" />)}
+
+                      {formData.watermarkType === 'TEXT' ? (
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <label className="edit-label">Watermark Text</label>
+                            <span className="text-[10px] font-bold text-emerald-600">Live Instant Preview</span>
                           </div>
-                          <div className="flex-1 flex flex-col">
-                            <label className="w-full text-center border border-slate-200 text-[#b69970] font-bold text-[13px] py-2 rounded-lg bg-white cursor-pointer hover:bg-[#f8f7f4] text-slate-900 transition-colors shadow-sm">
-                               Choose File
-                               <input type="file" accept="image/*" className="hidden" onChange={handleWatermarkLogoUpload} />
-                            </label>
-                            <p className="text-[10px] text-slate-600 font-bold mt-2">PNG with transparent background recommended.</p>
+                          <input 
+                            type="text" 
+                            className="edit-input font-medium" 
+                            placeholder="Enter watermark text..."
+                            value={formData.watermarkText}
+                            onChange={e => setFormData({...formData, watermarkText: e.target.value})}
+                          />
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="edit-label">Watermark Logo Image</label>
+                          <div className="flex gap-4 items-center mt-1">
+                            <div className="w-[60px] h-[60px] rounded border border-dashed border-slate-300 flex items-center justify-center shrink-0 bg-[#f8f7f4] text-slate-900">
+                               {uploadingLogo ? <Loader2 className="h-5 w-5 animate-spin text-[#c5a880]" /> : (formData.watermarkLogoUrl ? <img src={formData.watermarkLogoUrl} className="max-w-[40px] max-h-[40px] object-contain" alt="Logo preview" /> : <Camera className="h-5 w-5 text-slate-400" />)}
+                            </div>
+                            <div className="flex-1 flex flex-col">
+                              <label className="w-full text-center border border-slate-200 text-[#b69970] font-bold text-[13px] py-2 rounded-lg bg-white cursor-pointer hover:bg-[#f8f7f4] text-slate-900 transition-colors shadow-sm">
+                                 Choose File
+                                 <input type="file" accept="image/*" className="hidden" onChange={handleWatermarkLogoUpload} />
+                              </label>
+                              <p className="text-[10px] text-slate-600 font-bold mt-2">PNG with transparent background recommended.</p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                      <div className="col-span-1">
-                        <label className="edit-label">Watermark Position</label>
+                      {/* Watermark Position Dropdown */}
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 sm:p-4">
+                        <label className="edit-label text-slate-700 font-bold mb-1.5 block">Watermark Position</label>
                         <select 
-                          className="edit-input font-bold tracking-wide mt-1"
+                          className="edit-input font-bold tracking-wide text-xs py-2 px-3 w-full bg-white border border-slate-200 rounded-lg cursor-pointer"
                           value={formData.watermarkPosition}
                           onChange={e => setFormData({...formData, watermarkPosition: e.target.value as any})}
                         >
-                          <option value="BOTTOM_RIGHT">BOTTOM RIGHT</option>
+                          <option value="BOTTOM_RIGHT">BOTTOM RIGHT (Default)</option>
                           <option value="BOTTOM_LEFT">BOTTOM LEFT</option>
+                          <option value="BOTTOM">BOTTOM CENTER</option>
                           <option value="TOP_RIGHT">TOP RIGHT</option>
                           <option value="TOP_LEFT">TOP LEFT</option>
+                          <option value="TOP">TOP CENTER</option>
                           <option value="CENTER">CENTER</option>
                         </select>
                       </div>
-                      <div className="col-span-1 flex flex-col justify-center">
-                        <label className="edit-label">Size ({formData.watermarkWidth}%)</label>
-                        <input 
-                          type="range" 
-                          min="5" max="100" 
-                          className="w-full custom-slider mt-2"
-                          value={formData.watermarkWidth}
-                          onChange={e => setFormData({...formData, watermarkWidth: Number(e.target.value)})}
-                          style={{'--val': `${formData.watermarkWidth}%`} as any}
-                        />
-                      </div>
-                      <div className="col-span-1 flex flex-col justify-center">
-                        <label className="edit-label">Opacity ({formData.watermarkOpacity}%)</label>
-                        <input 
-                          type="range" 
-                          min="10" max="100" 
-                          className="w-full custom-slider mt-2"
-                          value={formData.watermarkOpacity}
-                          onChange={e => setFormData({...formData, watermarkOpacity: Number(e.target.value)})}
-                          style={{'--val': `${formData.watermarkOpacity}%`} as any}
-                        />
-                      </div>
-                    </div>
 
-                    <div className="mt-8 border border-slate-200 rounded-xl overflow-hidden bg-white">
-                       <div className="bg-[#e8ebf0] text-[#64748b] text-[11px] font-bold px-4 py-2.5">
-                          LIVE PREVIEW
-                       </div>
-                       <div className="relative w-full aspect-[3/2] bg-slate-200 flex items-center justify-center">
-                          <img src="/wedding.jpg" className="absolute inset-0 w-full h-full object-cover" alt="Preview Background" />
-                          {formData.watermarkType === 'LOGO' && formData.watermarkLogoUrl && (
-                             <img 
-                               src={formData.watermarkLogoUrl} 
-                               className="absolute pointer-events-none object-contain"
-                               style={{
-                                 opacity: formData.watermarkOpacity / 100,
-                                 width: `${formData.watermarkWidth}%`,
-                                 ...getPreviewPosition(formData.watermarkPosition)
-                               }}
-                             />
-                          )}
-                          {formData.watermarkType === 'TEXT' && formData.watermarkText && (
-                             <div 
-                               className="absolute pointer-events-none text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] font-bold whitespace-nowrap"
-                               style={{
-                                 opacity: formData.watermarkOpacity / 100,
-                                 fontSize: `${formData.watermarkWidth * 0.3}px`, 
-                                 ...getPreviewPosition(formData.watermarkPosition)
-                               }}
-                             >
-                               {formData.watermarkText}
-                             </div>
-                          )}
-                       </div>
+                      {/* Size and Opacity Controls */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="edit-label mb-0">Size ({formData.watermarkWidth}%)</label>
+                            <span className="text-xs font-mono font-black text-[#c5a880] bg-white px-2 py-0.5 rounded border border-slate-200">
+                              {formData.watermarkWidth}%
+                            </span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="5" max="100" 
+                            className="w-full custom-slider mt-2"
+                            value={formData.watermarkWidth}
+                            onChange={e => setFormData({...formData, watermarkWidth: Number(e.target.value)})}
+                            style={{'--val': `${formData.watermarkWidth}%`} as any}
+                          />
+                        </div>
+
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="edit-label mb-0">Opacity ({formData.watermarkOpacity}%)</label>
+                            <span className="text-xs font-mono font-black text-[#c5a880] bg-white px-2 py-0.5 rounded border border-slate-200">
+                              {formData.watermarkOpacity}%
+                            </span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="10" max="100" 
+                            className="w-full custom-slider mt-2"
+                            value={formData.watermarkOpacity}
+                            onChange={e => setFormData({...formData, watermarkOpacity: Number(e.target.value)})}
+                            style={{'--val': `${formData.watermarkOpacity}%`} as any}
+                          />
+                        </div>
+                      </div>
+
+                      {/* LIVE PREVIEW BOX WITH FIXED PHOTO */}
+                      <div className="mt-8 border border-slate-200 rounded-2xl overflow-hidden bg-slate-900 shadow-sm relative w-full aspect-[3/2] flex items-center justify-center select-none">
+                         <img 
+                           src="/wedding.jpg" 
+                           className="absolute inset-0 w-full h-full object-cover" 
+                           alt="Preview Background" 
+                         />
+                         
+                         {formData.watermarkType === 'LOGO' && formData.watermarkLogoUrl && (
+                            <img 
+                              src={formData.watermarkLogoUrl} 
+                              className="absolute pointer-events-none object-contain"
+                              style={{
+                                opacity: Number(formData.watermarkOpacity || 80) / 100,
+                                width: `${formData.watermarkWidth}%`,
+                                maxHeight: '65%',
+                                ...getPreviewPosition(formData.watermarkPosition)
+                              }}
+                              alt="Live Logo Watermark"
+                            />
+                         )}
+
+                         {formData.watermarkType === 'TEXT' && formData.watermarkText && (
+                            <div 
+                              className="absolute pointer-events-none text-white font-black whitespace-nowrap tracking-wide select-none"
+                              style={{
+                                opacity: Number(formData.watermarkOpacity || 100) / 100,
+                                fontSize: `${previewFontSize}px`, 
+                                filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.9)) drop-shadow(0 1px 2px rgba(0,0,0,0.7))',
+                                textShadow: '0 2px 4px rgba(0,0,0,0.85)',
+                                ...getPreviewPosition(formData.watermarkPosition)
+                              }}
+                            >
+                              {formData.watermarkText}
+                            </div>
+                         )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
 
               <div className="flex items-center justify-between py-4">
