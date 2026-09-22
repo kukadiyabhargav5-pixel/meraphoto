@@ -187,12 +187,12 @@ export default function DedicatedFaceScanPage() {
     }
   }, []);
 
-  const startCamera = useCallback(async (forcedDeviceIndex?: number, forcedFacing?: 'user' | 'environment') => {
+  const startCamera = useCallback(async (forcedFacing?: 'user' | 'environment') => {
     try {
       if (typeof window === 'undefined' || !navigator?.mediaDevices?.getUserMedia) {
         setCameraActive(false);
         setCameraReady(false);
-        setSearchError('Live webcam preview requires HTTPS or secure context. Tap "Take Photo with Camera" below to snap your photo directly.');
+        setSearchError('Live camera requires HTTPS or secure context. Tap "Take Selfie with Phone Camera" below to take your selfie.');
         return;
       }
 
@@ -204,90 +204,38 @@ export default function DedicatedFaceScanPage() {
       setCameraReady(false);
       setSearchError('');
 
-      // Enumerate devices if not yet populated
-      let devices = cameraDevices;
-      try {
-        const allDevices = await navigator.mediaDevices.enumerateDevices();
-        const vInputs = allDevices.filter(d => d.kind === 'videoinput');
-        if (vInputs.length > 0) {
-          vInputs.sort((a, b) => {
-            const isIrA = /ir|infrared|hello|virtual/i.test(a.label);
-            const isIrB = /ir|infrared|hello|virtual/i.test(b.label);
-            if (isIrA && !isIrB) return 1;
-            if (!isIrA && isIrB) return -1;
-            return 0;
-          });
-          devices = vInputs;
-          setCameraDevices(vInputs);
-        }
-      } catch (e) {
-        console.warn('Device enumeration failed:', e);
-      }
-
-      const activeIdx = forcedDeviceIndex !== undefined ? forcedDeviceIndex : selectedDeviceIndex;
-      const targetDevice = devices[activeIdx];
       const targetFacing = forcedFacing || cameraFacing;
 
       let stream: MediaStream | null = null;
 
-      // Plan A: Use deviceId if available
-      if (targetDevice?.deviceId) {
+      // Prioritize front selfie camera
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: targetFacing,
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+      } catch (e1) {
+        console.warn('Constrained getUserMedia failed, trying basic facingMode:', e1);
         try {
           stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              deviceId: { exact: targetDevice.deviceId },
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-            },
-            audio: false,
-          });
-        } catch (e1) {
-          console.warn('DeviceId constraints failed, trying facingMode:', e1);
-        }
-      }
-
-      // Plan B: Use facingMode constraint
-      if (!stream) {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: { ideal: targetFacing },
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-            },
+            video: { facingMode: targetFacing },
             audio: false,
           });
         } catch (e2) {
-          console.warn('FacingMode constraints failed, trying basic video:', e2);
+          console.warn('FacingMode failed, trying generic video:', e2);
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
         }
-      }
-
-      // Plan C: Simple generic fallback
-      if (!stream) {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
       }
 
       streamRef.current = stream;
       setCameraActive(true);
-
-      // Re-enumerate to capture proper device labels now that permission is granted
-      try {
-        const refreshed = await navigator.mediaDevices.enumerateDevices();
-        const vInputs = refreshed.filter(d => d.kind === 'videoinput');
-        if (vInputs.length > 0) {
-          vInputs.sort((a, b) => {
-            const isIrA = /ir|infrared|hello|virtual/i.test(a.label);
-            const isIrB = /ir|infrared|hello|virtual/i.test(b.label);
-            if (isIrA && !isIrB) return 1;
-            if (!isIrA && isIrB) return -1;
-            return 0;
-          });
-          setCameraDevices(vInputs);
-        }
-      } catch {}
 
       if (videoRef.current) {
         attachStreamToVideo(videoRef.current, stream);
@@ -299,12 +247,11 @@ export default function DedicatedFaceScanPage() {
       const isDenied = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
       setSearchError(
         isDenied
-          ? 'Camera permission denied. Tap "Take Photo with Camera" to open your device camera directly, or allow permission in browser settings.'
-          : 'Could not connect to live webcam. Tap "Take Photo with Camera" to capture directly.'
+          ? 'Camera permission denied. Tap "Take Selfie with Phone Camera" below to snap your selfie directly.'
+          : 'Could not connect to live camera. Tap "Take Selfie with Phone Camera" below.'
       );
-      // NOTE: We deliberately DO NOT force switch to upload tab so the user can easily use the camera!
     }
-  }, [cameraDevices, selectedDeviceIndex, cameraFacing, attachStreamToVideo]);
+  }, [cameraFacing, attachStreamToVideo]);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -316,15 +263,9 @@ export default function DedicatedFaceScanPage() {
   }, []);
 
   const toggleCamera = () => {
-    if (cameraDevices.length > 1) {
-      const nextIdx = (selectedDeviceIndex + 1) % cameraDevices.length;
-      setSelectedDeviceIndex(nextIdx);
-      startCamera(nextIdx);
-    } else {
-      const nextFacing = cameraFacing === 'user' ? 'environment' : 'user';
-      setCameraFacing(nextFacing);
-      startCamera(undefined, nextFacing);
-    }
+    const nextFacing = cameraFacing === 'user' ? 'environment' : 'user';
+    setCameraFacing(nextFacing);
+    startCamera(nextFacing);
   };
 
   useEffect(() => {
@@ -336,7 +277,7 @@ export default function DedicatedFaceScanPage() {
     return () => {
       stopCamera();
     };
-  }, [activeTab, hasSearched, startCamera, stopCamera]);
+  }, [activeTab, hasSearched]);
 
   // Clean up selfie preview URL
   useEffect(() => {
@@ -466,7 +407,7 @@ export default function DedicatedFaceScanPage() {
         samples++;
       }
       const avgBrightness = samples > 0 ? brightnessSum / samples : 0;
-      if (avgBrightness < 12) {
+      if (avgBrightness < 3) {
         setIsCapturing(false);
         setSearchError('The camera preview is pitch black. Please open your webcam privacy shutter, check lighting, or click "Switch Camera".');
         return;
@@ -837,7 +778,7 @@ export default function DedicatedFaceScanPage() {
                           videoRef.current.play().then(() => setCameraReady(true)).catch(() => {});
                         }
                       }}
-                      className="relative w-full aspect-[4/5] sm:aspect-[4/3] max-h-[50vh] sm:max-h-[390px] rounded-2xl sm:rounded-3xl overflow-hidden bg-slate-950 border-2 border-[#c5a880]/40 shadow-xl flex items-center justify-center group cursor-pointer"
+                      className="relative w-full aspect-[4/5] sm:aspect-[4/3] max-h-[52vh] sm:max-h-[420px] rounded-2xl sm:rounded-3xl overflow-hidden bg-slate-950 border-2 border-[#c5a880]/40 shadow-xl flex items-center justify-center group"
                     >
                       <video
                         ref={(el) => {
@@ -866,43 +807,14 @@ export default function DedicatedFaceScanPage() {
                         className={`absolute inset-0 w-full h-full object-cover ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
                       />
 
-                      {/* Camera Initializing / Tap to Start state */}
+                      {/* Connecting / Tap to Start state */}
                       {!cameraActive && (
-                        <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center gap-3 z-20 p-5 text-center">
-                          <div className="w-14 h-14 rounded-2xl bg-[#c5a880]/20 border border-[#c5a880]/40 flex items-center justify-center shadow-lg shadow-[#c5a880]/10">
-                            <Camera className="w-7 h-7 text-[#c5a880]" />
+                        <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center gap-3 z-10 p-6 text-center">
+                          <div className="w-12 h-12 rounded-full bg-[#c5a880]/20 border border-[#c5a880]/40 flex items-center justify-center animate-spin">
+                            <Loader className="w-6 h-6 text-[#c5a880]" />
                           </div>
-                          <div className="max-w-xs">
-                            <span className="text-sm font-bold text-white tracking-wide block mb-1">Face Scan Camera</span>
-                            <span className="text-[11px] text-slate-300 block">Take a selfie with your camera to find all your event photos</span>
-                          </div>
-                          <div className="flex flex-col sm:flex-row gap-2.5 w-full max-w-xs mt-1">
-                            <button
-                              type="button"
-                              onClick={openNativeCamera}
-                              className="flex-1 bg-gradient-to-r from-[#c5a880] to-[#b09672] text-slate-950 font-black py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md hover:brightness-105 active:scale-95 transition-all cursor-pointer min-h-[40px]"
-                            >
-                              <Camera className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-                              <span>Take Photo</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => startCamera()}
-                              className="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 border border-white/20 active:scale-95 transition-all cursor-pointer min-h-[40px]"
-                            >
-                              <Video className="w-4 h-4 text-[#c5a880]" />
-                              <span>Start Webcam</span>
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {cameraActive && !cameraReady && (
-                        <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-sm flex flex-col items-center justify-center gap-2.5 z-10 p-4 text-center pointer-events-none">
-                          <div className="w-11 h-11 rounded-full bg-[#c5a880]/20 border border-[#c5a880]/40 flex items-center justify-center animate-spin">
-                            <Loader className="w-5 h-5 text-[#c5a880]" />
-                          </div>
-                          <span className="text-xs font-mono font-bold text-slate-200 tracking-wider">STARTING STREAM...</span>
+                          <span className="text-xs font-mono font-bold text-slate-200 tracking-wider">CONNECTING SELFIE CAMERA...</span>
+                          <span className="text-[11px] text-slate-400">Please allow camera permissions if prompted</span>
                         </div>
                       )}
 
@@ -937,26 +849,18 @@ export default function DedicatedFaceScanPage() {
                           e.stopPropagation();
                           toggleCamera();
                         }}
-                        className="absolute top-2.5 right-2.5 sm:top-3.5 sm:right-3.5 bg-white/95 backdrop-blur-md hover:bg-white text-slate-800 px-2.5 py-1.5 sm:py-2 rounded-xl border border-slate-200 transition-all hover:scale-105 active:scale-95 shadow-md flex items-center gap-1.5 text-xs font-bold cursor-pointer z-30 min-h-[38px]"
-                        title="Switch Camera Device"
+                        className="absolute top-2.5 right-2.5 sm:top-3.5 sm:right-3.5 bg-white/95 backdrop-blur-md hover:bg-white text-slate-800 px-3 py-1.5 sm:py-2 rounded-xl border border-slate-200 transition-all hover:scale-105 active:scale-95 shadow-md flex items-center gap-1.5 text-xs font-bold cursor-pointer z-30 min-h-[38px]"
+                        title="Switch Camera (Front / Back)"
                       >
                         <SwitchCamera className="w-4 h-4 text-[#c5a880]" />
-                        <span>
-                          {cameraDevices.length > 1
-                            ? (cameraDevices[selectedDeviceIndex]?.label
-                                ? (cameraDevices[selectedDeviceIndex].label.length > 14
-                                    ? cameraDevices[selectedDeviceIndex].label.slice(0, 12) + '..'
-                                    : cameraDevices[selectedDeviceIndex].label)
-                                : `Camera ${selectedDeviceIndex + 1}`)
-                            : (cameraFacing === 'user' ? 'Front' : 'Back')}
-                        </span>
+                        <span>{cameraFacing === 'user' ? 'Front (Selfie)' : 'Back Camera'}</span>
                       </button>
                     </div>
 
                     {/* Touch-Friendly Capture Action Buttons */}
-                    <div className="flex flex-col gap-2.5">
+                    <div className="w-full flex flex-col gap-2.5">
                       {cameraActive ? (
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 w-full">
                           <button
                             type="button"
                             onClick={handleCapture}
@@ -966,40 +870,40 @@ export default function DedicatedFaceScanPage() {
                             {isCapturing ? (
                               <>
                                 <Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-slate-950" />
-                                <span>Scanning Burst Frames...</span>
+                                <span>Scanning Face & Matching...</span>
                               </>
                             ) : (
                               <>
                                 <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
-                                <span>Capture & Scan Face</span>
+                                <span>Capture Selfie & Scan Face</span>
                               </>
                             )}
                           </button>
                           <button
                             type="button"
                             onClick={openNativeCamera}
-                            title="Take photo with phone camera"
-                            className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 px-3.5 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer min-h-[48px]"
+                            title="Open phone camera app"
+                            className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 px-4 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer min-h-[48px]"
                           >
                             <Camera className="w-5 h-5 text-slate-700" />
                           </button>
                         </div>
                       ) : (
-                        <div className="flex flex-col sm:flex-row gap-2.5">
+                        <div className="flex flex-col sm:flex-row gap-2.5 w-full">
                           <button
                             type="button"
                             onClick={openNativeCamera}
                             className="flex-1 bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-105 active:scale-[0.98] text-slate-950 font-black py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition-all shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 cursor-pointer min-h-[48px]"
                           >
                             <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
-                            <span>Take Photo with Camera</span>
+                            <span>Take Selfie with Phone Camera</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => startCamera()}
                             className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-bold py-3.5 sm:py-4 px-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer min-h-[48px]"
                           >
-                            <Video className="w-4 h-4 text-[#c5a880]" />
+                            <RefreshCw className="w-4 h-4 text-[#c5a880]" />
                             <span>Retry Live Webcam</span>
                           </button>
                         </div>

@@ -209,6 +209,23 @@ export default function ClientGallery() {
     };
   }, [selfiePreview]);
 
+  // Sync webcam stream to video element whenever stream or search tab changes
+  useEffect(() => {
+    if (webcamStream && videoRef.current) {
+      const v = videoRef.current;
+      if (v.srcObject !== webcamStream) {
+        v.srcObject = webcamStream;
+      }
+      v.muted = true;
+      v.defaultMuted = true;
+      v.playsInline = true;
+      v.setAttribute('playsinline', 'true');
+      v.setAttribute('webkit-playsinline', 'true');
+      v.setAttribute('muted', 'true');
+      v.play().catch(() => {});
+    }
+  }, [webcamStream, searchTab]);
+
   // Keyboard navigation for Lightbox
   useEffect(() => {
     if (!selectedItem) return;
@@ -386,8 +403,13 @@ export default function ClientGallery() {
       return;
     }
 
-    // Capture primary frame in native aspect ratio and resolution
+    // Mirror image for front selfie camera
+    ctx.save();
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
+    ctx.restore();
+
     const primaryBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
     if (!primaryBlob) {
       setIsCapturing(false);
@@ -405,7 +427,11 @@ export default function ClientGallery() {
     for (let i = 1; i <= 2; i++) {
       await new Promise(r => setTimeout(r, 120));
       if (videoRef.current) {
+        ctx.save();
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
         ctx.drawImage(videoRef.current, 0, 0, videoWidth, videoHeight);
+        ctx.restore();
         const b = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
         if (b) {
           frames.push(new File([b], `frame_${i}.jpg`, { type: 'image/jpeg' }));
@@ -1406,7 +1432,19 @@ export default function ClientGallery() {
                       {webcamStream ? (
                         <>
                           <div className="w-full rounded-3xl border-2 border-[#c5a880]/50 overflow-hidden bg-slate-950 relative shadow-[0_0_30px_rgba(197,168,128,0.25)] group">
-                            <video ref={videoRef} autoPlay playsInline muted className="w-full h-auto max-h-[50vh] object-contain scale-x-[-1] opacity-90 transition-opacity duration-300 group-hover:opacity-100" />
+                            <video 
+                              ref={(node) => {
+                                (videoRef as any).current = node;
+                                if (node && webcamStream && node.srcObject !== webcamStream) {
+                                  node.srcObject = webcamStream;
+                                  node.play().catch(() => {});
+                                }
+                              }} 
+                              autoPlay 
+                              playsInline 
+                              muted 
+                              className="w-full h-auto max-h-[50vh] object-contain scale-x-[-1] opacity-90 transition-opacity duration-300 group-hover:opacity-100" 
+                            />
                             
                             {/* Shutter flash effect */}
                             {shutterFlash && (
@@ -1461,39 +1499,30 @@ export default function ClientGallery() {
                               <Camera className="h-8 w-8 text-[#c5a880]" />
                             </div>
                             <div>
-                              <p className="text-sm text-slate-800 font-extrabold">Ready to Take Selfie</p>
+                              <p className="text-sm text-slate-800 font-extrabold">Ready to Scan Face</p>
                               <p className="text-xs text-slate-500 font-medium mt-1 max-w-xs">
-                                Tap below to open your phone camera directly or launch the live webcam feed.
+                                Start your selfie camera or capture a quick photo with your device camera.
                               </p>
                             </div>
                             <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs mt-2">
                               <button
                                 type="button"
-                                onClick={openNativeCamera}
-                                className="flex-1 bg-gradient-to-r from-[#c5a880] to-[#b09672] text-slate-950 font-black py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md hover:brightness-105 active:scale-95 transition-all cursor-pointer"
+                                onClick={startWebcam}
+                                className="flex-1 bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] text-slate-950 font-black py-3.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md hover:brightness-105 active:scale-95 transition-all cursor-pointer"
                               >
-                                <Camera className="w-4 h-4 text-slate-950" />
-                                <span>Take Photo</span>
+                                <Video className="w-4 h-4 text-slate-950" />
+                                <span>Start Live Camera</span>
                               </button>
                               <button
                                 type="button"
-                                onClick={startWebcam}
-                                className="flex-1 bg-white hover:bg-slate-50 text-slate-700 font-bold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-200 active:scale-95 transition-all shadow-sm cursor-pointer"
+                                onClick={openNativeCamera}
+                                className="flex-1 bg-white hover:bg-slate-50 text-slate-700 font-bold py-3.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-200 active:scale-95 transition-all shadow-sm cursor-pointer"
                               >
-                                <Video className="w-4 h-4 text-[#c5a880]" />
-                                <span>Live Webcam</span>
+                                <Camera className="w-4 h-4 text-[#c5a880]" />
+                                <span>Phone Camera</span>
                               </button>
                             </div>
                           </div>
-
-                          <button
-                            type="button"
-                            onClick={openNativeCamera}
-                            className="w-full bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-110 text-slate-950 font-black py-4 rounded-2xl text-sm transition-all duration-300 shadow-[0_8px_30px_rgba(197,168,128,0.4)] flex items-center justify-center gap-2 cursor-pointer"
-                          >
-                            <Camera className="h-5 w-5 text-slate-950" />
-                            <span>Take Photo with Camera</span>
-                          </button>
                         </div>
                       )}
                     </div>
