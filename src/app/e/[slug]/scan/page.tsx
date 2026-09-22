@@ -10,7 +10,7 @@ import {
   Camera, Upload, ArrowLeft, ScanFace, Sparkles, Check, X,
   RefreshCw, Download, ShieldCheck, SwitchCamera, AlertCircle,
   Loader, ZoomIn, Share2, Layers, CheckCircle2, ChevronRight,
-  ChevronLeft, Eye, Heart, Image as ImageIcon
+  ChevronLeft, Eye, Heart, Image as ImageIcon, Video
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 
@@ -57,6 +57,7 @@ export default function DedicatedFaceScanPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nativeCameraInputRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   // States
@@ -163,8 +164,38 @@ export default function DedicatedFaceScanPage() {
     }
   }, []);
 
+  const openNativeCamera = useCallback(() => {
+    if (nativeCameraInputRef.current) {
+      nativeCameraInputRef.current.value = '';
+      nativeCameraInputRef.current.click();
+    }
+  }, []);
+
+  const handleNativeCameraCapture = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const previewUrl = URL.createObjectURL(file);
+      setSelfiePreview(previewUrl);
+      setSelfieFile(file);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+      setCameraActive(false);
+      setCameraReady(false);
+      performSearch([file]);
+    }
+  }, []);
+
   const startCamera = useCallback(async (forcedDeviceIndex?: number, forcedFacing?: 'user' | 'environment') => {
     try {
+      if (typeof window === 'undefined' || !navigator?.mediaDevices?.getUserMedia) {
+        setCameraActive(false);
+        setCameraReady(false);
+        setSearchError('Live webcam preview requires HTTPS or secure context. Tap "Take Photo with Camera" below to snap your photo directly.');
+        return;
+      }
+
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
         streamRef.current = null;
@@ -265,8 +296,13 @@ export default function DedicatedFaceScanPage() {
       console.error('Camera access error:', err);
       setCameraActive(false);
       setCameraReady(false);
-      setSearchError('Camera access denied or unavailable. Please allow camera permissions in your browser or upload a photo instead.');
-      setActiveTab('upload');
+      const isDenied = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
+      setSearchError(
+        isDenied
+          ? 'Camera permission denied. Tap "Take Photo with Camera" to open your device camera directly, or allow permission in browser settings.'
+          : 'Could not connect to live webcam. Tap "Take Photo with Camera" to capture directly.'
+      );
+      // NOTE: We deliberately DO NOT force switch to upload tab so the user can easily use the camera!
     }
   }, [cameraDevices, selectedDeviceIndex, cameraFacing, attachStreamToVideo]);
 
@@ -831,13 +867,42 @@ export default function DedicatedFaceScanPage() {
                       />
 
                       {/* Camera Initializing / Tap to Start state */}
-                      {(!cameraReady || !cameraActive) && (
-                        <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center gap-2.5 z-10 p-4 text-center">
-                          <div className="w-12 h-12 rounded-full bg-[#c5a880]/20 border border-[#c5a880]/40 flex items-center justify-center animate-spin">
-                            <Loader className="w-6 h-6 text-[#c5a880]" />
+                      {!cameraActive && (
+                        <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center gap-3 z-20 p-5 text-center">
+                          <div className="w-14 h-14 rounded-2xl bg-[#c5a880]/20 border border-[#c5a880]/40 flex items-center justify-center shadow-lg shadow-[#c5a880]/10">
+                            <Camera className="w-7 h-7 text-[#c5a880]" />
                           </div>
-                          <span className="text-xs font-mono font-bold text-slate-200 tracking-wider">CONNECTING CAMERA...</span>
-                          <span className="text-[11px] text-slate-400">Click anywhere if preview doesn't appear</span>
+                          <div className="max-w-xs">
+                            <span className="text-sm font-bold text-white tracking-wide block mb-1">Face Scan Camera</span>
+                            <span className="text-[11px] text-slate-300 block">Take a selfie with your camera to find all your event photos</span>
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-2.5 w-full max-w-xs mt-1">
+                            <button
+                              type="button"
+                              onClick={openNativeCamera}
+                              className="flex-1 bg-gradient-to-r from-[#c5a880] to-[#b09672] text-slate-950 font-black py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md hover:brightness-105 active:scale-95 transition-all cursor-pointer min-h-[40px]"
+                            >
+                              <Camera className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                              <span>Take Photo</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => startCamera()}
+                              className="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 border border-white/20 active:scale-95 transition-all cursor-pointer min-h-[40px]"
+                            >
+                              <Video className="w-4 h-4 text-[#c5a880]" />
+                              <span>Start Webcam</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {cameraActive && !cameraReady && (
+                        <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-sm flex flex-col items-center justify-center gap-2.5 z-10 p-4 text-center pointer-events-none">
+                          <div className="w-11 h-11 rounded-full bg-[#c5a880]/20 border border-[#c5a880]/40 flex items-center justify-center animate-spin">
+                            <Loader className="w-5 h-5 text-[#c5a880]" />
+                          </div>
+                          <span className="text-xs font-mono font-bold text-slate-200 tracking-wider">STARTING STREAM...</span>
                         </div>
                       )}
 
@@ -888,25 +953,58 @@ export default function DedicatedFaceScanPage() {
                       </button>
                     </div>
 
-                    {/* Touch-Friendly Capture Action Button */}
-                    <button
-                      type="button"
-                      onClick={handleCapture}
-                      disabled={isCapturing || !cameraActive}
-                      className="w-full bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-105 active:scale-[0.98] text-slate-950 font-black py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition-all shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer min-h-[48px]"
-                    >
-                      {isCapturing ? (
-                        <>
-                          <Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-slate-950" />
-                          <span>Scanning Burst Frames...</span>
-                        </>
+                    {/* Touch-Friendly Capture Action Buttons */}
+                    <div className="flex flex-col gap-2.5">
+                      {cameraActive ? (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={handleCapture}
+                            disabled={isCapturing}
+                            className="flex-1 bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-105 active:scale-[0.98] text-slate-950 font-black py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition-all shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer min-h-[48px]"
+                          >
+                            {isCapturing ? (
+                              <>
+                                <Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-slate-950" />
+                                <span>Scanning Burst Frames...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
+                                <span>Capture & Scan Face</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={openNativeCamera}
+                            title="Take photo with phone camera"
+                            className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 px-3.5 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer min-h-[48px]"
+                          >
+                            <Camera className="w-5 h-5 text-slate-700" />
+                          </button>
+                        </div>
                       ) : (
-                        <>
-                          <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
-                          <span>Capture & Scan Face</span>
-                        </>
+                        <div className="flex flex-col sm:flex-row gap-2.5">
+                          <button
+                            type="button"
+                            onClick={openNativeCamera}
+                            className="flex-1 bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-105 active:scale-[0.98] text-slate-950 font-black py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition-all shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 cursor-pointer min-h-[48px]"
+                          >
+                            <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
+                            <span>Take Photo with Camera</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => startCamera()}
+                            className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-bold py-3.5 sm:py-4 px-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer min-h-[48px]"
+                          >
+                            <Video className="w-4 h-4 text-[#c5a880]" />
+                            <span>Retry Live Webcam</span>
+                          </button>
+                        </div>
                       )}
-                    </button>
+                    </div>
                   </div>
                 )}
 
@@ -988,6 +1086,16 @@ export default function DedicatedFaceScanPage() {
                       onChange={handleFileChange}
                       className="hidden"
                       accept="image/*"
+                    />
+
+                    {/* Native Camera input fallback with direct capture */}
+                    <input
+                      type="file"
+                      ref={nativeCameraInputRef}
+                      accept="image/*"
+                      capture="user"
+                      onChange={handleNativeCameraCapture}
+                      className="hidden"
                     />
                   </div>
                 )}

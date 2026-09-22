@@ -51,6 +51,7 @@ export default function ClientGallery() {
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nativeCameraInputRef = useRef<HTMLInputElement>(null);
   const playerRef = useRef<HTMLVideoElement>(null);
 
   // States
@@ -290,11 +291,33 @@ export default function ClientGallery() {
     }
   };
 
+  const openNativeCamera = () => {
+    if (nativeCameraInputRef.current) {
+      nativeCameraInputRef.current.value = '';
+      nativeCameraInputRef.current.click();
+    }
+  };
+
+  const handleNativeCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelfieFile(file);
+      setSelfiePreview(URL.createObjectURL(file));
+      stopWebcam();
+      performMultiFrameSearch([file]);
+    }
+  };
+
   // ── Camera handling ──────────────────────
   const startWebcam = async () => {
     setSearchTab('camera');
     setSearchError('');
     try {
+      if (typeof window === 'undefined' || !navigator?.mediaDevices?.getUserMedia) {
+        setSearchError('Live webcam preview requires HTTPS or secure context. Tap "Take Photo with Camera" below to take a photo directly.');
+        return;
+      }
+
       if (webcamStream) {
         webcamStream.getTracks().forEach((track) => track.stop());
       }
@@ -318,9 +341,14 @@ export default function ClientGallery() {
         v.setAttribute('muted', 'true');
         v.play().catch(() => {});
       }
-    } catch (err) {
-      setSearchError('Could not access camera. Please allow camera permissions or upload a photo instead.');
-      setSearchTab('upload');
+    } catch (err: any) {
+      console.error('startWebcam error:', err);
+      const isDenied = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
+      setSearchError(
+        isDenied
+          ? 'Camera permission denied. Tap "Take Photo with Camera" below to use your camera directly.'
+          : 'Could not connect to live webcam. Tap "Take Photo with Camera" below.'
+      );
     }
   };
 
@@ -1373,45 +1401,101 @@ export default function ClientGallery() {
                   </div>
 
                   {/* Camera View */}
-                  {searchTab === 'camera' && webcamStream && (
+                  {searchTab === 'camera' && (
                     <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                      <div className="w-full rounded-3xl border-2 border-[#c5a880]/50 overflow-hidden bg-slate-950 relative shadow-[0_0_30px_rgba(197,168,128,0.25)] group">
-                        <video ref={videoRef} autoPlay playsInline muted className="w-full h-auto max-h-[50vh] object-contain scale-x-[-1] opacity-90 transition-opacity duration-300 group-hover:opacity-100" />
-                        
-                        {/* Shutter flash effect */}
-                        {shutterFlash && (
-                          <div className="absolute inset-0 bg-white z-50 animate-shutter-flash pointer-events-none" />
-                        )}
+                      {webcamStream ? (
+                        <>
+                          <div className="w-full rounded-3xl border-2 border-[#c5a880]/50 overflow-hidden bg-slate-950 relative shadow-[0_0_30px_rgba(197,168,128,0.25)] group">
+                            <video ref={videoRef} autoPlay playsInline muted className="w-full h-auto max-h-[50vh] object-contain scale-x-[-1] opacity-90 transition-opacity duration-300 group-hover:opacity-100" />
+                            
+                            {/* Shutter flash effect */}
+                            {shutterFlash && (
+                              <div className="absolute inset-0 bg-white z-50 animate-shutter-flash pointer-events-none" />
+                            )}
 
-                        {/* Face guide overlay */}
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="w-40 sm:w-56 h-40 sm:h-56 border-2 border-[#c5a880] rounded-full border-dashed shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-500 group-hover:scale-105" />
-                          {/* Scanning laser */}
-                          <div className="absolute w-40 sm:w-56 h-0.5 bg-gradient-to-r from-transparent via-[#c5a880] to-transparent animate-scan-laser shadow-[0_0_12px_rgba(197,168,128,0.9)]" />
-                        </div>
-                        <div className="absolute bottom-3 sm:bottom-6 left-0 right-0 text-center animate-pulse-soft">
-                          <span className="text-[9px] sm:text-[10px] tracking-widest text-white font-mono font-bold bg-black/80 backdrop-blur-md px-3 sm:px-6 py-1 sm:py-2 rounded-full border border-white/20 shadow-lg">
-                            ALIGN FACE IN CIRCLE
-                          </span>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={capturePhoto} 
-                        disabled={isCapturing}
-                        className="w-full bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-110 text-slate-950 font-black py-4 rounded-2xl text-sm transition-all duration-300 shadow-[0_8px_30px_rgba(197,168,128,0.4)] hover:shadow-[0_8px_40px_rgba(197,168,128,0.6)] hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed"
-                      >
-                        {isCapturing ? (
-                          <>
-                            <Loader className="h-5 w-5 animate-spin text-slate-950" />
-                            <span>Scanning & Analyzing Face...</span>
-                          </>
-                        ) : (
-                          <>
+                            {/* Face guide overlay */}
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <div className="w-40 sm:w-56 h-40 sm:h-56 border-2 border-[#c5a880] rounded-full border-dashed shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-500 group-hover:scale-105" />
+                              {/* Scanning laser */}
+                              <div className="absolute w-40 sm:w-56 h-0.5 bg-gradient-to-r from-transparent via-[#c5a880] to-transparent animate-scan-laser shadow-[0_0_12px_rgba(197,168,128,0.9)]" />
+                            </div>
+                            <div className="absolute bottom-3 sm:bottom-6 left-0 right-0 text-center animate-pulse-soft">
+                              <span className="text-[9px] sm:text-[10px] tracking-widest text-white font-mono font-bold bg-black/80 backdrop-blur-md px-3 sm:px-6 py-1 sm:py-2 rounded-full border border-white/20 shadow-lg">
+                                ALIGN FACE IN CIRCLE
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="w-full flex gap-2.5">
+                            <button 
+                              onClick={capturePhoto} 
+                              disabled={isCapturing}
+                              className="flex-1 bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-110 text-slate-950 font-black py-4 rounded-2xl text-sm transition-all duration-300 shadow-[0_8px_30px_rgba(197,168,128,0.4)] hover:shadow-[0_8px_40px_rgba(197,168,128,0.6)] hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
+                            >
+                              {isCapturing ? (
+                                <>
+                                  <Loader className="h-5 w-5 animate-spin text-slate-950" />
+                                  <span>Scanning & Analyzing Face...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Camera className="h-5 w-5 text-slate-950" />
+                                  <span>Capture Photo & Scan Face</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={openNativeCamera}
+                              title="Take photo with phone camera"
+                              className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 px-4 rounded-2xl flex items-center justify-center transition-all cursor-pointer"
+                            >
+                              <Camera className="w-5 h-5 text-slate-700" />
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="w-full flex flex-col items-center gap-4">
+                          <div className="rounded-3xl bg-[#faf9f6] border border-slate-200 p-8 flex flex-col items-center justify-center gap-4 text-center w-full shadow-sm">
+                            <div className="w-16 h-16 bg-[#c5a880]/15 rounded-2xl flex items-center justify-center border border-[#c5a880]/30 shadow-md">
+                              <Camera className="h-8 w-8 text-[#c5a880]" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-slate-800 font-extrabold">Ready to Take Selfie</p>
+                              <p className="text-xs text-slate-500 font-medium mt-1 max-w-xs">
+                                Tap below to open your phone camera directly or launch the live webcam feed.
+                              </p>
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs mt-2">
+                              <button
+                                type="button"
+                                onClick={openNativeCamera}
+                                className="flex-1 bg-gradient-to-r from-[#c5a880] to-[#b09672] text-slate-950 font-black py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md hover:brightness-105 active:scale-95 transition-all cursor-pointer"
+                              >
+                                <Camera className="w-4 h-4 text-slate-950" />
+                                <span>Take Photo</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={startWebcam}
+                                className="flex-1 bg-white hover:bg-slate-50 text-slate-700 font-bold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-200 active:scale-95 transition-all shadow-sm cursor-pointer"
+                              >
+                                <Video className="w-4 h-4 text-[#c5a880]" />
+                                <span>Live Webcam</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={openNativeCamera}
+                            className="w-full bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-110 text-slate-950 font-black py-4 rounded-2xl text-sm transition-all duration-300 shadow-[0_8px_30px_rgba(197,168,128,0.4)] flex items-center justify-center gap-2 cursor-pointer"
+                          >
                             <Camera className="h-5 w-5 text-slate-950" />
-                            <span>Capture Photo & Scan Face</span>
-                          </>
-                        )}
-                      </button>
+                            <span>Take Photo with Camera</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1490,6 +1574,16 @@ export default function ClientGallery() {
                         onChange={handleSelfieUploadChange} 
                         className="hidden" 
                         accept="image/*" 
+                      />
+
+                      {/* Native camera fallback input */}
+                      <input 
+                        type="file" 
+                        ref={nativeCameraInputRef} 
+                        accept="image/*" 
+                        capture="user" 
+                        onChange={handleNativeCameraCapture} 
+                        className="hidden" 
                       />
                     </div>
                   )}

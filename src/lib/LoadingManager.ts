@@ -91,41 +91,39 @@ class LoadingManagerClass {
     if (this.hasStarted && !force) return;
     this.hasStarted = true;
 
-    // Safety timeout: force-complete at 3.5s ceiling so loader can never hang
+    // Safety timeout: force-complete at 1.2s ceiling so loader can never hang
     this.globalSafetyTimer = setTimeout(() => {
       if (!this.state.applicationReady) {
         console.warn('[LoadingManager] Safety timeout — forcing completion.');
         this.forceComplete();
       }
-    }, 3500);
+    }, 1200);
 
     const startTime = Date.now();
 
     try {
       // ══════════════════════════════════════════════════
-      // PHASE 1 → APPLICATION CORE (0–15%) [~100ms]
+      // PHASE 1 → APPLICATION CORE (0–15%)
       // ══════════════════════════════════════════════════
-      this.update({ currentPhase: 1, progress: 5, status: 'Initializing Application...', error: null });
+      this.update({ currentPhase: 1, progress: 15, status: 'Initializing Application...', error: null });
       await this.runPhase1_AppCore();
-      this.update({ progress: 15 });
 
       // ══════════════════════════════════════════════════
-      // PHASE 2 → HOME PAGE + HERO ELEMENT (15–90%) [~1.5s]
-      // High-speed parallel preloading of all hero frames & assets
+      // PHASE 2 → HOME PAGE READY (15–90%)
+      // Fast parallel preloading
       // ══════════════════════════════════════════════════
       this.update({ currentPhase: 2, status: 'Loading Home Page...' });
       await this.runPhase2_HomePageWithHero(startTime);
-      this.update({ progress: 90, status: 'Home Page Ready' });
+      this.update({ progress: 95, status: 'Home Page Ready' });
 
-      // Ensure high-speed, consistent 2.0-2.3s completion (per user requirement: 2-3 seconds total)
+      // Fast, ultra-smooth transition (~250-300ms total)
       const elapsed = Date.now() - startTime;
-      if (elapsed < 2100) {
-        await new Promise((r) => setTimeout(r, 2100 - elapsed));
+      if (elapsed < 280) {
+        await new Promise((r) => setTimeout(r, 280 - elapsed));
       }
 
       // ══════════════════════════════════════════════════
-      // FINAL → READINESS & 100% COMPLETION (90–100%)
-      // Page loader reaches 100% smoothly at ~2.1-2.3s!
+      // FINAL → READINESS (100%)
       // ══════════════════════════════════════════════════
       this.update({ currentPhase: 5, progress: 100, status: 'Welcome to Mara Photo' });
       await this.runFinalReadinessCheck();
@@ -281,10 +279,10 @@ class LoadingManagerClass {
         } 
       };
 
-      // Progressively advance progress smoothly from 15% to 90% over ~1.6s
+      // Progressively advance progress smoothly from 15% to 90% over ~240ms
       progressTimer = setInterval(() => {
         const timePassed = Date.now() - startTime;
-        const ratio = Math.min(1, timePassed / 1650);
+        const ratio = Math.min(1, timePassed / 240);
         const dynamicProgress = Math.min(90, Math.round(15 + ratio * 75));
         
         if (dynamicProgress > this.state.progress) {
@@ -296,7 +294,7 @@ class LoadingManagerClass {
           cleanup();
           done();
         }
-      }, 35);
+      }, 20);
 
       // Listen for hero frame progress updates
       const onHeroProgress = (e: Event) => {
