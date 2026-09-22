@@ -14,7 +14,7 @@ export const DashboardProvider = ({ children }: { children: React.ReactNode }) =
   const [bills, setBills] = useState([]);
   const [studio, setStudio] = useState<any>(authStudio || { 
     name: 'Mara Photo', 
-    subscriptionPlan: 'Professional', 
+    subscriptionPlan: 'BASIC', 
     branding: { color: '#c5a880', watermarkEnabled: false } 
   });
   const [credits, setCredits] = useState<any>(null);
@@ -38,7 +38,7 @@ export const DashboardProvider = ({ children }: { children: React.ReactNode }) =
       setStudio((prev: any) => ({
         ...prev,
         ...authStudio,
-        subscriptionPlan: authStudio.subscriptionPlan || prev?.subscriptionPlan || 'PREMIUM'
+        subscriptionPlan: authStudio.subscriptionPlan || prev?.subscriptionPlan || 'BASIC'
       }));
     }
   }, [authStudio]);
@@ -61,22 +61,49 @@ export const DashboardProvider = ({ children }: { children: React.ReactNode }) =
     }
   };
 
-  // Instant Live Sync across tabs and pages for Plan changes
+  // Instant Live Sync across tabs and pages for Plan and Logo changes
   useEffect(() => {
     const handlePlanUpdated = () => {
       refreshCredits();
       apiClient.get('/studio/me').then(res => {
-        if (res.data?.studio) setStudio(res.data.studio);
+        if (res.data?.studio) {
+          setStudio(res.data.studio);
+          try {
+            localStorage.setItem('studio', JSON.stringify(res.data.studio));
+          } catch {}
+        }
         if (res.data?.credits) setCredits(res.data.credits);
       }).catch(console.error);
     };
 
+    const handleStudioUpdated = (e?: any) => {
+      if (e?.detail) {
+        setStudio((prev: any) => ({ ...prev, ...e.detail }));
+        try {
+          localStorage.setItem('studio', JSON.stringify(e.detail));
+        } catch {}
+      } else {
+        apiClient.get('/studio/me').then(res => {
+          if (res.data?.studio) {
+            setStudio(res.data.studio);
+            try {
+              localStorage.setItem('studio', JSON.stringify(res.data.studio));
+            } catch {}
+          }
+        }).catch(console.error);
+      }
+    };
+
     window.addEventListener('studio_plan_updated', handlePlanUpdated);
+    window.addEventListener('studio_logo_updated', handleStudioUpdated);
+    window.addEventListener('studio_updated', handleStudioUpdated);
     window.addEventListener('storage', handlePlanUpdated);
     window.addEventListener('focus', handlePlanUpdated);
 
     return () => {
       window.removeEventListener('studio_plan_updated', handlePlanUpdated);
+      window.removeEventListener('studio_logo_updated', handleStudioUpdated);
+      window.removeEventListener('studio_updated', handleStudioUpdated);
       window.removeEventListener('storage', handlePlanUpdated);
       window.removeEventListener('focus', handlePlanUpdated);
     };

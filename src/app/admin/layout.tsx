@@ -191,7 +191,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             
             <button onClick={async () => {
               await logout();
-              router.push('/auth/login');
             }} className="w-10 h-10 flex items-center justify-center rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-all duration-300 hover:shadow-lg hover:shadow-red-500/20 group/btn shrink-0" title="Logout">
               <LogOut className="w-4.5 h-4.5 group-hover/btn:-translate-x-0.5 transition-transform" />
             </button>

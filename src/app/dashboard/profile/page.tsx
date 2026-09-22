@@ -1,8 +1,9 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
-import { Camera, Upload, CheckCircle, Edit } from 'lucide-react';
+import { Camera, Upload, CheckCircle, Edit, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import toast from 'react-hot-toast';
 
 export default function ProfilePage() {
   const context = useDashboard();
@@ -21,6 +22,7 @@ export default function ProfilePage() {
   const [websiteLink, setWebsiteLink] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
   // Sync with context
@@ -47,17 +49,50 @@ export default function ProfilePage() {
     }
   }, [successMsg, setSuccessMsg]);
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Direct file upload to cloud for logo
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setLogoUrl(event.target.result as string);
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Logo file size must be under 10MB');
+      return;
+    }
+
+    try {
+      setUploadingLogo(true);
+      // Instant temporary preview
+      const localPreview = URL.createObjectURL(file);
+      setLogoUrl(localPreview);
+
+      // Upload directly to server & cloud storage
+      const formData = new FormData();
+      formData.append('logo', file);
+      formData.append('image', file);
+
+      const res = await apiClient.post('/studio/logo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (res.data?.logoUrl) {
+        const cloudLogoUrl = res.data.logoUrl;
+        setLogoUrl(cloudLogoUrl);
+        if (res.data?.studio) {
+          setStudio(res.data.studio);
+          try {
+            localStorage.setItem('studio', JSON.stringify(res.data.studio));
+          } catch {}
+          window.dispatchEvent(new CustomEvent('studio_logo_updated', { detail: res.data.studio }));
+        }
+        toast.success('Studio logo uploaded and updated everywhere! 🎉');
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      console.error('Logo upload failed:', err);
+      toast.error(err.response?.data?.error || 'Failed to upload studio logo');
+    } finally {
+      setUploadingLogo(false);
+      if (e.target) e.target.value = '';
+    }
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -75,16 +110,21 @@ export default function ProfilePage() {
         mobile
       }));
 
-      // Try calling studio API
+      // Update studio API
       const res = await apiClient.put('/studio/me', {
         name: studioName,
         logoUrl: logoUrl,
-        customDomain: websiteLink,
+        customDomain: websiteLink || undefined,
         userName: name,
         userPhone: mobile
       });
+
       if (res.data && res.data.studio) {
         setStudio(res.data.studio);
+        try {
+          localStorage.setItem('studio', JSON.stringify(res.data.studio));
+        } catch {}
+        window.dispatchEvent(new CustomEvent('studio_logo_updated', { detail: res.data.studio }));
       } else {
         setStudio((prev: any) => ({
           ...prev,
@@ -94,12 +134,16 @@ export default function ProfilePage() {
         }));
       }
 
+      toast.success('Profile and Studio configuration saved successfully!');
       setSuccessMsg('Profile and Studio settings saved successfully!');
+      setIsEditing(false);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to save configuration');
+      console.error('Save profile error:', err);
+      const msg = err.response?.data?.error || err.message || 'Failed to save configuration';
+      toast.error(msg);
+      setErrorMsg(msg);
     } finally {
       setLoading(false);
-      setIsEditing(false);
     }
   };
 
@@ -217,25 +261,34 @@ export default function ProfilePage() {
             <label className="text-[11px] text-slate-450 font-bold uppercase tracking-wider flex items-center gap-1">
               Studio Logo <span className="text-[9px] text-slate-400 font-normal">(Optional)</span>
             </label>
-            <div className={`relative border border-dashed border-slate-300 rounded-lg p-4 flex flex-col items-center justify-center transition-colors ${!isEditing ? 'bg-[#f8f7f4] text-slate-900 opacity-80 cursor-default' : 'bg-white cursor-pointer hover:border-[#c5a880]'}`}>
-              {logoUrl ? (
-                <img src={logoUrl} alt="Logo Preview" className="max-h-16 object-contain mb-3" />
+            <div className="relative border-2 border-dashed border-slate-300 hover:border-[#c5a880] rounded-2xl p-5 flex flex-col items-center justify-center transition-all bg-white cursor-pointer group shadow-sm">
+              {uploadingLogo ? (
+                <div className="flex flex-col items-center justify-center py-4 gap-2">
+                  <Loader2 className="w-7 h-7 text-[#c5a880] animate-spin" />
+                  <span className="text-xs font-bold text-[#c5a880]">Uploading logo to cloud...</span>
+                </div>
               ) : (
-                <Upload className="w-5 h-5 text-slate-400 mb-1" />
-              )}
-              {isEditing && (
                 <>
+                  {logoUrl ? (
+                    <div className="relative mb-2">
+                      <img src={logoUrl} alt="Logo Preview" className="max-h-20 object-contain rounded-lg p-1 bg-white" />
+                    </div>
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-2 group-hover:bg-[#c5a880]/10 transition-colors">
+                      <Upload className="w-6 h-6 text-slate-400 group-hover:text-[#c5a880] transition-colors" />
+                    </div>
+                  )}
                   <input 
                     type="file" 
                     accept="image/*"
-                    disabled={!isEditing}
+                    disabled={uploadingLogo}
                     onChange={handleLogoUpload}
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
                   />
-                  <span className="text-xs font-bold text-slate-400 mt-1">
-                    {logoUrl ? 'Change Logo' : 'Upload Logo'}
+                  <span className="text-xs font-bold text-slate-700 group-hover:text-[#8a6e42] transition-colors mt-1">
+                    {logoUrl ? 'Change Logo' : 'Upload Studio Logo'}
                   </span>
-                  <span className="text-[9px] text-slate-400 mt-0.5">PNG, JPG, SVG up to 2MB</span>
+                  <span className="text-[10px] text-slate-400 mt-0.5 font-medium">PNG, JPG, SVG up to 10MB</span>
                 </>
               )}
             </div>
