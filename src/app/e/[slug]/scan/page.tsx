@@ -66,6 +66,8 @@ export default function DedicatedFaceScanPage() {
   const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('user');
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
+  const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceIndex, setSelectedDeviceIndex] = useState<number>(0);
   const [shutterFlash, setShutterFlash] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -133,7 +135,35 @@ export default function DedicatedFaceScanPage() {
   }, [localUrls]);
 
   // ── Camera Management ──────────────────────────
-  const startCamera = useCallback(async (facing = cameraFacing) => {
+  const attachStreamToVideo = useCallback((v: HTMLVideoElement | null, stream: MediaStream | null) => {
+    if (!v) return;
+    if (!stream) {
+      v.srcObject = null;
+      return;
+    }
+    if (v.srcObject !== stream) {
+      v.srcObject = stream;
+    }
+    v.muted = true;
+    v.defaultMuted = true;
+    v.playsInline = true;
+    v.setAttribute('playsinline', 'true');
+    v.setAttribute('webkit-playsinline', 'true');
+    v.setAttribute('muted', 'true');
+
+    const p = v.play();
+    if (p !== undefined) {
+      p.then(() => {
+        if (v.videoWidth > 0) {
+          setCameraReady(true);
+        }
+      }).catch(err => {
+        console.warn('Play prevented by policy, tap to play:', err);
+      });
+    }
+  }, []);
+
+  const startCamera = useCallback(async (forcedDeviceIndex?: number, forcedFacing?: 'user' | 'environment') => {
     try {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
@@ -143,35 +173,102 @@ export default function DedicatedFaceScanPage() {
       setCameraReady(false);
       setSearchError('');
 
-      const constraints: MediaStreamConstraints = {
-        video: {
-          facingMode: { ideal: facing },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      };
+      // Enumerate devices if not yet populated
+      let devices = cameraDevices;
+      try {
+        const allDevices = await navigator.mediaDevices.enumerateDevices();
+        const vInputs = allDevices.filter(d => d.kind === 'videoinput');
+        if (vInputs.length > 0) {
+          vInputs.sort((a, b) => {
+            const isIrA = /ir|infrared|hello|virtual/i.test(a.label);
+            const isIrB = /ir|infrared|hello|virtual/i.test(b.label);
+            if (isIrA && !isIrB) return 1;
+            if (!isIrA && isIrB) return -1;
+            return 0;
+          });
+          devices = vInputs;
+          setCameraDevices(vInputs);
+        }
+      } catch (e) {
+        console.warn('Device enumeration failed:', e);
+      }
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      const activeIdx = forcedDeviceIndex !== undefined ? forcedDeviceIndex : selectedDeviceIndex;
+      const targetDevice = devices[activeIdx];
+      const targetFacing = forcedFacing || cameraFacing;
+
+      let stream: MediaStream | null = null;
+
+      // Plan A: Use deviceId if available
+      if (targetDevice?.deviceId) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              deviceId: { exact: targetDevice.deviceId },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+            audio: false,
+          });
+        } catch (e1) {
+          console.warn('DeviceId constraints failed, trying facingMode:', e1);
+        }
+      }
+
+      // Plan B: Use facingMode constraint
+      if (!stream) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: targetFacing },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+            audio: false,
+          });
+        } catch (e2) {
+          console.warn('FacingMode constraints failed, trying basic video:', e2);
+        }
+      }
+
+      // Plan C: Simple generic fallback
+      if (!stream) {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+
       streamRef.current = stream;
       setCameraActive(true);
 
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play()
-            .then(() => setCameraReady(true))
-            .catch(console.error);
+      // Re-enumerate to capture proper device labels now that permission is granted
+      try {
+        const refreshed = await navigator.mediaDevices.enumerateDevices();
+        const vInputs = refreshed.filter(d => d.kind === 'videoinput');
+        if (vInputs.length > 0) {
+          vInputs.sort((a, b) => {
+            const isIrA = /ir|infrared|hello|virtual/i.test(a.label);
+            const isIrB = /ir|infrared|hello|virtual/i.test(b.label);
+            if (isIrA && !isIrB) return 1;
+            if (!isIrA && isIrB) return -1;
+            return 0;
+          });
+          setCameraDevices(vInputs);
         }
-      }, 150);
+      } catch {}
+
+      if (videoRef.current) {
+        attachStreamToVideo(videoRef.current, stream);
+      }
     } catch (err: any) {
       console.error('Camera access error:', err);
       setCameraActive(false);
       setCameraReady(false);
-      setSearchError('Camera access denied or unavailable. Please enable camera permission or upload a photo instead.');
+      setSearchError('Camera access denied or unavailable. Please allow camera permissions in your browser or upload a photo instead.');
       setActiveTab('upload');
     }
-  }, [cameraFacing]);
+  }, [cameraDevices, selectedDeviceIndex, cameraFacing, attachStreamToVideo]);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -182,24 +279,28 @@ export default function DedicatedFaceScanPage() {
     setCameraReady(false);
   }, []);
 
-  const toggleCameraFacing = () => {
-    const nextFacing = cameraFacing === 'user' ? 'environment' : 'user';
-    setCameraFacing(nextFacing);
-    if (cameraActive) {
-      startCamera(nextFacing);
+  const toggleCamera = () => {
+    if (cameraDevices.length > 1) {
+      const nextIdx = (selectedDeviceIndex + 1) % cameraDevices.length;
+      setSelectedDeviceIndex(nextIdx);
+      startCamera(nextIdx);
+    } else {
+      const nextFacing = cameraFacing === 'user' ? 'environment' : 'user';
+      setCameraFacing(nextFacing);
+      startCamera(undefined, nextFacing);
     }
   };
 
   useEffect(() => {
     if (activeTab === 'camera' && !hasSearched) {
-      startCamera(cameraFacing);
+      startCamera();
     } else {
       stopCamera();
     }
     return () => {
       stopCamera();
     };
-  }, [activeTab, hasSearched, startCamera, stopCamera, cameraFacing]);
+  }, [activeTab, hasSearched, startCamera, stopCamera]);
 
   // Clean up selfie preview URL
   useEffect(() => {
@@ -286,28 +387,57 @@ export default function DedicatedFaceScanPage() {
 
   // ── Capture from Live Camera ──────────────────
   const handleCapture = async () => {
-    if (!videoRef.current || isCapturing) return;
+    const video = videoRef.current;
+    if (!video || !streamRef.current || isCapturing) return;
+
+    // Check if video actually has frames ready
+    if (video.videoWidth === 0 || video.videoHeight === 0 || video.readyState < 2) {
+      setSearchError('Camera feed is still initializing. Please wait a moment for the preview to appear.');
+      return;
+    }
+
     setIsCapturing(true);
     setSearchError('');
     setShutterFlash(true);
     setTimeout(() => setShutterFlash(false), 300);
 
-    const video = videoRef.current;
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 720;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) {
       setIsCapturing(false);
       return;
     }
 
-    // Mirror if front camera
+    // Mirror if front camera with proper save/restore
+    ctx.save();
     if (cameraFacing === 'user') {
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
     }
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+
+    // Verify the frame is not completely dark/black (e.g. privacy shutter closed or IR camera selected)
+    try {
+      const sampleData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let brightnessSum = 0;
+      const step = Math.max(1, Math.floor(sampleData.data.length / (4 * 400))); // sample ~400 pixels
+      let samples = 0;
+      for (let i = 0; i < sampleData.data.length; i += step * 4) {
+        brightnessSum += (sampleData.data[i] + sampleData.data[i + 1] + sampleData.data[i + 2]) / 3;
+        samples++;
+      }
+      const avgBrightness = samples > 0 ? brightnessSum / samples : 0;
+      if (avgBrightness < 12) {
+        setIsCapturing(false);
+        setSearchError('The camera preview is pitch black. Please open your webcam privacy shutter, check lighting, or click "Switch Camera".');
+        return;
+      }
+    } catch (e) {
+      console.warn('Brightness check skipped:', e);
+    }
 
     const primaryBlob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', 0.95));
     if (!primaryBlob) {
@@ -637,7 +767,7 @@ export default function DedicatedFaceScanPage() {
                 <div className="bg-slate-100 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl flex mb-4 sm:mb-6 border border-slate-200 gap-1">
                   <button
                     type="button"
-                    onClick={() => { setActiveTab('camera'); startCamera(cameraFacing); }}
+                    onClick={() => { setActiveTab('camera'); startCamera(); }}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 sm:py-3 rounded-lg sm:rounded-xl text-xs sm:text-sm font-black transition-all duration-300 min-h-[42px] cursor-pointer ${
                       activeTab === 'camera'
                         ? 'bg-gradient-to-r from-[#c5a880] to-[#b09672] text-white shadow-[0_4px_15px_rgba(197,168,128,0.3)]'
@@ -665,22 +795,49 @@ export default function DedicatedFaceScanPage() {
                 {activeTab === 'camera' && (
                   <div className="flex flex-col items-center gap-4 sm:gap-5">
                     {/* Viewfinder Container */}
-                    <div className="relative w-full aspect-[4/5] sm:aspect-[4/3] max-h-[50vh] sm:max-h-[390px] rounded-2xl sm:rounded-3xl overflow-hidden bg-slate-950 border-2 border-[#c5a880]/40 shadow-xl flex items-center justify-center group">
+                    <div 
+                      onClick={() => {
+                        if (videoRef.current && videoRef.current.paused) {
+                          videoRef.current.play().then(() => setCameraReady(true)).catch(() => {});
+                        }
+                      }}
+                      className="relative w-full aspect-[4/5] sm:aspect-[4/3] max-h-[50vh] sm:max-h-[390px] rounded-2xl sm:rounded-3xl overflow-hidden bg-slate-950 border-2 border-[#c5a880]/40 shadow-xl flex items-center justify-center group cursor-pointer"
+                    >
                       <video
-                        ref={videoRef}
+                        ref={(el) => {
+                          videoRef.current = el;
+                          if (el && streamRef.current && el.srcObject !== streamRef.current) {
+                            attachStreamToVideo(el, streamRef.current);
+                          }
+                        }}
                         autoPlay
                         playsInline
                         muted
-                        className={`w-full h-full object-cover ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
+                        onLoadedMetadata={(e) => {
+                          const v = e.currentTarget;
+                          v.play().catch(() => {});
+                          if (v.videoWidth > 0) setCameraReady(true);
+                        }}
+                        onCanPlay={(e) => {
+                          const v = e.currentTarget;
+                          v.play().catch(() => {});
+                          if (v.videoWidth > 0) setCameraReady(true);
+                        }}
+                        onPlaying={(e) => {
+                          const v = e.currentTarget;
+                          if (v.videoWidth > 0) setCameraReady(true);
+                        }}
+                        className={`absolute inset-0 w-full h-full object-cover ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
                       />
 
-                      {/* Camera Initializing state */}
-                      {!cameraReady && cameraActive && (
-                        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center gap-2.5 z-10">
-                          <div className="w-10 h-10 rounded-full bg-[#c5a880]/20 flex items-center justify-center animate-spin">
-                            <Loader className="w-5 h-5 text-[#c5a880]" />
+                      {/* Camera Initializing / Tap to Start state */}
+                      {(!cameraReady || !cameraActive) && (
+                        <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center gap-2.5 z-10 p-4 text-center">
+                          <div className="w-12 h-12 rounded-full bg-[#c5a880]/20 border border-[#c5a880]/40 flex items-center justify-center animate-spin">
+                            <Loader className="w-6 h-6 text-[#c5a880]" />
                           </div>
-                          <span className="text-[11px] font-mono font-bold text-slate-300 tracking-wider">INITIALIZING CAMERA...</span>
+                          <span className="text-xs font-mono font-bold text-slate-200 tracking-wider">CONNECTING CAMERA...</span>
+                          <span className="text-[11px] text-slate-400">Click anywhere if preview doesn't appear</span>
                         </div>
                       )}
 
@@ -691,7 +848,7 @@ export default function DedicatedFaceScanPage() {
 
                       {/* Biometric HUD Corner Brackets */}
                       <div className="absolute top-3 left-3 w-4 h-4 sm:w-5 sm:h-5 border-t-2 border-l-2 border-[#c5a880] rounded-tl pointer-events-none z-10 opacity-80" />
-                      <div className="absolute top-3 right-14 sm:right-16 w-4 h-4 sm:w-5 sm:h-5 border-t-2 border-r-2 border-[#c5a880] rounded-tr pointer-events-none z-10 opacity-80" />
+                      <div className="absolute top-3 right-28 sm:right-32 w-4 h-4 sm:w-5 sm:h-5 border-t-2 border-r-2 border-[#c5a880] rounded-tr pointer-events-none z-10 opacity-80" />
                       <div className="absolute bottom-3 left-3 w-4 h-4 sm:w-5 sm:h-5 border-b-2 border-l-2 border-[#c5a880] rounded-bl pointer-events-none z-10 opacity-80" />
                       <div className="absolute bottom-3 right-3 w-4 h-4 sm:w-5 sm:h-5 border-b-2 border-r-2 border-[#c5a880] rounded-br pointer-events-none z-10 opacity-80" />
 
@@ -708,15 +865,26 @@ export default function DedicatedFaceScanPage() {
                         </span>
                       </div>
 
-                      {/* Camera Flip Button */}
+                      {/* Camera Switch / Flip Button */}
                       <button
                         type="button"
-                        onClick={toggleCameraFacing}
-                        className="absolute top-2.5 right-2.5 sm:top-3.5 sm:right-3.5 bg-white/95 backdrop-blur-md hover:bg-white text-slate-800 p-2 sm:p-2.5 rounded-xl border border-slate-200 transition-all hover:scale-105 active:scale-95 shadow-md flex items-center gap-1.5 text-xs font-bold cursor-pointer z-30 min-h-[38px] min-w-[38px] justify-center"
-                        title="Switch Camera (Front/Back)"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleCamera();
+                        }}
+                        className="absolute top-2.5 right-2.5 sm:top-3.5 sm:right-3.5 bg-white/95 backdrop-blur-md hover:bg-white text-slate-800 px-2.5 py-1.5 sm:py-2 rounded-xl border border-slate-200 transition-all hover:scale-105 active:scale-95 shadow-md flex items-center gap-1.5 text-xs font-bold cursor-pointer z-30 min-h-[38px]"
+                        title="Switch Camera Device"
                       >
                         <SwitchCamera className="w-4 h-4 text-[#c5a880]" />
-                        <span className="hidden sm:inline">{cameraFacing === 'user' ? 'Front' : 'Back'}</span>
+                        <span>
+                          {cameraDevices.length > 1
+                            ? (cameraDevices[selectedDeviceIndex]?.label
+                                ? (cameraDevices[selectedDeviceIndex].label.length > 14
+                                    ? cameraDevices[selectedDeviceIndex].label.slice(0, 12) + '..'
+                                    : cameraDevices[selectedDeviceIndex].label)
+                                : `Camera ${selectedDeviceIndex + 1}`)
+                            : (cameraFacing === 'user' ? 'Front' : 'Back')}
+                        </span>
                       </button>
                     </div>
 

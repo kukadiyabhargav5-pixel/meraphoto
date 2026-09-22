@@ -267,18 +267,38 @@ export default function EventPhotosPage() {
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 } });
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+      setCameraActive(false);
+      setCameraReady(false);
+
+      let stream: MediaStream | null = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } 
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+
       streamRef.current = stream;
       setCameraActive(true);
       
-      // Foolproof fallback to ensure the stream attaches after render
-      setTimeout(() => {
-        if (videoRef.current && videoRef.current.srcObject !== stream) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().then(() => setCameraReady(true)).catch(console.error);
-        }
-      }, 200);
-      
+      const v = videoRef.current;
+      if (v) {
+        v.srcObject = stream;
+        v.muted = true;
+        v.defaultMuted = true;
+        v.playsInline = true;
+        v.setAttribute('playsinline', 'true');
+        v.setAttribute('webkit-playsinline', 'true');
+        v.setAttribute('muted', 'true');
+        v.play().then(() => {
+          if (v.videoWidth > 0) setCameraReady(true);
+        }).catch(() => {});
+      }
     } catch (err) {
       setAiError('Could not access camera. Please allow camera permission or upload a photo instead.');
       setCameraActive(false);
@@ -306,12 +326,17 @@ export default function EventPhotosPage() {
 
   const captureFromCamera = async () => {
     if (!videoRef.current || !canvasRef.current || isCapturing) return;
+    const video = videoRef.current;
+    if (video.videoWidth === 0 || video.readyState < 2) {
+      setAiError('Camera feed is still initializing. Please wait a moment.');
+      return;
+    }
+
     setIsCapturing(true);
     setAiError('');
     setShutterFlash(true);
     setTimeout(() => setShutterFlash(false), 350);
 
-    const video = videoRef.current;
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;

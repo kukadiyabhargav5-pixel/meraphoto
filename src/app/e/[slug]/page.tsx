@@ -295,15 +295,29 @@ export default function ClientGallery() {
     setSearchTab('camera');
     setSearchError('');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { width: 640, height: 480, facingMode: 'user' } 
-      });
+      if (webcamStream) {
+        webcamStream.getTracks().forEach((track) => track.stop());
+      }
+      let stream: MediaStream | null = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } 
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
       setWebcamStream(stream);
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      }, 100);
+      if (videoRef.current) {
+        const v = videoRef.current;
+        v.srcObject = stream;
+        v.muted = true;
+        v.defaultMuted = true;
+        v.playsInline = true;
+        v.setAttribute('playsinline', 'true');
+        v.setAttribute('webkit-playsinline', 'true');
+        v.setAttribute('muted', 'true');
+        v.play().catch(() => {});
+      }
     } catch (err) {
       setSearchError('Could not access camera. Please allow camera permissions or upload a photo instead.');
       setSearchTab('upload');
@@ -319,6 +333,12 @@ export default function ClientGallery() {
 
   const capturePhoto = async () => {
     if (!videoRef.current || isCapturing) return;
+    const video = videoRef.current;
+    if (video.videoWidth === 0 || video.readyState < 2) {
+      setSearchError('Camera feed is still initializing. Please wait a moment.');
+      return;
+    }
+
     setIsCapturing(true);
     setSearchError('');
     setIsMatchedSuccess(false);
@@ -327,7 +347,6 @@ export default function ClientGallery() {
     setShutterFlash(true);
     setTimeout(() => setShutterFlash(false), 300);
 
-    const video = videoRef.current;
     const canvas = document.createElement('canvas');
     const videoWidth = video.videoWidth || 1280;
     const videoHeight = video.videoHeight || 720;
