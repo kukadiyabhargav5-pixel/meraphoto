@@ -109,11 +109,23 @@ export default function CreateEventPage() {
 
   const getPreviewPosition = (pos: string) => {
     switch (pos) {
-      case 'TOP_LEFT': return { top: '4%', left: '4%' };
-      case 'TOP_RIGHT': return { top: '4%', right: '4%' };
-      case 'BOTTOM_LEFT': return { bottom: '4%', left: '4%' };
-      case 'CENTER': return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
-      case 'BOTTOM_RIGHT': default: return { bottom: '4%', right: '4%' };
+      case 'TOP_LEFT':
+        return { top: '5%', left: '5%', right: 'auto', bottom: 'auto', transform: 'none' };
+      case 'TOP_RIGHT':
+        return { top: '5%', right: '5%', left: 'auto', bottom: 'auto', transform: 'none' };
+      case 'TOP':
+      case 'TOP_CENTER':
+        return { top: '5%', left: '50%', right: 'auto', bottom: 'auto', transform: 'translateX(-50%)' };
+      case 'BOTTOM_LEFT':
+        return { bottom: '5%', left: '5%', right: 'auto', top: 'auto', transform: 'none' };
+      case 'CENTER':
+        return { top: '50%', left: '50%', right: 'auto', bottom: 'auto', transform: 'translate(-50%, -50%)' };
+      case 'BOTTOM':
+      case 'BOTTOM_CENTER':
+        return { bottom: '5%', left: '50%', right: 'auto', top: 'auto', transform: 'translateX(-50%)' };
+      case 'BOTTOM_RIGHT':
+      default:
+        return { bottom: '5%', right: '5%', left: 'auto', top: 'auto', transform: 'none' };
     }
   };
 
@@ -916,24 +928,33 @@ export default function CreateEventPage() {
                             </div>
                           )}
 
-                          {/* Watermark Position, Size, Opacity Controls */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                            <div className="col-span-1">
-                              <label className="edit-label">Watermark Position</label>
-                              <select 
-                                className="edit-input font-bold tracking-wide mt-1"
-                                value={watermarkPosition}
-                                onChange={e => setWatermarkPosition(e.target.value)}
-                              >
-                                <option value="BOTTOM_RIGHT">BOTTOM RIGHT</option>
-                                <option value="BOTTOM_LEFT">BOTTOM LEFT</option>
-                                <option value="TOP_RIGHT">TOP RIGHT</option>
-                                <option value="TOP_LEFT">TOP LEFT</option>
-                                <option value="CENTER">CENTER</option>
-                              </select>
-                            </div>
-                            <div className="col-span-1 flex flex-col justify-center">
-                              <label className="edit-label">Size ({watermarkWidth}%)</label>
+                          {/* Watermark Position Dropdown */}
+                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 sm:p-4">
+                            <label className="edit-label text-slate-700 font-bold mb-1.5 block">Watermark Position</label>
+                            <select 
+                              className="edit-input font-bold tracking-wide text-xs py-2 px-3 w-full bg-white border border-slate-200 rounded-lg cursor-pointer"
+                              value={watermarkPosition}
+                              onChange={e => setWatermarkPosition(e.target.value)}
+                            >
+                              <option value="BOTTOM_RIGHT">BOTTOM RIGHT (Default)</option>
+                              <option value="BOTTOM_LEFT">BOTTOM LEFT</option>
+                              <option value="BOTTOM">BOTTOM CENTER</option>
+                              <option value="TOP_RIGHT">TOP RIGHT</option>
+                              <option value="TOP_LEFT">TOP LEFT</option>
+                              <option value="TOP">TOP CENTER</option>
+                              <option value="CENTER">CENTER</option>
+                            </select>
+                          </div>
+
+                          {/* Size and Opacity Controls */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="edit-label mb-0">Size ({watermarkWidth}%)</label>
+                                <span className="text-xs font-mono font-black text-[#c5a880] bg-white px-2 py-0.5 rounded border border-slate-200">
+                                  {watermarkWidth}%
+                                </span>
+                              </div>
                               <input 
                                 type="range" 
                                 min="5" max="100" 
@@ -943,8 +964,14 @@ export default function CreateEventPage() {
                                 style={{'--val': `${watermarkWidth}%`} as any}
                               />
                             </div>
-                            <div className="col-span-1 flex flex-col justify-center">
-                              <label className="edit-label">Opacity ({watermarkOpacity}%)</label>
+
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="edit-label mb-0">Opacity ({watermarkOpacity}%)</label>
+                                <span className="text-xs font-mono font-black text-[#c5a880] bg-white px-2 py-0.5 rounded border border-slate-200">
+                                  {watermarkOpacity}%
+                                </span>
+                              </div>
                               <input 
                                 type="range" 
                                 min="10" max="100" 
@@ -956,41 +983,38 @@ export default function CreateEventPage() {
                             </div>
                           </div>
 
-                          {/* EXACT LIVE PREVIEW BOX FROM EVENT MANAGE */}
-                          <div className="mt-8 border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm">
-                            <div className="bg-[#e8ebf0] text-[#64748b] text-[11px] font-black px-4 py-2.5 uppercase tracking-wider flex items-center justify-between">
-                              <span>Live Preview</span>
-                              <span className="text-[10px] font-mono text-slate-500">{watermarkPosition} • {watermarkWidth}% size</span>
-                            </div>
-                            <div className="relative w-full aspect-[3/2] bg-slate-200 flex items-center justify-center overflow-hidden">
-                              <img src="/wedding.jpg" className="absolute inset-0 w-full h-full object-cover" alt="Preview Background" />
-                              
-                              {watermarkType === 'LOGO' && watermarkLogoUrl && (
-                                <img 
-                                  src={watermarkLogoUrl} 
-                                  className="absolute pointer-events-none object-contain transition-all duration-200"
-                                  style={{
-                                    opacity: watermarkOpacity / 100,
-                                    width: `${watermarkWidth}%`,
-                                    ...getPreviewPosition(watermarkPosition)
-                                  }}
-                                  alt="watermark"
-                                />
-                              )}
-                              
-                              {watermarkType === 'TEXT' && watermarkText && (
-                                <div 
-                                  className="absolute pointer-events-none text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)] font-bold whitespace-nowrap transition-all duration-200"
-                                  style={{
-                                    opacity: watermarkOpacity / 100,
-                                    fontSize: `${Math.max(12, watermarkWidth * 0.35)}px`, 
-                                    ...getPreviewPosition(watermarkPosition)
-                                  }}
-                                >
-                                  {watermarkText}
-                                </div>
-                              )}
-                            </div>
+                          {/* EXACT LIVE PREVIEW BOX WITH FIXED PHOTO */}
+                          <div className="mt-8 border border-slate-200 rounded-2xl overflow-hidden bg-slate-900 shadow-sm relative w-full aspect-[3/2] flex items-center justify-center select-none">
+                            <img src="/wedding.jpg" className="absolute inset-0 w-full h-full object-cover" alt="Preview Background" />
+                            
+                            {watermarkType === 'LOGO' && watermarkLogoUrl && (
+                              <img 
+                                src={watermarkLogoUrl} 
+                                className="absolute pointer-events-none object-contain"
+                                style={{
+                                  opacity: Number(watermarkOpacity || 80) / 100,
+                                  width: `${watermarkWidth}%`,
+                                  maxHeight: '65%',
+                                  ...getPreviewPosition(watermarkPosition)
+                                }}
+                                alt="watermark"
+                              />
+                            )}
+                            
+                            {watermarkType === 'TEXT' && watermarkText && (
+                              <div 
+                                className="absolute pointer-events-none text-white font-black whitespace-nowrap tracking-wide select-none"
+                                style={{
+                                  opacity: Number(watermarkOpacity || 100) / 100,
+                                  fontSize: `${Math.max(13, Math.round((Number(watermarkWidth || 20) / 100) * 44 + 6))}px`, 
+                                  filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.9)) drop-shadow(0 1px 2px rgba(0,0,0,0.7))',
+                                  textShadow: '0 2px 4px rgba(0,0,0,0.85)',
+                                  ...getPreviewPosition(watermarkPosition)
+                                }}
+                              >
+                                {watermarkText}
+                              </div>
+                            )}
                           </div>
 
                         </div>

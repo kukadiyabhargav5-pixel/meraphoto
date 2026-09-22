@@ -50,22 +50,45 @@ export default function StudioSettingsPage() {
     }
   }, [studio, sessionUser]);
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Logo must be under 2MB');
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Logo must be under 10MB');
       return;
     }
     setUploadingLogo(true);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setStudioLogo(event.target.result as string);
+    try {
+      const formData = new FormData();
+      formData.append('logo', file);
+      formData.append('image', file);
+
+      const res = await apiClient.post('/studio/logo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (res.data?.logoUrl) {
+        setStudioLogo(res.data.logoUrl);
+        if (res.data?.studio) {
+          setStudio(res.data.studio);
+          try {
+            localStorage.setItem('studio', JSON.stringify(res.data.studio));
+          } catch {}
+          window.dispatchEvent(new CustomEvent('studio_logo_updated', { detail: res.data.studio }));
+        }
+        toast.success('Logo uploaded to cloud successfully!');
       }
+    } catch (err: any) {
+      console.error('Logo upload error:', err);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) setStudioLogo(event.target.result as string);
+      };
+      reader.readAsDataURL(file);
+    } finally {
       setUploadingLogo(false);
-    };
-    reader.readAsDataURL(file);
+      if (e.target) e.target.value = '';
+    }
   };
 
   const handleRemoveLogo = () => {
@@ -91,6 +114,10 @@ export default function StudioSettingsPage() {
       });
       if (res.data?.studio) {
         setStudio(res.data.studio);
+        try {
+          localStorage.setItem('studio', JSON.stringify(res.data.studio));
+        } catch {}
+        window.dispatchEvent(new CustomEvent('studio_logo_updated', { detail: res.data.studio }));
       }
       setSessionUser((prev: any) => ({
         ...prev,

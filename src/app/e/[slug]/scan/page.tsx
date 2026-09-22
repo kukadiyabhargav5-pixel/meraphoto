@@ -89,6 +89,7 @@ export default function DedicatedFaceScanPage() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [selectedPhoto, setSelectedPhoto] = useState<any | null>(null);
   const [localUrls, setLocalUrls] = useState<Record<string, string>>({});
+  const [photoSize, setPhotoSize] = useState<'big' | 'huge'>('big');
 
   // ── Load Event Data ──────────────────────────
   useEffect(() => {
@@ -429,8 +430,8 @@ export default function DedicatedFaceScanPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#07070a] text-white flex flex-col items-center justify-center p-6">
-        <div className="w-16 h-16 rounded-2xl bg-[#c5a880]/15 border border-[#c5a880]/40 flex items-center justify-center shadow-[0_0_30px_rgba(197,168,128,0.3)] animate-pulse mb-4">
+      <div className="min-h-screen bg-white text-slate-800 flex flex-col items-center justify-center p-6">
+        <div className="w-16 h-16 rounded-2xl bg-[#c5a880]/10 border border-[#c5a880]/25 flex items-center justify-center shadow-sm animate-gentle-pulse mb-4">
           <ScanFace className="w-8 h-8 text-[#c5a880]" />
         </div>
         <Loader className="w-6 h-6 text-[#c5a880] animate-spin mb-2" />
@@ -440,29 +441,27 @@ export default function DedicatedFaceScanPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#060609] text-white flex flex-col selection:bg-[#c5a880] selection:text-black relative overflow-x-hidden font-sans">
-      {/* Dynamic Background Ambient Gradients */}
+    <div className="min-h-screen min-h-[100dvh] bg-white text-slate-800 flex flex-col selection:bg-[#c5a880] selection:text-white relative overflow-x-hidden font-sans pb-10 safe-bottom">
+      {/* Subtle Background Accent */}
       <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[450px] bg-gradient-to-b from-[#c5a880]/20 via-[#c5a880]/5 to-transparent blur-3xl opacity-75" />
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-emerald-500/10 blur-3xl rounded-full" />
-        <div className="absolute top-1/3 left-0 w-80 h-80 bg-[#FF6B00]/10 blur-3xl rounded-full" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[350px] bg-gradient-to-b from-[#c5a880]/8 via-[#c5a880]/3 to-transparent blur-3xl opacity-75" />
       </div>
 
       {/* ── Top Sticky Luxury Navigation Bar ── */}
-      <header className="sticky top-0 z-40 bg-[#060609]/90 backdrop-blur-2xl border-b border-white/10 px-4 sm:px-8 py-3.5 sm:py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-2xl border-b border-slate-200 px-3 sm:px-6 py-2.5 sm:py-3.5 transition-all">
+        <div className="w-full max-w-[1700px] mx-auto flex items-center justify-between gap-2 sm:gap-4">
           <Link
             href={`/e/${slug}`}
-            className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-300 hover:text-white transition-colors group bg-white/5 hover:bg-white/10 border border-white/10 px-3.5 sm:px-4 py-2 rounded-xl"
+            className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-700 hover:text-slate-950 transition-all bg-slate-100 hover:bg-slate-200 border border-slate-200 px-2.5 sm:px-4 py-2 rounded-xl shrink-0 active:scale-95"
           >
-            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
-            <span className="hidden xs:inline">Back to Gallery</span>
-            <span className="xs:hidden">Back</span>
+            <ArrowLeft className="w-4 h-4 shrink-0 transition-transform group-hover:-translate-x-0.5" />
+            <span className="hidden sm:inline">Back to Gallery</span>
+            <span className="sm:hidden">Back</span>
           </Link>
 
           {/* Event & Studio Logo/Title */}
-          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-            <div className="h-8 sm:h-9 max-w-[120px] flex items-center justify-start shrink-0 overflow-hidden">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 justify-end sm:justify-start">
+            <div className="h-7 sm:h-9 max-w-[80px] sm:max-w-[120px] flex items-center justify-start shrink-0 overflow-hidden">
               <img
                 src={event?.studioId?.logoUrl || '/studio-gold-icon.png'}
                 alt="Studio Logo"
@@ -470,64 +469,68 @@ export default function DedicatedFaceScanPage() {
                   (e.currentTarget as HTMLImageElement).src = '/studio-gold-icon.png';
                 }}
                 style={{
-                  maxHeight: '34px',
+                  maxHeight: '32px',
                   maxWidth: '120px',
                   width: 'auto',
                   height: 'auto',
                   objectFit: 'contain',
                   display: 'block'
                 }}
-                className="max-h-8 sm:max-h-9 w-auto max-w-[120px] object-contain rounded drop-shadow-sm"
+                className="max-h-7 sm:max-h-9 w-auto max-w-[80px] sm:max-w-[120px] object-contain rounded"
               />
             </div>
-            <div className="text-right sm:text-left">
-              <h1 className="text-xs sm:text-sm font-extrabold text-white truncate max-w-[160px] sm:max-w-xs">
+            <div className="text-right sm:text-left min-w-0">
+              <h1 className="text-xs sm:text-sm font-extrabold text-slate-900 truncate max-w-[110px] xs:max-w-[160px] sm:max-w-xs leading-tight">
                 {event?.name || 'Private Event'}
               </h1>
-              <p className="text-[10px] text-[#c5a880] font-mono tracking-wider uppercase font-bold">
+              <p className="text-[9px] sm:text-[10px] text-[#c5a880] font-mono tracking-wider uppercase font-bold">
                 AI Face Scanner
               </p>
             </div>
           </div>
 
           {/* Biometric Status Tag */}
-          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#c5a880]/15 border border-[#c5a880]/30 text-[10px] font-mono font-bold text-[#c5a880] shadow-[0_0_15px_rgba(197,168,128,0.2)]">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#c5a880]/10 border border-[#c5a880]/25 text-[10px] font-mono font-bold text-[#c5a880] shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span>NEURAL 512-D</span>
           </div>
         </div>
       </header>
 
       {/* ── Main Responsive Content Area ── */}
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 relative z-10 flex flex-col items-center">
+      <main className={`flex-1 w-full mx-auto py-5 sm:py-8 relative z-10 flex flex-col items-center transition-all duration-500 ${
+        hasSearched 
+          ? 'w-full max-w-full px-3 sm:px-6 md:px-10 lg:px-14 xl:px-16' 
+          : 'max-w-xl px-4 sm:px-6'
+      }`}>
         
         {/* ── View 1: Biometric Scanning & Capture Interface ── */}
         {!hasSearched ? (
           <div className="w-full max-w-xl flex flex-col items-center">
             
             {/* Header Title & Description */}
-            <div className="text-center mb-6 sm:mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
-              <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-3xl bg-gradient-to-tr from-[#c5a880]/30 via-[#c5a880]/15 to-transparent border border-[#c5a880]/40 shadow-[0_0_30px_rgba(197,168,128,0.35)] mb-4">
-                <ScanFace className="w-7 h-7 sm:w-8 sm:h-8 text-[#c5a880] animate-pulse-soft" />
+            <div className="text-center mb-4 sm:mb-6 animate-in fade-in slide-in-from-top-3 duration-500 w-full px-2">
+              <div className="inline-flex items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-[#c5a880]/10 border border-[#c5a880]/25 shadow-sm mb-2.5 sm:mb-3">
+                <ScanFace className="w-6 h-6 sm:w-7 sm:h-7 text-[#c5a880] animate-gentle-pulse" />
               </div>
-              <h2 className="text-2xl sm:text-4xl font-black tracking-tight bg-gradient-to-r from-white via-slate-100 to-[#c5a880] bg-clip-text text-transparent">
+              <h2 className="text-xl sm:text-3xl font-black tracking-tight text-slate-900 leading-tight">
                 Find Your Memories
               </h2>
-              <p className="text-xs sm:text-sm text-slate-400 font-medium mt-2 max-w-md mx-auto leading-relaxed">
-                Take a quick selfie or upload your photo. Our deep-learning AI will scan the entire album to find all your moments.
+              <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1 sm:mt-1.5 max-w-sm sm:max-w-md mx-auto leading-relaxed">
+                Take a quick selfie or upload a photo to instantly find all your photos in this event album.
               </p>
             </div>
 
             {/* Error Message Box */}
             {searchError && (
-              <div className="w-full mb-6 bg-rose-950/40 backdrop-blur-md border border-rose-500/40 text-rose-300 p-4 rounded-2xl text-xs sm:text-sm flex items-start justify-between gap-3 font-semibold shadow-[0_0_20px_rgba(244,63,94,0.25)] animate-in slide-in-from-top-2 duration-300">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 shrink-0 text-rose-400 mt-0.5 animate-pulse" />
+              <div className="w-full mb-4 sm:mb-6 bg-rose-50 border border-rose-200 text-rose-700 p-3 sm:p-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm flex items-start justify-between gap-2.5 font-semibold shadow-sm animate-in slide-in-from-top-2 duration-300">
+                <div className="flex items-start gap-2 sm:gap-2.5">
+                  <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 text-rose-500 mt-0.5" />
                   <span className="leading-relaxed">{searchError}</span>
                 </div>
                 <button
                   onClick={() => setSearchError('')}
-                  className="text-rose-400 hover:text-rose-200 p-1 rounded-lg hover:bg-rose-500/20 transition-colors shrink-0"
+                  className="text-rose-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-100 transition-colors shrink-0"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -536,89 +539,91 @@ export default function DedicatedFaceScanPage() {
 
             {/* ── Active Scanning Animation Mode ── */}
             {searchLoading || isMatchedSuccess ? (
-              <div className="w-full bg-[#0c0c14]/95 backdrop-blur-3xl border border-[#c5a880]/30 rounded-[2.5rem] p-6 sm:p-8 shadow-[0_25px_80px_rgba(0,0,0,0.9),0_0_50px_rgba(197,168,128,0.2)] flex flex-col items-center gap-6 animate-in zoom-in-95 duration-500">
+              <div className="w-full bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-[0_4px_24px_rgba(0,0,0,0.06)] flex flex-col items-center gap-4 sm:gap-6 animate-in zoom-in-95 duration-500">
                 {/* Biometric Viewport with Scan Lines */}
-                <div className={`relative w-full max-w-sm aspect-[4/3] rounded-3xl overflow-hidden bg-[#020205] border-2 transition-all duration-700 shadow-2xl flex items-center justify-center ${
+                <div className={`relative w-full max-w-[260px] sm:max-w-xs aspect-square sm:aspect-[4/3] rounded-2xl sm:rounded-3xl overflow-hidden bg-slate-950 border-2 transition-all duration-700 shadow-xl flex items-center justify-center ${
                   isMatchedSuccess
-                    ? 'border-emerald-400 shadow-[0_0_60px_rgba(16,185,129,0.7)]'
-                    : 'border-[#c5a880] shadow-[0_0_45px_rgba(197,168,128,0.4)]'
+                    ? 'border-emerald-400 shadow-[0_0_40px_rgba(16,185,129,0.4)]'
+                    : 'border-[#c5a880] shadow-[0_0_30px_rgba(197,168,128,0.25)]'
                 }`}>
                   {selfiePreview ? (
                     <img
                       src={selfiePreview}
                       alt="Target Face"
                       className={`w-full h-full object-cover transition-all duration-700 ${
-                        isMatchedSuccess ? 'brightness-105 contrast-105' : 'brightness-90 contrast-110'
+                        isMatchedSuccess ? 'brightness-105 contrast-105' : 'brightness-95 contrast-105'
                       }`}
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-[#07070b]">
-                      <ScanFace className="w-20 h-20 text-[#c5a880]/50 animate-pulse" />
+                    <div className="w-full h-full flex items-center justify-center bg-slate-900">
+                      <ScanFace className="w-14 h-14 sm:w-16 sm:h-16 text-[#c5a880]/50 animate-pulse" />
                     </div>
                   )}
 
-                  {/* High-Tech Biometric HUD Rings & Scanning Lasers */}
+                  {/* HUD Rings & Scanning Lasers */}
                   <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                    <div className={`absolute w-56 h-56 rounded-full border-2 border-dashed transition-all duration-700 ${
+                    <div className={`absolute w-36 h-36 sm:w-48 sm:h-48 rounded-full border-2 border-dashed transition-all duration-700 ${
                       isMatchedSuccess
-                        ? 'border-emerald-400 scale-105 shadow-[0_0_20px_rgba(52,211,153,0.8)]'
-                        : 'border-[#c5a880]/70 animate-spin-slow shadow-[0_0_15px_rgba(197,168,128,0.4)]'
+                        ? 'border-emerald-400 scale-105'
+                        : 'border-[#c5a880]/60 animate-spin-slow'
                     }`} />
 
-                    <div className={`absolute w-44 h-44 rounded-full border border-dotted transition-all duration-700 ${
+                    <div className={`absolute w-24 h-24 sm:w-36 sm:h-36 rounded-full border border-dotted transition-all duration-700 ${
                       isMatchedSuccess
                         ? 'border-emerald-300'
-                        : 'border-amber-300/80 animate-spin-reverse-slow'
+                        : 'border-[#c5a880]/40 animate-spin-reverse-slow'
                     }`} />
 
-                    {/* Holographic Laser Sweep */}
+                    {/* Laser Sweep */}
                     {!isMatchedSuccess && (
                       <div className="absolute inset-x-0 animate-laser-sweep pointer-events-none z-20">
-                        <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-[#e3d8c8] to-transparent shadow-[0_0_16px_rgba(227,216,200,1),0_0_30px_rgba(197,168,128,0.8)]" />
-                        <div className="h-14 w-full bg-gradient-to-b from-[#c5a880]/25 to-transparent" />
+                        <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-[#c5a880] to-transparent shadow-[0_0_12px_rgba(197,168,128,0.7)]" />
+                        <div className="h-8 sm:h-12 w-full bg-gradient-to-b from-[#c5a880]/20 to-transparent" />
                       </div>
                     )}
 
                     {/* Match Confirmed Overlay */}
                     {isMatchedSuccess && (
-                      <div className="absolute inset-0 bg-emerald-950/80 backdrop-blur-[3px] flex flex-col items-center justify-center p-6 text-center animate-in zoom-in-95 duration-300">
-                        <div className="w-16 h-16 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-[0_0_35px_rgba(16,185,129,0.9)] mb-3 animate-bounce">
-                          <Check className="w-9 h-9 stroke-[3]" />
+                      <div className="absolute inset-0 bg-emerald-950/85 backdrop-blur-[3px] flex flex-col items-center justify-center p-3 sm:p-5 text-center animate-in zoom-in-95 duration-300">
+                        <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-lg mb-2 animate-bounce">
+                          <Check className="w-6 h-6 sm:w-8 sm:h-8 stroke-[3]" />
                         </div>
-                        <h4 className="text-xl font-black text-white tracking-wider">FACE IDENTIFIED!</h4>
-                        <p className="text-xs text-emerald-300 font-extrabold mt-1">Opening your personal album...</p>
+                        <h4 className="text-base sm:text-lg font-black text-white tracking-wider">FACE IDENTIFIED!</h4>
+                        <p className="text-[11px] sm:text-xs text-emerald-300 font-extrabold mt-1">Opening your personal album...</p>
                       </div>
                     )}
                   </div>
                 </div>
 
                 {/* Progress Card */}
-                <div className="w-full bg-white/[0.04] border border-white/10 rounded-2xl p-5 shadow-inner">
-                  <div className="flex items-center justify-between mb-3 text-xs font-mono font-bold">
-                    <span className="text-[#c5a880] flex items-center gap-2 uppercase tracking-wider">
-                      <Sparkles className="w-4 h-4 animate-pulse" />
-                      {isMatchedSuccess ? 'Biometric Identification Complete' : 'AI Neural Analysis'}
+                <div className="w-full bg-[#faf9f6] border border-slate-200 rounded-xl sm:rounded-2xl p-3.5 sm:p-4">
+                  <div className="flex items-center justify-between mb-2.5 text-xs font-mono font-bold">
+                    <span className="text-[#c5a880] flex items-center gap-1.5 uppercase tracking-wider text-[10px] sm:text-xs truncate">
+                      <Sparkles className="w-3.5 h-3.5 animate-pulse shrink-0" />
+                      {isMatchedSuccess ? 'Match Complete' : 'AI Neural Analysis'}
                     </span>
-                    <span className="text-white bg-white/10 px-2.5 py-0.5 rounded-md">
+                    <span className="text-slate-800 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold shrink-0">
                       {searchProgress}%
                     </span>
                   </div>
 
-                  {/* Radiant Progress Bar */}
-                  <div className="w-full h-3 bg-black/80 rounded-full p-0.5 border border-white/10 overflow-hidden">
+                  {/* Progress Bar */}
+                  <div className="w-full h-2.5 sm:h-3 bg-slate-200 rounded-full overflow-hidden relative">
                     <div
-                      className={`h-full transition-all duration-300 rounded-full ${
+                      className={`h-full transition-all duration-300 rounded-full relative ${
                         isMatchedSuccess
-                          ? 'bg-gradient-to-r from-emerald-500 to-teal-300 shadow-[0_0_20px_rgba(16,185,129,0.9)]'
-                          : 'bg-gradient-to-r from-amber-500 via-[#c5a880] to-emerald-400 shadow-[0_0_20px_rgba(197,168,128,0.9)]'
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                          : 'bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880]'
                       }`}
                       style={{ width: `${searchProgress}%` }}
-                    />
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-progress-shine" />
+                    </div>
                   </div>
 
-                  <div className="mt-4 flex items-center gap-3 bg-black/50 border border-white/5 rounded-xl p-3 px-4">
-                    <Loader className="w-4 h-4 text-[#c5a880] animate-spin shrink-0" />
-                    <p className="text-xs font-bold text-slate-200">
+                  <div className="mt-2.5 sm:mt-3.5 flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-2.5 sm:p-3">
+                    <Loader className="w-3.5 h-3.5 text-[#c5a880] animate-spin shrink-0" />
+                    <p className="text-[11px] sm:text-xs font-bold text-slate-600 leading-snug break-words">
                       {searchStage || 'Processing face biometric detection...'}
                     </p>
                   </div>
@@ -626,39 +631,41 @@ export default function DedicatedFaceScanPage() {
               </div>
             ) : (
               /* ── Idle / Capture Mode Card ── */
-              <div className="w-full bg-[#0c0c14]/95 backdrop-blur-3xl border border-[#c5a880]/30 rounded-[2.5rem] p-6 sm:p-8 shadow-[0_25px_80px_rgba(0,0,0,0.95),0_0_50px_rgba(197,168,128,0.18)]">
+              <div className="w-full bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-3.5 sm:p-7 shadow-[0_4px_24px_rgba(0,0,0,0.06)]">
                 
                 {/* Tab Switcher */}
-                <div className="bg-black/60 p-1.5 rounded-2xl flex mb-6 border border-white/10 shadow-inner">
+                <div className="bg-slate-100 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl flex mb-4 sm:mb-6 border border-slate-200 gap-1">
                   <button
+                    type="button"
                     onClick={() => { setActiveTab('camera'); startCamera(cameraFacing); }}
-                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs sm:text-sm font-black transition-all duration-300 ${
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 sm:py-3 rounded-lg sm:rounded-xl text-xs sm:text-sm font-black transition-all duration-300 min-h-[42px] cursor-pointer ${
                       activeTab === 'camera'
-                        ? 'bg-gradient-to-r from-[#c5a880] to-[#b09672] text-slate-950 shadow-[0_4px_20px_rgba(197,168,128,0.4)] transform scale-[1.01] border border-white/20'
-                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        ? 'bg-gradient-to-r from-[#c5a880] to-[#b09672] text-white shadow-[0_4px_15px_rgba(197,168,128,0.3)]'
+                        : 'text-slate-500 hover:text-slate-800 hover:bg-white/80'
                     }`}
                   >
-                    <Camera className="w-4 h-4" />
-                    Live Camera Scan
+                    <Camera className="w-4 h-4 shrink-0" />
+                    <span>Live Camera</span>
                   </button>
                   <button
+                    type="button"
                     onClick={() => { setActiveTab('upload'); stopCamera(); }}
-                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs sm:text-sm font-black transition-all duration-300 ${
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 sm:py-3 rounded-lg sm:rounded-xl text-xs sm:text-sm font-black transition-all duration-300 min-h-[42px] cursor-pointer ${
                       activeTab === 'upload'
-                        ? 'bg-gradient-to-r from-[#c5a880] to-[#b09672] text-slate-950 shadow-[0_4px_20px_rgba(197,168,128,0.4)] transform scale-[1.01] border border-white/20'
-                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        ? 'bg-gradient-to-r from-[#c5a880] to-[#b09672] text-white shadow-[0_4px_15px_rgba(197,168,128,0.3)]'
+                        : 'text-slate-500 hover:text-slate-800 hover:bg-white/80'
                     }`}
                   >
-                    <Upload className="w-4 h-4" />
-                    Upload Photo
+                    <Upload className="w-4 h-4 shrink-0" />
+                    <span>Upload Photo</span>
                   </button>
                 </div>
 
                 {/* ── Tab 1: Live Camera Viewfinder ── */}
                 {activeTab === 'camera' && (
-                  <div className="flex flex-col items-center gap-5">
+                  <div className="flex flex-col items-center gap-4 sm:gap-5">
                     {/* Viewfinder Container */}
-                    <div className="relative w-full aspect-[4/3] sm:aspect-[4/3] max-w-md rounded-3xl overflow-hidden bg-black border-2 border-[#c5a880]/50 shadow-[0_0_35px_rgba(197,168,128,0.25)] flex items-center justify-center group">
+                    <div className="relative w-full aspect-[4/5] sm:aspect-[4/3] max-h-[50vh] sm:max-h-[390px] rounded-2xl sm:rounded-3xl overflow-hidden bg-slate-950 border-2 border-[#c5a880]/40 shadow-xl flex items-center justify-center group">
                       <video
                         ref={videoRef}
                         autoPlay
@@ -667,33 +674,49 @@ export default function DedicatedFaceScanPage() {
                         className={`w-full h-full object-cover ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
                       />
 
+                      {/* Camera Initializing state */}
+                      {!cameraReady && cameraActive && (
+                        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center gap-2.5 z-10">
+                          <div className="w-10 h-10 rounded-full bg-[#c5a880]/20 flex items-center justify-center animate-spin">
+                            <Loader className="w-5 h-5 text-[#c5a880]" />
+                          </div>
+                          <span className="text-[11px] font-mono font-bold text-slate-300 tracking-wider">INITIALIZING CAMERA...</span>
+                        </div>
+                      )}
+
                       {/* Shutter flash effect */}
                       {shutterFlash && (
                         <div className="absolute inset-0 bg-white z-50 animate-shutter-flash pointer-events-none" />
                       )}
 
-                      {/* Oval Face Guide */}
+                      {/* Biometric HUD Corner Brackets */}
+                      <div className="absolute top-3 left-3 w-4 h-4 sm:w-5 sm:h-5 border-t-2 border-l-2 border-[#c5a880] rounded-tl pointer-events-none z-10 opacity-80" />
+                      <div className="absolute top-3 right-14 sm:right-16 w-4 h-4 sm:w-5 sm:h-5 border-t-2 border-r-2 border-[#c5a880] rounded-tr pointer-events-none z-10 opacity-80" />
+                      <div className="absolute bottom-3 left-3 w-4 h-4 sm:w-5 sm:h-5 border-b-2 border-l-2 border-[#c5a880] rounded-bl pointer-events-none z-10 opacity-80" />
+                      <div className="absolute bottom-3 right-3 w-4 h-4 sm:w-5 sm:h-5 border-b-2 border-r-2 border-[#c5a880] rounded-br pointer-events-none z-10 opacity-80" />
+
+                      {/* Oval Face Guide with Animated Laser */}
                       <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        <div className="w-48 sm:w-56 h-60 sm:h-68 rounded-[48%] border-2 border-[#c5a880] border-dashed shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] group-hover:scale-105 transition-transform duration-500" />
-                        <div className="absolute w-48 sm:w-56 h-0.5 bg-gradient-to-r from-transparent via-[#c5a880] to-transparent animate-scan-laser shadow-[0_0_12px_rgba(197,168,128,0.9)]" />
+                        <div className="w-36 sm:w-52 h-48 sm:h-64 rounded-[48%] border-2 border-[#c5a880] border-dashed shadow-[0_0_0_9999px_rgba(0,0,0,0.55)] group-hover:scale-105 transition-transform duration-500" />
+                        <div className="absolute w-36 sm:w-52 h-0.5 bg-gradient-to-r from-transparent via-[#c5a880] to-transparent animate-scan-laser shadow-[0_0_12px_rgba(197,168,128,0.7)]" />
                       </div>
 
                       {/* Bottom Instruction Tag */}
-                      <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none">
-                        <span className="text-[10px] tracking-widest text-white font-mono font-bold bg-black/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/20 shadow-lg">
-                          ALIGN YOUR FACE IN OVAL
+                      <div className="absolute bottom-2.5 sm:bottom-3.5 left-0 right-0 text-center pointer-events-none z-20">
+                        <span className="text-[9px] sm:text-[10px] tracking-widest text-white font-mono font-bold bg-black/75 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 shadow-lg">
+                          ALIGN FACE IN OVAL
                         </span>
                       </div>
 
-                      {/* Camera Flip Button (Mobile Front/Back switch) */}
+                      {/* Camera Flip Button */}
                       <button
                         type="button"
                         onClick={toggleCameraFacing}
-                        className="absolute top-4 right-4 bg-black/75 backdrop-blur-md hover:bg-black text-white p-2.5 rounded-xl border border-white/20 transition-all hover:scale-110 shadow-lg flex items-center gap-1.5 text-xs font-bold cursor-pointer z-30"
+                        className="absolute top-2.5 right-2.5 sm:top-3.5 sm:right-3.5 bg-white/95 backdrop-blur-md hover:bg-white text-slate-800 p-2 sm:p-2.5 rounded-xl border border-slate-200 transition-all hover:scale-105 active:scale-95 shadow-md flex items-center gap-1.5 text-xs font-bold cursor-pointer z-30 min-h-[38px] min-w-[38px] justify-center"
                         title="Switch Camera (Front/Back)"
                       >
                         <SwitchCamera className="w-4 h-4 text-[#c5a880]" />
-                        <span className="hidden xs:inline">{cameraFacing === 'user' ? 'Front' : 'Back'}</span>
+                        <span className="hidden sm:inline">{cameraFacing === 'user' ? 'Front' : 'Back'}</span>
                       </button>
                     </div>
 
@@ -702,17 +725,17 @@ export default function DedicatedFaceScanPage() {
                       type="button"
                       onClick={handleCapture}
                       disabled={isCapturing || !cameraActive}
-                      className="w-full bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-110 active:scale-[0.99] text-slate-950 font-black py-4 sm:py-4.5 rounded-2xl text-sm sm:text-base transition-all shadow-[0_8px_30px_rgba(197,168,128,0.4)] flex items-center justify-center gap-2.5 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+                      className="w-full bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-105 active:scale-[0.98] text-slate-950 font-black py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition-all shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer min-h-[48px]"
                     >
                       {isCapturing ? (
                         <>
-                          <Loader className="w-5 h-5 animate-spin text-slate-950" />
-                          <span>Scanning 3 Burst Frames...</span>
+                          <Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-slate-950" />
+                          <span>Scanning Burst Frames...</span>
                         </>
                       ) : (
                         <>
-                          <Camera className="w-5 h-5 text-slate-950 stroke-[2.5]" />
-                          <span>Capture Photo & Scan Face</span>
+                          <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
+                          <span>Capture & Scan Face</span>
                         </>
                       )}
                     </button>
@@ -721,14 +744,14 @@ export default function DedicatedFaceScanPage() {
 
                 {/* ── Tab 2: Upload Photo View ── */}
                 {activeTab === 'upload' && (
-                  <div className="flex flex-col gap-5">
+                  <div className="flex flex-col gap-4">
                     {selfiePreview ? (
-                      <div className="flex flex-col items-center gap-5">
-                        <div className="relative w-full max-w-sm rounded-3xl overflow-hidden border-2 border-[#c5a880]/50 shadow-2xl bg-black">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="relative w-full max-w-sm rounded-xl sm:rounded-2xl overflow-hidden border border-[#c5a880]/30 shadow-md bg-slate-50">
                           <img
                             src={selfiePreview}
                             alt="Selfie Preview"
-                            className="w-full h-auto max-h-[320px] object-cover"
+                            className="w-full h-auto max-h-[260px] sm:max-h-[320px] object-cover"
                           />
                           <button
                             type="button"
@@ -737,18 +760,18 @@ export default function DedicatedFaceScanPage() {
                               if (selfiePreview) URL.revokeObjectURL(selfiePreview);
                               setSelfiePreview(null);
                             }}
-                            className="absolute top-3 right-3 bg-black/80 hover:bg-black text-white p-2 rounded-xl border border-white/20 transition-all hover:text-rose-400"
+                            className="absolute top-2.5 right-2.5 bg-white/95 backdrop-blur-md hover:bg-white text-slate-600 p-2 rounded-xl border border-slate-200 transition-all hover:text-rose-500 shadow-md min-h-[36px] min-w-[36px] flex items-center justify-center cursor-pointer"
                             title="Remove photo"
                           >
                             <X className="w-4 h-4" />
                           </button>
                         </div>
 
-                        <div className="w-full flex flex-col gap-3">
+                        <div className="w-full flex flex-col gap-2.5">
                           <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="text-xs text-[#c5a880] hover:text-white font-bold py-1.5 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                            className="text-xs text-[#c5a880] hover:text-slate-900 font-bold py-1.5 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                           >
                             <RefreshCw className="w-3.5 h-3.5" />
                             Choose a different photo
@@ -757,35 +780,35 @@ export default function DedicatedFaceScanPage() {
                           <button
                             type="button"
                             onClick={handleUploadSearch}
-                            className="w-full bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-110 active:scale-[0.99] text-slate-950 font-black py-4 rounded-2xl text-sm sm:text-base transition-all shadow-[0_8px_30px_rgba(197,168,128,0.4)] flex items-center justify-center gap-2.5 cursor-pointer"
+                            className="w-full bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-105 active:scale-[0.98] text-slate-950 font-black py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition-all shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 cursor-pointer min-h-[48px]"
                           >
-                            <Sparkles className="w-5 h-5 text-slate-950" />
+                            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950" />
                             <span>Search Matches with AI</span>
                           </button>
                         </div>
                       </div>
                     ) : (
-                      /* Drag and Drop Zone */
+                      /* Drag and Drop / Mobile Tap Zone */
                       <div
                         onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
                         onDragLeave={() => setIsDragOver(false)}
                         onDrop={handleDrop}
                         onClick={() => fileInputRef.current?.click()}
-                        className={`w-full min-h-[260px] sm:min-h-[300px] rounded-3xl border-2 border-dashed cursor-pointer transition-all duration-300 flex flex-col items-center justify-center gap-4 p-6 sm:p-8 relative group ${
+                        className={`w-full min-h-[190px] sm:min-h-[250px] rounded-xl sm:rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-300 flex flex-col items-center justify-center gap-2.5 sm:gap-3.5 p-4 sm:p-6 relative group ${
                           isDragOver
-                            ? 'border-[#c5a880] bg-[#c5a880]/15 scale-[1.01]'
-                            : 'border-[#c5a880]/30 bg-white/[0.02] hover:border-[#c5a880] hover:bg-[#c5a880]/5'
+                            ? 'border-[#c5a880] bg-[#c5a880]/10 scale-[1.01]'
+                            : 'border-slate-300 bg-[#faf9f6] hover:border-[#c5a880] hover:bg-[#c5a880]/5'
                         }`}
                       >
-                        <div className="w-16 h-16 rounded-2xl bg-white/[0.05] border border-white/10 group-hover:border-[#c5a880]/50 flex items-center justify-center shadow-lg transition-transform group-hover:scale-110">
-                          <Upload className="w-8 h-8 text-[#c5a880]" />
+                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-white border border-slate-200 group-hover:border-[#c5a880]/50 flex items-center justify-center shadow-sm transition-transform group-hover:scale-110">
+                          <Upload className="w-6 h-6 sm:w-7 sm:h-7 text-[#c5a880]" />
                         </div>
-                        <div className="text-center">
-                          <p className="text-sm sm:text-base font-black text-white">
-                            {isDragOver ? 'Drop photo here!' : 'Tap or Drag photo to upload'}
+                        <div className="text-center px-2">
+                          <p className="text-xs sm:text-sm font-black text-slate-800">
+                            {isDragOver ? 'Drop photo here!' : 'Tap to Take Selfie or Select Photo'}
                           </p>
-                          <p className="text-xs text-slate-400 font-medium mt-1">
-                            Choose selfie from camera roll or files • JPG, PNG, WebP
+                          <p className="text-[11px] text-slate-400 font-medium mt-1">
+                            JPG, PNG, WebP • Tap camera roll or files
                           </p>
                         </div>
                       </div>
@@ -802,8 +825,8 @@ export default function DedicatedFaceScanPage() {
                 )}
 
                 {/* Privacy Badge */}
-                <div className="mt-6 pt-5 border-t border-white/10 flex items-center justify-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <div className="mt-4 sm:mt-5 pt-3 sm:pt-4 border-t border-slate-200 flex items-center justify-center gap-1.5 sm:gap-2 text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-wider text-center px-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                   <span>Your photo is encrypted and never stored permanently</span>
                 </div>
               </div>
@@ -811,31 +834,31 @@ export default function DedicatedFaceScanPage() {
           </div>
         ) : (
           /* ── View 2: Matched Photos Gallery & Results View ── */
-          <div className="w-full flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
+          <div className="w-full max-w-full mx-auto flex flex-col items-center animate-in fade-in duration-500">
             
-            {/* Success Results Banner */}
-            <div className="w-full bg-gradient-to-b from-[#c5a880]/15 via-[#0c0c14] to-[#0c0c14] border border-[#c5a880]/40 rounded-[2.5rem] p-6 sm:p-8 mb-8 text-center shadow-[0_20px_60px_rgba(0,0,0,0.8)] relative overflow-hidden">
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-500 text-white shadow-[0_0_30px_rgba(16,185,129,0.8)] mb-4">
-                <Check className="w-8 h-8 stroke-[3]" />
+            {/* Success Results Banner - Expansive Full Width Luxury Card */}
+            <div className="w-full max-w-4xl lg:max-w-5xl bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 md:p-10 mb-8 sm:mb-12 text-center shadow-[0_8px_32px_rgba(0,0,0,0.06)] relative overflow-hidden">
+              <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-emerald-500 text-white shadow-md mb-3 sm:mb-4">
+                <Check className="w-7 h-7 sm:w-8 sm:h-8 stroke-[3]" />
               </div>
 
-              <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
+              <h2 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
                 {matchedPhotos.length > 0 ? 'Face Matched Successfully!' : 'No Matching Photos Found'}
               </h2>
-              <p className="text-xs sm:text-sm text-slate-300 font-medium mt-2 max-w-lg mx-auto leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1.5 sm:mt-2 max-w-md mx-auto leading-relaxed px-1">
                 {matchedPhotos.length > 0
                   ? `We found ${matchedPhotos.length} photo${matchedPhotos.length > 1 ? 's' : ''} containing your face in this album.`
-                  : 'We could not detect this face in any album photos. Try a different angle or clearer photo.'}
+                  : 'We could not detect this face in any album photos. Try taking another selfie with good lighting.'}
               </p>
 
               {/* Action Buttons */}
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+              <div className="mt-5 sm:mt-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2.5 sm:gap-3.5 w-full">
                 {matchedPhotos.length > 0 && (
                   <button
                     type="button"
                     onClick={downloadAllMatched}
                     disabled={downloadingZip}
-                    className="bg-[#c5a880] hover:bg-[#b09672] active:scale-95 text-slate-950 font-black px-6 py-3.5 rounded-xl text-xs sm:text-sm shadow-[0_4px_20px_rgba(197,168,128,0.4)] flex items-center gap-2 transition-all cursor-pointer"
+                    className="w-full sm:w-auto bg-[#c5a880] hover:bg-[#b09672] active:scale-95 text-slate-950 font-black px-6 py-3.5 rounded-xl text-xs sm:text-sm shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[46px]"
                   >
                     {downloadingZip ? (
                       <>
@@ -844,8 +867,8 @@ export default function DedicatedFaceScanPage() {
                       </>
                     ) : (
                       <>
-                        <Download className="w-4 h-4 text-slate-950" />
-                        <span>Download All My Photos (ZIP)</span>
+                        <Download className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                        <span>Download All Photos (ZIP)</span>
                       </>
                     )}
                   </button>
@@ -854,15 +877,15 @@ export default function DedicatedFaceScanPage() {
                 <button
                   type="button"
                   onClick={resetScanner}
-                  className="bg-white/10 hover:bg-white/20 active:scale-95 text-white font-bold px-5 py-3.5 rounded-xl text-xs sm:text-sm border border-white/15 flex items-center gap-2 transition-all cursor-pointer"
+                  className="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 font-bold px-5 py-3.5 rounded-xl text-xs sm:text-sm border border-slate-200 flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[46px]"
                 >
-                  <RefreshCw className="w-4 h-4" />
+                  <RefreshCw className="w-4 h-4 text-slate-600" />
                   <span>Scan Another Face</span>
                 </button>
 
                 <Link
                   href={`/e/${slug}`}
-                  className="bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-bold px-5 py-3.5 rounded-xl text-xs sm:text-sm border border-white/10 flex items-center gap-2 transition-all"
+                  className="w-full sm:w-auto bg-white hover:bg-slate-50 active:scale-95 text-slate-800 hover:text-slate-950 font-bold px-5 py-3.5 rounded-xl text-xs sm:text-sm border border-slate-200 flex items-center justify-center gap-2 transition-all min-h-[46px]"
                 >
                   <span>View Full Album</span>
                 </Link>
@@ -872,53 +895,89 @@ export default function DedicatedFaceScanPage() {
             {/* Photos Grid */}
             {matchedPhotos.length > 0 ? (
               <div className="w-full">
-                <div className="flex items-center justify-between mb-4 px-2">
-                  <h3 className="text-sm sm:text-base font-extrabold text-white flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4 text-[#c5a880]" />
-                    <span>Your Personal Gallery ({matchedPhotos.length})</span>
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-5 sm:mb-8 px-1">
+                  <h3 className="text-lg sm:text-2xl font-black text-slate-900 flex items-center gap-2.5 sm:gap-3">
+                    <ImageIcon className="w-5 h-5 sm:w-6 sm:h-6 text-[#c5a880]" />
+                    <span>Your Photos ({matchedPhotos.length})</span>
                   </h3>
-                  <span className="text-[10px] sm:text-xs font-mono font-bold text-[#c5a880] uppercase tracking-wider">
-                    AI Curated
-                  </span>
+
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xs font-mono font-bold text-[#c5a880] uppercase tracking-wider bg-[#c5a880]/10 border border-[#c5a880]/25 px-3.5 py-1.5 rounded-full hidden sm:inline-flex">
+                      AI Curated
+                    </span>
+
+                    {/* Photo Size Switcher */}
+                    <div className="inline-flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => setPhotoSize('big')}
+                        className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                          photoSize === 'big'
+                            ? 'bg-white text-slate-900 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                        title="Large photo view"
+                      >
+                        Big
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPhotoSize('huge')}
+                        className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                          photoSize === 'huge'
+                            ? 'bg-white text-slate-900 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                        title="Extra large photo view"
+                      >
+                        Extra Big
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Responsive 2-col on mobile, 3-4 col on tablet/desktop */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-5">
+                {/* Big Spacious Responsive Grid */}
+                <div className={`w-full grid gap-6 sm:gap-8 lg:gap-10 transition-all duration-300 ${
+                  photoSize === 'huge'
+                    ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3'
+                    : 'grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4'
+                }`}>
                   {matchedPhotos.map((photo, index) => {
                     const imgSrc = resolveMediaUrl(photo);
                     return (
                       <div
                         key={photo._id}
                         onClick={() => setSelectedPhoto(photo)}
-                        className="group relative aspect-[3/4] rounded-2xl sm:rounded-3xl overflow-hidden bg-slate-900 border border-white/10 hover:border-[#c5a880]/60 transition-all duration-300 shadow-lg cursor-pointer hover:shadow-[0_10px_30px_rgba(197,168,128,0.2)] hover:-translate-y-1"
+                        className="smooth-photo-zoom-card group aspect-[3/4] shadow-md hover:shadow-2xl"
                       >
                         <img
                           src={imgSrc}
                           alt={`Matched Memory ${index + 1}`}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                          className="smooth-zoom-img"
                           loading="lazy"
                         />
-                        {/* Hover Overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-between p-3.5">
+
+                        {/* Smooth Luxury Hover Overlay */}
+                        <div className="photo-card-overlay absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent flex flex-col justify-between p-4 sm:p-6 pointer-events-none">
                           <div className="flex justify-end">
-                            <span className="bg-black/60 backdrop-blur-md border border-white/20 rounded-full px-2.5 py-0.5 text-[9px] font-mono font-bold text-emerald-400">
-                              {Math.round((photo.similarity || 0.45) * 100)}% Match
+                            <span className="bg-white/95 backdrop-blur-md text-slate-900 rounded-full px-3.5 py-1.5 text-xs font-black shadow-lg flex items-center gap-1.5 border border-white/40">
+                              <ZoomIn className="w-3.5 h-3.5 text-[#c5a880]" />
+                              View Full
                             </span>
                           </div>
 
                           <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-bold text-white flex items-center gap-1">
-                              <ZoomIn className="w-3.5 h-3.5 text-[#c5a880]" />
-                              View
+                            <span className="text-xs sm:text-sm font-black text-white drop-shadow-md">
+                              Photo #{index + 1}
                             </span>
                             <a
                               href={imgSrc}
                               download
                               onClick={(e) => e.stopPropagation()}
-                              className="w-8 h-8 rounded-full bg-white/20 hover:bg-[#c5a880] text-white hover:text-black flex items-center justify-center transition-colors shadow-md"
-                              title="Download"
+                              className="pointer-events-auto w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white hover:bg-[#c5a880] text-slate-900 hover:text-white flex items-center justify-center transition-all duration-300 shadow-xl hover:scale-110 active:scale-95 cursor-pointer"
+                              title="Download Photo"
                             >
-                              <Download className="w-3.5 h-3.5" />
+                              <Download className="w-4 h-4 sm:w-5 sm:h-5" />
                             </a>
                           </div>
                         </div>
@@ -928,16 +987,16 @@ export default function DedicatedFaceScanPage() {
                 </div>
               </div>
             ) : (
-              <div className="w-full py-16 text-center bg-white/[0.02] border border-white/10 rounded-3xl p-8">
-                <ScanFace className="w-12 h-12 text-slate-500 mx-auto mb-3 animate-pulse" />
-                <h4 className="text-base font-bold text-white">No Matched Photos</h4>
-                <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                  Try uploading a clearer, well-lit photo of your face, or take a direct selfie using the camera.
+              <div className="w-full py-10 sm:py-14 text-center bg-[#faf9f6] border border-slate-200 rounded-2xl p-5 sm:p-8">
+                <ScanFace className="w-9 h-9 sm:w-11 sm:h-11 text-slate-400 mx-auto mb-2.5 animate-pulse" />
+                <h4 className="text-xs sm:text-sm font-bold text-slate-800">No Matched Photos</h4>
+                <p className="text-[11px] sm:text-xs text-slate-500 mt-1 max-w-sm mx-auto px-2">
+                  Try uploading a clearer, well-lit photo of your face, or take a direct selfie with the front camera.
                 </p>
                 <button
                   type="button"
                   onClick={resetScanner}
-                  className="mt-4 bg-[#c5a880] text-slate-950 font-extrabold px-5 py-2.5 rounded-xl text-xs"
+                  className="mt-3.5 bg-[#c5a880] text-slate-950 font-black px-4 py-2 rounded-xl text-xs shadow-sm cursor-pointer"
                 >
                   Try Again
                 </button>
@@ -949,40 +1008,40 @@ export default function DedicatedFaceScanPage() {
 
       {/* ── Fullscreen Lightbox Modal ── */}
       {selectedPhoto && (
-        <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col justify-between p-4 sm:p-6 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col justify-between p-3 sm:p-6 animate-in fade-in duration-200 safe-bottom">
           <div className="flex items-center justify-between w-full relative z-10">
-            <span className="text-xs font-mono font-bold text-[#c5a880] tracking-wider uppercase">
-              AI Biometric Matched Photo
+            <span className="text-[10px] sm:text-xs font-mono font-bold text-[#c5a880] tracking-wider uppercase">
+              AI Matched Photo
             </span>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <a
                 href={resolveMediaUrl(selectedPhoto)}
                 download
-                className="bg-white/10 hover:bg-white/20 border border-white/15 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors"
+                className="bg-white/10 hover:bg-white/20 border border-white/15 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-3.5 h-3.5" />
                 <span>Download</span>
               </a>
               <button
                 type="button"
                 onClick={() => setSelectedPhoto(null)}
-                className="bg-white/10 hover:bg-rose-500/80 text-white p-2 rounded-xl transition-colors border border-white/10 cursor-pointer"
+                className="bg-white/10 hover:bg-rose-500/80 text-white p-2 rounded-xl transition-colors border border-white/10 cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          <div className="flex-1 flex items-center justify-center p-2 sm:p-6 overflow-hidden">
+          <div className="flex-1 flex items-center justify-center p-2 sm:p-4 overflow-hidden">
             <img
               src={resolveMediaUrl(selectedPhoto)}
               alt="Full Size View"
-              className="max-h-[82vh] max-w-full object-contain rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-white/10"
+              className="max-h-[75vh] sm:max-h-[82vh] max-w-full object-contain rounded-xl sm:rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-white/10"
             />
           </div>
 
-          <div className="text-center py-2 text-xs text-slate-400 font-medium">
-            Tap outside or click &apos;X&apos; to return to gallery
+          <div className="text-center py-1 text-[11px] text-slate-400 font-medium">
+            Tap outside or click &apos;X&apos; to return
           </div>
         </div>
       )}

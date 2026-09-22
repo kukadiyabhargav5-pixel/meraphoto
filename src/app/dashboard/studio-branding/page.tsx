@@ -29,19 +29,41 @@ export default function StudioBrandingPage() {
     
   } = context;
 
-  const handleAssetUpload = (e: any, setter: any, type: string) => { 
+  const handleAssetUpload = async (e: any, setter: any, type: string) => { 
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploadingAsset(type); 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setter(event.target.result as string);
+    try {
+      const formData = new FormData();
+      formData.append('logo', file);
+      formData.append('image', file);
+
+      const res = await apiClient.post('/studio/logo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (res.data?.logoUrl) {
+        setter(res.data.logoUrl);
+        if (res.data?.studio) {
+          setStudio(res.data.studio);
+          try {
+            localStorage.setItem('studio', JSON.stringify(res.data.studio));
+          } catch {}
+          window.dispatchEvent(new CustomEvent('studio_logo_updated', { detail: res.data.studio }));
+        }
       }
+    } catch (err) {
+      console.error('Logo upload error:', err);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) setter(event.target.result as string);
+      };
+      reader.readAsDataURL(file);
+    } finally {
       setUploadingAsset('');
-    };
-    reader.readAsDataURL(file);
+      if (e.target) e.target.value = '';
+    }
   };
   const [uploadingAsset, setUploadingAsset] = useState('');
   
@@ -93,7 +115,13 @@ export default function StudioBrandingPage() {
       };
       
       const res = await apiClient.put('/studio/me', payload);
-      setStudio(res.data.studio); // Update context
+      if (res.data?.studio) {
+        setStudio(res.data.studio);
+        try {
+          localStorage.setItem('studio', JSON.stringify(res.data.studio));
+        } catch {}
+        window.dispatchEvent(new CustomEvent('studio_logo_updated', { detail: res.data.studio }));
+      }
       setSuccessMsg('Studio settings updated successfully!');
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch (error: any) {

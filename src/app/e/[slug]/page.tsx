@@ -932,7 +932,7 @@ export default function ClientGallery() {
                        <div 
                          {...rest} 
                          style={{ ...style, overflow: 'hidden', borderRadius: '1rem' }} 
-                         className={`group relative transition-all duration-500 ease-out bg-slate-100 flex items-center justify-center ${isSelected ? 'border-2 border-[#c5a880] ring-4 ring-[#c5a880]/20 shadow-lg scale-95' : 'shadow-sm hover:shadow-2xl z-0 hover:z-10 cursor-pointer'}`}
+                         className={`group relative transition-all duration-500 ease-out bg-slate-100 flex items-center justify-center ${isSelected ? 'border-2 border-[#c5a880] ring-4 ring-[#c5a880]/20 shadow-lg scale-95' : 'shadow-sm hover:shadow-xl hover:-translate-y-1.5 z-0 hover:z-10 cursor-pointer'}`}
                        >
                          {children}
                        </div>
@@ -941,8 +941,14 @@ export default function ClientGallery() {
                    image: ({ style, className, ...rest }) => (
                      <img 
                        {...rest} 
-                       style={{ ...style, transition: 'transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)' }} 
-                       className={`${className} group-hover:scale-[1.03] object-cover`} 
+                       style={{
+                         ...style,
+                         transition: 'transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), filter 0.6s ease',
+                         willChange: 'transform',
+                         backfaceVisibility: 'hidden',
+                         WebkitBackfaceVisibility: 'hidden'
+                       }} 
+                       className={`${className} group-hover:scale-110 object-cover`} 
                      />
                    ),
                    extras: (_, { photo }) => {
@@ -992,7 +998,7 @@ export default function ClientGallery() {
                        <div 
                          {...rest} 
                          style={{ ...style, overflow: 'hidden', borderRadius: '1rem' }} 
-                         className={`group relative transition-all duration-500 ease-out bg-slate-100 flex items-center justify-center ${isSelected ? 'border-2 border-[#c5a880] ring-4 ring-[#c5a880]/20 shadow-lg scale-95' : 'shadow-sm hover:shadow-2xl z-0 hover:z-10 cursor-pointer'}`}
+                         className={`group relative transition-all duration-500 ease-out bg-slate-100 flex items-center justify-center ${isSelected ? 'border-2 border-[#c5a880] ring-4 ring-[#c5a880]/20 shadow-lg scale-95' : 'shadow-sm hover:shadow-xl hover:-translate-y-1.5 z-0 hover:z-10 cursor-pointer'}`}
                        >
                          {children}
                        </div>
@@ -1001,8 +1007,14 @@ export default function ClientGallery() {
                    image: ({ style, className, ...rest }) => (
                      <img 
                        {...rest} 
-                       style={{ ...style, transition: 'transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)' }} 
-                       className={`${className} group-hover:scale-[1.03] object-cover`} 
+                       style={{
+                         ...style,
+                         transition: 'transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), filter 0.6s ease',
+                         willChange: 'transform',
+                         backfaceVisibility: 'hidden',
+                         WebkitBackfaceVisibility: 'hidden'
+                       }} 
+                       className={`${className} group-hover:scale-110 object-cover`} 
                      />
                    ),
                    extras: (_, { photo }) => {
@@ -1060,80 +1072,57 @@ export default function ClientGallery() {
         )}
       </div>
 
-      {/* ── Mobile Floating Quick Action Pill ── */}
-      <div className="sm:hidden fixed bottom-6 left-0 right-0 z-30 px-4 flex items-center justify-center pointer-events-none">
-        <div className="pointer-events-auto bg-[#0a0a0f]/92 backdrop-blur-2xl border border-[#c5a880]/50 p-1.5 rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.7),0_0_30px_rgba(197,168,128,0.35)] flex items-center gap-2">
-          <Link
-            href={`/e/${slug}/scan`}
-            className="bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] text-slate-950 font-black text-xs px-5 py-3 rounded-full flex items-center gap-2 shadow-md active:scale-95 transition-all"
-          >
-            <ScanFace className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-            <span>AI Face Scan</span>
-          </Link>
-          <button
-            type="button"
-            onClick={() => setSearchModalOpen(true)}
-            className="bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-3.5 py-3 rounded-full transition-all active:scale-95 border border-white/10 flex items-center gap-1.5"
-            title="Quick Popup"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-[#c5a880]" />
-            <span>Popup</span>
-          </button>
-        </div>
-      </div>
 
       {/* ── Professional Cyber-Luxury Selfie Search Modal ── */}
       {searchModalOpen && (
         <div 
           onClick={closeSearchModal}
-          className="fixed inset-0 z-50 bg-[#050508]/85 backdrop-blur-2xl flex items-center justify-center p-4 sm:p-6 transition-all duration-500 animate-fade-in cursor-pointer"
+          className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 transition-all duration-500 animate-modal-fade-in cursor-pointer safe-bottom"
         >
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg bg-[#0c0c14]/95 backdrop-blur-3xl p-0 rounded-[2.5rem] relative shadow-[0_25px_80px_rgba(0,0,0,0.95),0_0_50px_rgba(197,168,128,0.2)] overflow-y-auto max-h-[92vh] border border-[#c5a880]/30 transform transition-all animate-in zoom-in-95 duration-500 text-white cursor-default"
+            className="w-full max-w-lg bg-white p-0 rounded-2xl sm:rounded-[2rem] relative shadow-[0_25px_60px_rgba(0,0,0,0.12),0_0_0_1px_rgba(0,0,0,0.04)] overflow-y-auto max-h-[90vh] sm:max-h-[92vh] border border-slate-200 transform transition-all animate-modal-slide-up text-slate-800 cursor-default"
           >
-            {/* Ambient Background Aura */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-4/5 h-36 bg-gradient-to-b from-[#c5a880]/25 via-[#c5a880]/10 to-transparent blur-3xl rounded-full pointer-events-none" />
-            <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-emerald-500/10 blur-3xl rounded-full pointer-events-none" />
+            {/* Subtle accent glow */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/5 h-24 bg-gradient-to-b from-[#c5a880]/10 to-transparent blur-3xl rounded-full pointer-events-none" />
 
             {/* Modal Header */}
-            <div className="relative bg-gradient-to-b from-white/[0.06] via-white/[0.02] to-transparent border-b border-white/10 p-7 sm:p-8 pb-7 rounded-t-[2.5rem]">
+            <div className="relative bg-gradient-to-b from-[#faf9f6] to-white border-b border-slate-200 p-4 sm:p-7 pb-4 sm:pb-6 rounded-t-2xl sm:rounded-t-[2rem]">
               <button 
                 type="button"
                 onClick={closeSearchModal} 
                 aria-label="Close dialog"
-                className="absolute top-6 right-6 text-slate-400 hover:text-white p-2.5 rounded-2xl bg-white/5 hover:bg-white/15 border border-white/10 hover:rotate-90 transition-all duration-300 shadow-sm cursor-pointer z-50 group"
+                className="absolute top-4 right-4 sm:top-6 sm:right-6 text-slate-400 hover:text-slate-700 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-slate-100 hover:bg-slate-200 border border-slate-200 hover:rotate-90 transition-all duration-300 shadow-sm cursor-pointer z-50 group min-h-[36px] min-w-[36px] flex items-center justify-center"
               >
-                <X className="h-5 w-5 transition-transform group-hover:scale-110" />
+                <X className="h-4 w-4 sm:h-5 sm:w-5 transition-transform group-hover:scale-110" />
               </button>
               
-              <div className="flex items-center gap-4 relative z-10">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#c5a880]/25 via-[#c5a880]/10 to-transparent border border-[#c5a880]/40 shadow-[0_0_25px_rgba(197,168,128,0.3)] flex items-center justify-center relative overflow-hidden group">
-                  <div className="absolute inset-0 bg-[#c5a880]/15 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  <ScanFace className="h-7 w-7 text-[#c5a880] animate-pulse-soft drop-shadow-[0_0_10px_rgba(197,168,128,0.8)]" />
+              <div className="flex items-center gap-3 sm:gap-4 relative z-10 pr-8 sm:pr-0">
+                <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-[#c5a880]/20 via-[#c5a880]/10 to-[#faf9f6] border border-[#c5a880]/30 shadow-sm flex items-center justify-center shrink-0">
+                  <ScanFace className="h-6 w-6 sm:h-7 sm:w-7 text-[#c5a880] animate-gentle-pulse" />
                 </div>
-                <div>
-                  <h3 className="text-2xl font-black bg-gradient-to-r from-white via-slate-100 to-[#c5a880] bg-clip-text text-transparent tracking-tight">Find My Photos</h3>
-                  <p className="text-xs text-slate-400 font-medium mt-1.5 tracking-wide flex items-center gap-2">
-                    <span>Scan your face or upload a photo to find your memories.</span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-widest bg-[#c5a880]/15 text-[#c5a880] border border-[#c5a880]/30">AI BIOMETRIC</span>
+                <div className="min-w-0">
+                  <h3 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">Find My Photos</h3>
+                  <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5 sm:mt-1 tracking-wide flex items-center gap-1.5 flex-wrap">
+                    <span>Scan face or upload a selfie</span>
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-mono font-bold uppercase tracking-widest bg-[#c5a880]/15 text-[#c5a880] border border-[#c5a880]/30">AI 512-D</span>
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="p-7 sm:p-8 -mt-2 bg-transparent rounded-b-[2.5rem] relative z-10">
+            <div className="p-4 sm:p-7 bg-white rounded-b-2xl sm:rounded-b-[2rem] relative z-10">
               {/* Error message */}
               {searchError && (
-                <div className="mb-6 bg-rose-950/40 backdrop-blur-md border border-rose-500/40 text-rose-300 p-4 rounded-2xl text-xs flex items-start justify-between gap-3 font-semibold shadow-[0_0_20px_rgba(244,63,94,0.2)] animate-in slide-in-from-top-2 duration-300">
+                <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-2xl text-xs flex items-start justify-between gap-3 font-semibold shadow-sm animate-in slide-in-from-top-2 duration-300">
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="h-4.5 w-4.5 shrink-0 animate-pulse text-rose-400 mt-0.5" />
+                    <AlertCircle className="h-4.5 w-4.5 shrink-0 animate-pulse text-rose-500 mt-0.5" />
                     <span className="leading-relaxed">{searchError}</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setSearchError('')}
-                    className="text-rose-400 hover:text-rose-200 p-1 rounded-lg hover:bg-rose-500/20 transition-colors shrink-0 cursor-pointer"
+                    className="text-rose-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-100 transition-colors shrink-0 cursor-pointer"
                     title="Dismiss"
                   >
                     <X className="h-4 w-4" />
@@ -1145,7 +1134,7 @@ export default function ClientGallery() {
                 /* ── FULL BIOMETRIC AI FACE SCANNING VIEW ── */
                 <div className="flex flex-col items-center gap-6 py-2 animate-in fade-in zoom-in-95 duration-500">
                   {/* Biometric Viewport */}
-                  <div className={`relative w-full max-w-sm aspect-[4/3] rounded-3xl overflow-hidden bg-[#030306] border-2 transition-all duration-700 shadow-2xl flex items-center justify-center ${
+                  <div className={`relative w-full max-w-sm aspect-[4/3] rounded-3xl overflow-hidden bg-slate-900 border-2 transition-all duration-700 shadow-xl flex items-center justify-center ${
                     isMatchedSuccess 
                       ? 'border-emerald-400 shadow-[0_0_60px_rgba(16,185,129,0.7)]' 
                       : 'border-[#c5a880] shadow-[0_0_45px_rgba(197,168,128,0.4)] animate-cyber-hologram'
@@ -1160,8 +1149,8 @@ export default function ClientGallery() {
                         }`} 
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-[#07070b]">
-                        <ScanFace className="w-20 h-20 text-[#c5a880]/50 animate-pulse" />
+                      <div className="w-full h-full flex items-center justify-center bg-slate-100">
+                        <ScanFace className="w-20 h-20 text-[#c5a880]/40 animate-pulse" />
                       </div>
                     )}
 
@@ -1294,43 +1283,43 @@ export default function ClientGallery() {
                   </div>
 
                   {/* Dynamic High-Tech Progress & Stage Status Card */}
-                  <div className="w-full bg-gradient-to-b from-white/[0.08] to-white/[0.02] border border-white/10 rounded-3xl p-5 sm:p-6 shadow-[0_20px_40px_rgba(0,0,0,0.6)] backdrop-blur-2xl relative overflow-hidden">
-                    <div className="absolute -right-8 -bottom-8 w-36 h-36 bg-[#c5a880]/15 rounded-full blur-3xl pointer-events-none" />
+                  <div className="w-full bg-[#faf9f6] border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm relative overflow-hidden">
+                    <div className="absolute -right-8 -bottom-8 w-36 h-36 bg-[#c5a880]/8 rounded-full blur-3xl pointer-events-none" />
 
                     <div className="flex items-center justify-between mb-3 relative z-10">
                       <span className="text-[11px] font-black uppercase tracking-[0.2em] text-[#c5a880] flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-[#c5a880] animate-pulse drop-shadow-[0_0_6px_rgba(197,168,128,0.8)]" />
+                        <Sparkles className="w-4 h-4 text-[#c5a880] animate-pulse" />
                         {isMatchedSuccess ? 'Biometric Match Complete' : 'AI Facial Processing'}
                       </span>
-                      <span className="text-xs font-mono font-black text-white bg-white/10 border border-white/10 px-2.5 py-0.5 rounded-lg shadow-xs">
+                      <span className="text-xs font-mono font-black text-slate-800 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-lg">
                         {searchProgress}%
                       </span>
                     </div>
 
-                    {/* Radiant Glowing Progress Bar */}
-                    <div className="w-full h-3.5 bg-black/80 rounded-full p-0.5 border border-white/10 shadow-inner overflow-hidden relative">
+                    {/* Progress Bar */}
+                    <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden relative">
                       <div 
                         className={`h-full transition-all duration-300 ease-out rounded-full relative ${
                           isMatchedSuccess 
-                            ? 'bg-gradient-to-r from-emerald-500 to-teal-300 shadow-[0_0_20px_rgba(16,185,129,0.9)]' 
-                            : 'bg-gradient-to-r from-amber-500 via-[#c5a880] to-emerald-400 shadow-[0_0_20px_rgba(197,168,128,0.9)]'
+                            ? 'bg-gradient-to-r from-emerald-500 to-teal-400' 
+                            : 'bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880]'
                         }`}
                         style={{ width: `${searchProgress}%` }}
                       >
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent animate-[shimmer_1.2s_infinite]" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-progress-shine" />
                       </div>
                     </div>
 
-                    {/* Stage Description Text Box */}
-                    <div className="mt-4 flex items-center gap-3 bg-black/40 border border-white/5 rounded-2xl p-3 px-4 shadow-sm relative z-10">
-                      <div className="w-6 h-6 rounded-full bg-[#c5a880]/10 border border-[#c5a880]/30 shadow-xs flex items-center justify-center shrink-0">
+                    {/* Stage Description */}
+                    <div className="mt-4 flex items-center gap-3 bg-white border border-slate-200 rounded-xl p-3 px-4 shadow-sm relative z-10">
+                      <div className="w-6 h-6 rounded-full bg-[#c5a880]/10 border border-[#c5a880]/25 flex items-center justify-center shrink-0">
                         {isMatchedSuccess ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
+                          <Check className="w-3.5 h-3.5 text-emerald-500 stroke-[2.5]" />
                         ) : (
                           <Loader className="w-3.5 h-3.5 text-[#c5a880] animate-spin" />
                         )}
                       </div>
-                      <p className="text-xs font-bold text-slate-100 tracking-wide select-none">
+                      <p className="text-xs font-bold text-slate-700 tracking-wide select-none">
                         {searchStage || 'Processing face detection...'}
                       </p>
                     </div>
@@ -1339,13 +1328,13 @@ export default function ClientGallery() {
               ) : (
                 <>
                   {/* Tab Switcher */}
-                  <div className="bg-black/50 p-1.5 rounded-2xl flex mb-7 border border-white/10 shadow-inner">
+                  <div className="bg-slate-100 p-1.5 rounded-2xl flex mb-7 border border-slate-200">
                     <button 
                       onClick={() => { setSearchTab('upload'); stopWebcam(); }}
                       className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black transition-all duration-300 ${
                         searchTab === 'upload' 
-                          ? 'bg-gradient-to-r from-[#c5a880] to-[#b09672] text-slate-950 shadow-[0_4px_20px_rgba(197,168,128,0.4)] transform scale-[1.02] border border-white/20' 
-                          : 'text-slate-400 hover:text-white hover:bg-white/5'
+                          ? 'bg-gradient-to-r from-[#c5a880] to-[#b09672] text-white shadow-[0_4px_15px_rgba(197,168,128,0.3)] transform scale-[1.02]' 
+                          : 'text-slate-500 hover:text-slate-800 hover:bg-white'
                       }`}
                     >
                       <Upload className="h-4 w-4" />
@@ -1355,8 +1344,8 @@ export default function ClientGallery() {
                       onClick={startWebcam}
                       className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black transition-all duration-300 ${
                         searchTab === 'camera' 
-                          ? 'bg-gradient-to-r from-[#c5a880] to-[#b09672] text-slate-950 shadow-[0_4px_20px_rgba(197,168,128,0.4)] transform scale-[1.02] border border-white/20' 
-                          : 'text-slate-400 hover:text-white hover:bg-white/5'
+                          ? 'bg-gradient-to-r from-[#c5a880] to-[#b09672] text-white shadow-[0_4px_15px_rgba(197,168,128,0.3)] transform scale-[1.02]' 
+                          : 'text-slate-500 hover:text-slate-800 hover:bg-white'
                       }`}
                     >
                       <Camera className="h-4 w-4" />
@@ -1377,13 +1366,13 @@ export default function ClientGallery() {
 
                         {/* Face guide overlay */}
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="w-56 h-56 border-2 border-[#c5a880] rounded-full border-dashed shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-500 group-hover:scale-105" />
+                          <div className="w-40 sm:w-56 h-40 sm:h-56 border-2 border-[#c5a880] rounded-full border-dashed shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-500 group-hover:scale-105" />
                           {/* Scanning laser */}
-                          <div className="absolute w-56 h-0.5 bg-gradient-to-r from-transparent via-[#c5a880] to-transparent animate-scan-laser shadow-[0_0_12px_rgba(197,168,128,0.9)]" />
+                          <div className="absolute w-40 sm:w-56 h-0.5 bg-gradient-to-r from-transparent via-[#c5a880] to-transparent animate-scan-laser shadow-[0_0_12px_rgba(197,168,128,0.9)]" />
                         </div>
-                        <div className="absolute bottom-6 left-0 right-0 text-center animate-pulse-soft">
-                          <span className="text-[10px] tracking-widest text-white font-mono font-bold bg-black/80 backdrop-blur-md px-6 py-2 rounded-full border border-white/20 shadow-lg">
-                            ALIGN FACE IN TARGET CIRCLE
+                        <div className="absolute bottom-3 sm:bottom-6 left-0 right-0 text-center animate-pulse-soft">
+                          <span className="text-[9px] sm:text-[10px] tracking-widest text-white font-mono font-bold bg-black/80 backdrop-blur-md px-3 sm:px-6 py-1 sm:py-2 rounded-full border border-white/20 shadow-lg">
+                            ALIGN FACE IN CIRCLE
                           </span>
                         </div>
                       </div>
@@ -1414,12 +1403,12 @@ export default function ClientGallery() {
                         <div className="flex flex-col items-center gap-6">
                           {/* Preview */}
                           <div className="relative w-full group">
-                            <div className="w-full rounded-3xl border-2 border-[#c5a880]/50 overflow-hidden bg-black/40 flex items-center justify-center shadow-xl relative">
+                            <div className="w-full rounded-3xl border-2 border-[#c5a880]/30 overflow-hidden bg-slate-50 flex items-center justify-center shadow-md relative">
                               <img src={selfiePreview} alt="Selfie Preview" className="w-full h-auto max-h-[300px] object-cover transition-transform duration-700 group-hover:scale-105" />
                             </div>
                             <button 
                               onClick={clearSelfie} 
-                              className="absolute top-4 right-4 bg-black/75 backdrop-blur-md hover:bg-black text-white p-2.5 rounded-xl transition-all duration-300 shadow-xl border border-white/20 hover:scale-110 hover:text-rose-400"
+                              className="absolute top-4 right-4 bg-white/90 backdrop-blur-md hover:bg-white text-slate-600 p-2.5 rounded-xl transition-all duration-300 shadow-lg border border-slate-200 hover:scale-110 hover:text-rose-500"
                             >
                               <X className="h-4 w-4" />
                             </button>
@@ -1429,7 +1418,7 @@ export default function ClientGallery() {
                           <div className="w-full space-y-4">
                             <button 
                               onClick={() => fileInputRef.current?.click()} 
-                              className="w-full text-xs text-[#c5a880] hover:text-white font-bold py-2 flex items-center justify-center gap-1.5 transition-colors"
+                              className="w-full text-xs text-[#c5a880] hover:text-slate-800 font-bold py-2 flex items-center justify-center gap-1.5 transition-colors"
                             >
                               <RefreshCw className="h-4 w-4" />
                               Remove & choose another photo
@@ -1454,20 +1443,20 @@ export default function ClientGallery() {
                           onDragLeave={() => setIsDragOver(false)}
                           onDrop={handleDrop}
                           onClick={() => fileInputRef.current?.click()}
-                          className={`w-full min-h-[260px] rounded-3xl border-2 border-dashed cursor-pointer transition-all duration-500 flex flex-col items-center justify-center gap-4 p-8 relative overflow-hidden group ${
+                          className={`w-full min-h-[260px] rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-500 flex flex-col items-center justify-center gap-4 p-8 relative overflow-hidden group ${
                             isDragOver 
-                              ? 'border-[#c5a880] bg-[#c5a880]/15 scale-[1.02]' 
-                              : 'border-[#c5a880]/30 bg-white/[0.02] hover:border-[#c5a880] hover:bg-[#c5a880]/5 hover:shadow-[0_0_30px_rgba(197,168,128,0.15)]'
+                              ? 'border-[#c5a880] bg-[#c5a880]/10 scale-[1.01]' 
+                              : 'border-slate-300 bg-[#faf9f6] hover:border-[#c5a880] hover:bg-[#c5a880]/5'
                           }`}
                         >
-                          <div className={`absolute inset-0 bg-gradient-to-br from-[#c5a880]/10 to-transparent opacity-0 transition-opacity duration-500 ${isDragOver ? 'opacity-100' : 'group-hover:opacity-100'}`} />
+                          <div className={`absolute inset-0 bg-gradient-to-br from-[#c5a880]/8 to-transparent opacity-0 transition-opacity duration-500 ${isDragOver ? 'opacity-100' : 'group-hover:opacity-100'}`} />
                           
-                          <div className={`w-16 h-16 rounded-2xl bg-white/[0.05] border shadow-md flex items-center justify-center relative z-10 transition-all duration-500 ${isDragOver ? 'border-[#c5a880] shadow-[#c5a880]/30 scale-110' : 'border-white/10 group-hover:scale-110 group-hover:border-[#c5a880]/50'}`}>
+                          <div className={`w-16 h-16 rounded-2xl bg-white border shadow-sm flex items-center justify-center relative z-10 transition-all duration-500 ${isDragOver ? 'border-[#c5a880] shadow-md scale-110' : 'border-slate-200 group-hover:scale-110 group-hover:border-[#c5a880]/50 group-hover:shadow-md'}`}>
                             <Upload className="h-7 w-7 text-[#c5a880]" />
                           </div>
                           
                           <div className="text-center relative z-10">
-                            <p className="text-sm font-black text-slate-100 transition-colors group-hover:text-white">
+                            <p className="text-sm font-black text-slate-700 transition-colors group-hover:text-slate-900">
                               {isDragOver ? 'Drop your photo here!' : 'Drag & drop your photo here'}
                             </p>
                             <p className="text-xs text-slate-400 font-medium mt-1.5 tracking-wide">
@@ -1489,20 +1478,20 @@ export default function ClientGallery() {
               )}
 
               {/* Privacy note */}
-              <div className="mt-7 flex items-center justify-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest bg-white/[0.03] border border-white/5 py-2.5 px-4 rounded-xl">
-                <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.7)]" />
+              <div className="mt-7 flex items-center justify-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-widest bg-slate-50 border border-slate-200 py-2.5 px-4 rounded-xl">
+                <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" />
                 <span>Your photo is encrypted and never stored permanently</span>
               </div>
 
               {/* Indexing Status Banner */}
               {indexingStatus && indexingStatus.pending > 0 && (
-                <div className="mt-4 bg-gradient-to-r from-amber-950/30 to-orange-950/20 border border-[#c5a880]/30 rounded-2xl p-4 flex items-start gap-4 animate-in fade-in slide-in-from-bottom-4 shadow-sm">
-                  <div className="w-10 h-10 rounded-xl bg-white/5 shadow-sm flex items-center justify-center shrink-0 border border-[#c5a880]/30">
+                <div className="mt-4 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-4 animate-in fade-in slide-in-from-bottom-4 shadow-sm">
+                  <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center shrink-0 border border-amber-200">
                     <Loader className="w-5 h-5 text-[#c5a880] animate-spin" />
                   </div>
                   <div className="mt-0.5">
-                    <h4 className="text-sm font-bold text-amber-200">Photo indexing in progress</h4>
-                    <p className="text-xs font-medium text-slate-300 mt-1 leading-relaxed">
+                    <h4 className="text-sm font-bold text-amber-800">Photo indexing in progress</h4>
+                    <p className="text-xs font-medium text-amber-600 mt-1 leading-relaxed">
                       {indexingStatus.pending} photos are still being processed. Check back soon to find more matches!
                     </p>
                   </div>
@@ -1510,11 +1499,11 @@ export default function ClientGallery() {
               )}
 
               {/* Bottom Cancel / Close button */}
-              <div className="mt-6 pt-5 border-t border-white/10 flex items-center justify-center">
+              <div className="mt-6 pt-5 border-t border-slate-200 flex items-center justify-center">
                 <button
                   type="button"
                   onClick={closeSearchModal}
-                  className="w-full py-3.5 px-4 rounded-2xl text-xs font-bold text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
+                  className="w-full py-3.5 px-4 rounded-2xl text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
                 >
                   <X className="h-4 w-4 text-slate-400" />
                   <span>Cancel / Close</span>

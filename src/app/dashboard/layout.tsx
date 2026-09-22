@@ -52,7 +52,6 @@ const NAV_ITEMS = [
       { href: '/dashboard/queries', label: 'Queries', icon: HelpCircle },
       { href: '/dashboard/studio-settings', label: 'Studio Settings', icon: Settings },
       { href: '/dashboard/studio-branding', label: 'Studio Branding', icon: Settings },
-      { href: '/dashboard/face-index', label: 'Face Index', icon: ScanLine },
       { href: '/dashboard/plans-billing', label: 'Plans & Billing', icon: CreditCard },
       { href: '/dashboard/support-help', label: 'Support Help', icon: HelpCircle },
     ],
@@ -73,7 +72,22 @@ function SidebarContent({
   const router = useRouter();
   const { studio } = useDashboard();
   const { studio: authStudio } = useAuth();
-  const logoUrl = studio?.logoUrl || authStudio?.logoUrl || '/logo.png';
+  const [logoState, setLogoState] = useState<string>(studio?.logoUrl || authStudio?.logoUrl || '/logo.png');
+
+  useEffect(() => {
+    if (studio?.logoUrl) setLogoState(studio.logoUrl);
+    else if (authStudio?.logoUrl) setLogoState(authStudio.logoUrl);
+  }, [studio?.logoUrl, authStudio?.logoUrl]);
+
+  useEffect(() => {
+    const handleLogoUpdated = (e: any) => {
+      if (e?.detail?.logoUrl) {
+        setLogoState(e.detail.logoUrl);
+      }
+    };
+    window.addEventListener('studio_logo_updated', handleLogoUpdated);
+    return () => window.removeEventListener('studio_logo_updated', handleLogoUpdated);
+  }, []);
   
   const currentPlan = (studio?.subscriptionPlan || authStudio?.subscriptionPlan || 'BASIC').toUpperCase();
   const isBasicPlan = currentPlan === 'BASIC' || currentPlan === 'STARTER';
@@ -122,7 +136,7 @@ function SidebarContent({
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-center w-full py-4 mb-6 px-2 shrink-0">
         <Link href="/dashboard" className="cursor-pointer" onClick={onLinkClick}>
-          <img src={logoUrl} alt="Studio Logo" className={`max-h-20 w-auto object-contain ${!studio?.logoUrl ? 'filter invert' : ''}`} />
+          <img src={logoState} alt="Studio Logo" className={`max-h-20 w-auto object-contain ${logoState === '/logo.png' ? 'filter invert' : ''}`} />
         </Link>
       </div>
 
@@ -192,7 +206,22 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
   const { user, logout, studio: authStudio } = useAuth();
   const { studio } = useDashboard();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const logoUrl = studio?.logoUrl || authStudio?.logoUrl || '/logo.png';
+  const [logoState, setLogoState] = useState<string>(studio?.logoUrl || authStudio?.logoUrl || '/logo.png');
+
+  useEffect(() => {
+    if (studio?.logoUrl) setLogoState(studio.logoUrl);
+    else if (authStudio?.logoUrl) setLogoState(authStudio.logoUrl);
+  }, [studio?.logoUrl, authStudio?.logoUrl]);
+
+  useEffect(() => {
+    const handleLogoUpdated = (e: any) => {
+      if (e?.detail?.logoUrl) {
+        setLogoState(e.detail.logoUrl);
+      }
+    };
+    window.addEventListener('studio_logo_updated', handleLogoUpdated);
+    return () => window.removeEventListener('studio_logo_updated', handleLogoUpdated);
+  }, []);
 
   const currentPlan = (studio?.subscriptionPlan || authStudio?.subscriptionPlan || 'BASIC').toUpperCase();
   const isBasicPlan = currentPlan === 'BASIC' || currentPlan === 'STARTER';
@@ -266,7 +295,7 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
             <Menu className="h-6 w-6" />
           </button>
           <Link href="/dashboard" className="flex-1 flex justify-center overflow-hidden px-2">
-            <img src={logoUrl} alt="Studio Logo" className={`h-8 w-auto max-w-full object-contain ${!studio?.logoUrl ? 'filter invert' : ''}`} />
+            <img src={logoState} alt="Studio Logo" className={`h-8 w-auto max-w-full object-contain ${logoState === '/logo.png' ? 'filter invert' : ''}`} />
           </Link>
           <div className="w-10 shrink-0" /> {/* spacer to balance the menu button */}
         </header>

@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Calendar, Image as ImageIcon, Video, Loader2, Sparkles, Crown, ArrowRight, Search } from 'lucide-react';
+import { Plus, Calendar, Image as ImageIcon, Video, Loader2, Sparkles, Crown, ArrowRight, Search, Clock } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 
 export default function EventsManagementPage() {
@@ -32,6 +32,24 @@ export default function EventsManagementPage() {
     };
     fetchEvents();
   }, []);
+
+  // Helper to calculate exact live days left out of 30 days based on event date or creation date
+  const getDaysLeft = (event: any) => {
+    const baseDateStr = event.date || event.createdAt;
+    if (!baseDateStr) return 30;
+
+    const baseDate = new Date(baseDateStr);
+    const now = new Date();
+
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const baseMidnight = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()).getTime();
+
+    const diffDays = Math.floor((todayMidnight - baseMidnight) / (1000 * 60 * 60 * 24));
+    if (diffDays <= 0) return 30;
+
+    const remaining = 30 - diffDays;
+    return Math.max(0, remaining);
+  };
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8 font-poppins">
@@ -145,6 +163,17 @@ export default function EventsManagementPage() {
                           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">No Cover Added</span>
                         </div>
                       )}
+                      {/* 30-Day Auto Delete Badge */}
+                      {(() => {
+                        const days = getDaysLeft(event);
+                        const label = days === 0 ? 'Expires today' : `${days} ${days === 1 ? 'day' : 'days'} left`;
+                        return (
+                          <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-xs px-2.5 py-1 rounded-full text-[11px] font-bold shadow-sm border border-slate-200/80 flex items-center gap-1.5 text-slate-700">
+                            <Clock className={`w-3.5 h-3.5 ${days <= 5 ? 'text-rose-500 animate-pulse' : 'text-[#c5a880]'}`} />
+                            <span>{label}</span>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Details Section */}

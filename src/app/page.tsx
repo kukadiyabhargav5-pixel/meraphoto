@@ -9,7 +9,8 @@ import {
   Star, Check,
   ChevronDown, ArrowRight, Shield, Users,
   Globe, QrCode, ScanFace, Zap, Upload,
-  Mail, Phone, Send
+  Mail, Phone, Send,
+  Quote, BadgeCheck, Sparkles, Award
 } from 'lucide-react';
 
 /* ─────────────── DATA ─────────────── */
@@ -125,19 +126,25 @@ const testimonials = [
   {
     name: 'Rohan Malhotra',
     role: 'Luxury Wedding Photographer, Mumbai',
-    rating: 5,
+    category: 'Heritage Wedding',
+    metric: '600+ Guests • Instant Delivery',
+    icon: Sparkles,
     text: 'Mara Photo transformed our client delivery. At a recent 600-guest heritage wedding, guests retrieved their personalized photos instantly. It completely saved us from endless WhatsApp and email follow-ups.',
   },
   {
     name: 'Sneha Rao',
     role: 'Editorial Portrait Photographer, Bangalore',
-    rating: 5,
+    category: 'Editorial & Portraits',
+    metric: 'Saved 4+ Hours / Shoot • Live Delivery',
+    icon: Zap,
     text: 'I save hours of manual sorting on every shoot. Delivering high-resolution portraits live as the event happens wows the hosts and generates instant social media word-of-mouth for my studio.',
   },
   {
     name: 'Hardik Patel',
     role: 'Creative Director, Ahmedabad',
-    rating: 5,
+    category: 'Grand Multi-Day Wedding',
+    metric: '12,000+ Photos • 100% AI Accuracy',
+    icon: Award,
     text: 'For a massive three-day Gujarati wedding, we uploaded over 12,000 photos. The AI face recognition worked flawlessly. Guests were thrilled, and we looked incredibly professional and modern.',
   },
 ];
@@ -461,10 +468,75 @@ export default function HomePage() {
           transform: translateY(-4px);
           box-shadow: 0 12px 32px rgba(0,0,0,0.3);
         }
-        .testimonial-stars {
+        .testimonial-card-header {
           display: flex;
-          gap: 2px;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 14px;
+        }
+        .testimonial-category-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 10px;
+          border-radius: 9999px;
+          background: rgba(197, 168, 128, 0.08);
+          border: 1px solid rgba(197, 168, 128, 0.22);
+          font-size: 11px;
+          font-weight: 700;
+          color: #e5d5be;
+          letter-spacing: 0.02em;
+        }
+        .testimonial-quote-badge {
+          width: 28px;
+          height: 28px;
+          border-radius: 8px;
+          background: rgba(197, 168, 128, 0.08);
+          border: 1px solid rgba(197, 168, 128, 0.2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #c5a880;
+          transition: all 0.3s ease;
+        }
+        .testimonial-card:hover .testimonial-quote-badge {
+          background: rgba(197, 168, 128, 0.2);
+          border-color: rgba(197, 168, 128, 0.45);
+          transform: scale(1.05);
+        }
+        .testimonial-metric-chip {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 12px;
           margin-bottom: 16px;
+          border-radius: 10px;
+          background: linear-gradient(90deg, rgba(197, 168, 128, 0.09) 0%, rgba(255, 255, 255, 0.02) 100%);
+          border-left: 2px solid #c5a880;
+          font-size: 12px;
+        }
+        .testimonial-metric-accent {
+          font-weight: 700;
+          color: #c5a880;
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+        .testimonial-metric-val {
+          font-weight: 600;
+          color: #f3f4f6;
+        }
+        .verified-studio-tag {
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: #34d399;
+          background: rgba(52, 211, 153, 0.08);
+          border: 1px solid rgba(52, 211, 153, 0.2);
+          padding: 3px 7px;
+          border-radius: 9999px;
+          white-space: nowrap;
         }
         .testimonial-text {
           font-size: 13px;
@@ -972,25 +1044,42 @@ export default function HomePage() {
           <h2 className="section-title" style={{ color: '#fff' }}>What Photographers Say</h2>
           <p className="section-desc" style={{ color: '#9ca3af' }}>Real results from real studios across India.</p>
           <div className="testimonials-grid">
-            {testimonials.map(t => (
-              <div key={t.name} className="testimonial-card">
-                <div>
-                  <div className="testimonial-stars">
-                    {Array.from({ length: t.rating }).map((_, i) => (
-                      <Star key={i} className="w-3 h-3" style={{ fill: '#c5a880', color: '#c5a880' }} />
-                    ))}
+            {testimonials.map(t => {
+              const CategoryIcon = t.icon;
+              return (
+                <div key={t.name} className="testimonial-card">
+                  <div>
+                    <div className="testimonial-card-header">
+                      <div className="testimonial-category-pill">
+                        <CategoryIcon className="w-3.5 h-3.5" style={{ color: '#c5a880' }} />
+                        <span>{t.category}</span>
+                      </div>
+                      <div className="testimonial-quote-badge" title="Verified Studio Quote">
+                        <Quote className="w-3.5 h-3.5" />
+                      </div>
+                    </div>
+
+                    <div className="testimonial-metric-chip">
+                      <span className="testimonial-metric-accent">Outcome</span>
+                      <span className="testimonial-metric-val">{t.metric}</span>
+                    </div>
+
+                    <p className="testimonial-text">&ldquo;{t.text}&rdquo;</p>
                   </div>
-                  <p className="testimonial-text">&ldquo;{t.text}&rdquo;</p>
-                </div>
-                <div className="testimonial-author">
-                  <div className="testimonial-avatar">{t.name.split(' ').map(n => n[0]).join('')}</div>
-                  <div style={{ textAlign: 'left' }}>
-                    <p className="testimonial-name">{t.name}</p>
-                    <p className="testimonial-role">{t.role}</p>
+                  <div className="testimonial-author">
+                    <div className="testimonial-avatar">{t.name.split(' ').map(n => n[0]).join('')}</div>
+                    <div style={{ textAlign: 'left', flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <p className="testimonial-name">{t.name}</p>
+                        <BadgeCheck className="w-3.5 h-3.5" style={{ color: '#c5a880', flexShrink: 0 }} />
+                      </div>
+                      <p className="testimonial-role">{t.role}</p>
+                    </div>
+                    <span className="verified-studio-tag">Verified Studio</span>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
