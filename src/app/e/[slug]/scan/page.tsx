@@ -72,6 +72,7 @@ export default function DedicatedFaceScanPage() {
   const [shutterFlash, setShutterFlash] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isStartingCamera, setIsStartingCamera] = useState(false);
 
   // Selfie file & preview
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
@@ -188,6 +189,7 @@ export default function DedicatedFaceScanPage() {
   }, []);
 
   const startCamera = useCallback(async (forcedFacing?: 'user' | 'environment') => {
+    setIsStartingCamera(true);
     try {
       if (typeof window === 'undefined' || !navigator?.mediaDevices?.getUserMedia) {
         setCameraActive(false);
@@ -250,6 +252,8 @@ export default function DedicatedFaceScanPage() {
           ? 'Camera permission denied. Tap "Take Selfie with Phone Camera" below to snap your selfie directly.'
           : 'Could not connect to live camera. Tap "Take Selfie with Phone Camera" below.'
       );
+    } finally {
+      setIsStartingCamera(false);
     }
   }, [cameraFacing, attachStreamToVideo]);
 
@@ -807,16 +811,39 @@ export default function DedicatedFaceScanPage() {
                         className={`absolute inset-0 w-full h-full object-cover ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
                       />
 
-                      {/* Connecting / Tap to Start state */}
-                      {!cameraActive && (
-                        <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center gap-3 z-10 p-6 text-center">
-                          <div className="w-12 h-12 rounded-full bg-[#c5a880]/20 border border-[#c5a880]/40 flex items-center justify-center animate-spin">
-                            <Loader className="w-6 h-6 text-[#c5a880]" />
-                          </div>
-                          <span className="text-xs font-mono font-bold text-slate-200 tracking-wider">CONNECTING SELFIE CAMERA...</span>
-                          <span className="text-[11px] text-slate-400">Please allow camera permissions if prompted</span>
+                      {/* Viewfinder States: Selfie Preview vs Starting vs Inactive */}
+                      {selfiePreview && !cameraActive ? (
+                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black overflow-hidden">
+                          <img src={selfiePreview} alt="Selfie" className="w-full h-full object-cover" />
                         </div>
-                      )}
+                      ) : !cameraActive ? (
+                        <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center gap-3 z-10 p-6 text-center">
+                          {isStartingCamera ? (
+                            <>
+                              <div className="w-12 h-12 rounded-full bg-[#c5a880]/20 border border-[#c5a880]/40 flex items-center justify-center animate-spin">
+                                <Loader className="w-6 h-6 text-[#c5a880]" />
+                              </div>
+                              <span className="text-xs font-mono font-bold text-slate-200 tracking-wider">CONNECTING SELFIE CAMERA...</span>
+                              <span className="text-[11px] text-slate-400">Please allow camera permissions if prompted</span>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-14 h-14 rounded-2xl bg-[#c5a880]/15 border border-[#c5a880]/30 flex items-center justify-center mb-1 shadow-md">
+                                <Camera className="w-7 h-7 text-[#c5a880]" />
+                              </div>
+                              <span className="text-xs font-bold text-slate-200">Live Camera Inactive</span>
+                              <button
+                                type="button"
+                                onClick={() => startCamera()}
+                                className="bg-gradient-to-r from-[#c5a880] to-[#b09672] text-slate-950 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow-md hover:brightness-105 active:scale-95 transition-all mt-1"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                <span>Start Live Camera</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      ) : null}
 
                       {/* Shutter flash effect */}
                       {shutterFlash && (
@@ -886,6 +913,39 @@ export default function DedicatedFaceScanPage() {
                             className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 px-4 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer min-h-[48px]"
                           >
                             <Camera className="w-5 h-5 text-slate-700" />
+                          </button>
+                        </div>
+                      ) : selfiePreview ? (
+                        <div className="flex flex-col sm:flex-row gap-2.5 w-full">
+                          <button
+                            type="button"
+                            onClick={() => selfieFile && performSearch([selfieFile])}
+                            disabled={searchLoading}
+                            className="flex-1 bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-105 active:scale-[0.98] text-slate-950 font-black py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition-all shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 cursor-pointer min-h-[48px] disabled:opacity-60"
+                          >
+                            {searchLoading ? (
+                              <>
+                                <Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-slate-950" />
+                                <span>Scanning Face & Matching...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
+                                <span>Scan This Selfie with AI</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelfieFile(null);
+                              setSelfiePreview(null);
+                              startCamera();
+                            }}
+                            className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-bold py-3.5 sm:py-4 px-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer min-h-[48px]"
+                          >
+                            <RefreshCw className="w-4 h-4 text-[#c5a880]" />
+                            <span>Retake Photo</span>
                           </button>
                         </div>
                       ) : (
