@@ -22,7 +22,7 @@ export const uploadFile = async (
       file: fileBuffer.toString('base64'), // ImageKit expects base64 string for buffer
       fileName: `upload_${Date.now()}`,
       folder: folder,
-    }, function(error, result) {
+    }, function(error: any, result: any) {
       if(error) {
         console.error('ImageKit Upload Error:', error);
         return reject(error);
@@ -43,7 +43,7 @@ export const uploadFile = async (
 export const deleteFile = async (fileId: string): Promise<void> => {
   try {
     await new Promise((resolve, reject) => {
-        imagekit.deleteFile(fileId, function(error, result) {
+        imagekit.deleteFile(fileId, function(error: any, result: any) {
             if (error) {
                console.error(`Failed to delete ImageKit file: ${fileId}`, error);
                return reject(error);

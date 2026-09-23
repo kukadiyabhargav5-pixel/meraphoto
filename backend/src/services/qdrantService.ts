@@ -33,7 +33,7 @@ export const initializeQdrant = async () => {
     }
 
     const { collections } = await qdrantClient.getCollections();
-    const exists = collections.some(c => c.name === COLLECTION_NAME);
+    const exists = collections.some((c: any) => c.name === COLLECTION_NAME);
     
     if (!exists) {
       await qdrantClient.createCollection(COLLECTION_NAME, {
