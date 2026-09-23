@@ -1083,7 +1083,6 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                          </div>
                        </>
                      )}
-                     </div>
                   </div>
                </div>
             )}
