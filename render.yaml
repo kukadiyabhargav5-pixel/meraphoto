@@ -1,22 +1,79 @@
 services:
   - type: web
-    name: maraphoto-backend
-    env: node
-    rootDir: backend
-    buildCommand: npm install && npm run build
-    startCommand: npm run start
+    name: meraphotoes
+    runtime: node
+    plan: free
+    region: oregon
+    repo: https://github.com/kukadiyabhargav5-pixel/meraphotoes.git
+    branch: main
+    buildCommand: cd backend && npm install && npm run build
+    startCommand: cd backend && npm start
+    autoDeploy: true
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 10000
+        value: 5000
       - key: MONGO_URI
         sync: false
       - key: JWT_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
         sync: false
       - key: IMAGEKIT_PUBLIC_KEY
         sync: false
       - key: IMAGEKIT_PRIVATE_KEY
         sync: false
+      - key: IMAGEKIT_URL_ENDPOINT
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
       - key: OPENROUTER_API_KEY
         sync: false
+      - key: AI_SERVICE_URL
+        value: http://maraphotoes-ai:10000
+      - key: FRONTEND_URL
+        value: https://meraphoto.vercel.app
+
+  - type: web
+    name: maraphotoes-ai
+    runtime: python
+    plan: free
+    region: oregon
+    repo: https://github.com/kukadiyabhargav5-pixel/meraphotoes.git
+    branch: main
+    rootDir: ai-service
+    buildCommand: pip install --upgrade pip && pip install --prefer-binary -r requirements.txt && python -c "from insightface.app import FaceAnalysis; app = FaceAnalysis(name='buffalo_sc', allowed_modules=['detection', 'recognition']); app.prepare(ctx_id=-1, det_size=(640, 640))"
+    startCommand: python app/main.py
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: INSIGHTFACE_MODEL
+        value: buffalo_sc
+      - key: PORT
+        value: 10000

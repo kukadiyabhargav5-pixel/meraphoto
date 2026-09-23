@@ -4,7 +4,18 @@ import { searchFaces, isQdrantAvailable, localCosineSearch } from '../services/q
 import axios from 'axios';
 import FormData from 'form-data';
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://127.0.0.1:8000';
+const getCandidateAiUrls = (): string[] => {
+  const envUrl = process.env.AI_SERVICE_URL;
+  const list = [
+    envUrl,
+    'http://maraphotoes-ai:10000',
+    'http://meraphoto-ai:10000',
+    'https://maraphotoes-ai.onrender.com',
+    'https://meraphoto-ai.onrender.com',
+    'http://127.0.0.1:8000',
+  ].filter(Boolean) as string[];
+  return Array.from(new Set(list));
+};
 
 /**
  * Cosine similarity between two vectors.
@@ -23,17 +34,39 @@ const cosineSimilarity = (a: number[], b: number[]): number => {
 
 /**
  * Extract face embeddings from an uploaded file via AI service.
+ * Supports multiple candidate URLs and retries to handle Render free-tier cold starts.
  */
 const extractEmbeddingsFromFile = async (file: Express.Multer.File): Promise<any[]> => {
-  const formData = new FormData();
-  formData.append('file', file.buffer, file.originalname || 'selfie.jpg');
+  const urls = getCandidateAiUrls();
+  let lastError: any = null;
 
-  const aiResponse = await axios.post(`${AI_SERVICE_URL}/detect-faces`, formData, {
-    headers: { ...formData.getHeaders(), 'bypass-tunnel-reminder': 'true' },
-    timeout: 30000,
-  });
+  for (const baseUrl of urls) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file.buffer, file.originalname || 'selfie.jpg');
 
-  return aiResponse.data.faces || [];
+        const aiResponse = await axios.post(`${baseUrl}/detect-faces`, formData, {
+          headers: { ...formData.getHeaders(), 'bypass-tunnel-reminder': 'true' },
+          timeout: 45000,
+        });
+
+        if (aiResponse.data && Array.isArray(aiResponse.data.faces)) {
+          return aiResponse.data.faces;
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[Face Search] AI service attempt ${attempt} on ${baseUrl} failed:`, err.message);
+        if (err.response?.status === 503 || err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
+          if (attempt < 2) {
+            await new Promise(r => setTimeout(r, 2500));
+          }
+        }
+      }
+    }
+  }
+
+  throw lastError || new Error('No AI service endpoints reachable');
 };
 
 // Map to avoid duplicate concurrent indexing per event
@@ -71,15 +104,26 @@ const triggerAutoIndexing = async (eventId: string) => {
         });
         const buffer = Buffer.from(imgRes.data);
 
-        const formData = new FormData();
-        formData.append('file', buffer, 'photo.jpg');
+        let faces: any[] = [];
+        const urls = getCandidateAiUrls();
+        for (const baseUrl of urls) {
+          try {
+            const formData = new FormData();
+            formData.append('file', buffer, 'photo.jpg');
 
-        const aiRes = await axios.post(`${AI_SERVICE_URL}/detect-faces`, formData, {
-          headers: { ...formData.getHeaders(), 'bypass-tunnel-reminder': 'true' },
-          timeout: 60000,
-        });
+            const aiRes = await axios.post(`${baseUrl}/detect-faces`, formData, {
+              headers: { ...formData.getHeaders(), 'bypass-tunnel-reminder': 'true' },
+              timeout: 60000,
+            });
 
-        const faces = aiRes.data.faces || [];
+            if (aiRes.data && Array.isArray(aiRes.data.faces)) {
+              faces = aiRes.data.faces;
+              break;
+            }
+          } catch (err: any) {
+            console.warn(`[AutoIndex] Failed with ${baseUrl}:`, err.message);
+          }
+        }
         await FaceEmbedding.deleteMany({ mediaId: photo._id });
 
         for (const face of faces) {

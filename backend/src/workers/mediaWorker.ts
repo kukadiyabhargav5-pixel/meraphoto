@@ -43,6 +43,19 @@ checkRedis().then((available) => {
   }
 });
 
+const getCandidateAiUrls = (): string[] => {
+  const envUrl = process.env.AI_SERVICE_URL;
+  const list = [
+    envUrl,
+    'http://maraphotoes-ai:10000',
+    'http://meraphoto-ai:10000',
+    'https://maraphotoes-ai.onrender.com',
+    'https://meraphoto-ai.onrender.com',
+    'http://127.0.0.1:8000',
+  ].filter(Boolean) as string[];
+  return Array.from(new Set(list));
+};
+
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://127.0.0.1:8000';
 
 /**
@@ -293,15 +306,28 @@ export const processPhoto = async (mediaId: string, studioId: string) => {
 
     let faces = [];
     let faceIndexStatus: 'INDEXED' | 'NO_FACE' | 'FAILED' = 'NO_FACE';
-    try {
-      const aiResponse = await axios.post(`${AI_SERVICE_URL}/detect-faces`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data', 'bypass-tunnel-reminder': 'true' },
-        timeout: 60000, // 60 second timeout for large images
-      });
-      faces = aiResponse.data.faces || [];
-      faceIndexStatus = faces.length > 0 ? 'INDEXED' : 'NO_FACE';
-    } catch (aiErr: any) {
-      console.warn(`[AI Warning]: AI Face Service offline. Skipping face detection for photo ${mediaId}:`, aiErr.message);
+    const candidateUrls = getCandidateAiUrls();
+    let lastAiErr: any = null;
+
+    for (const baseUrl of candidateUrls) {
+      try {
+        const aiResponse = await axios.post(`${baseUrl}/detect-faces`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data', 'bypass-tunnel-reminder': 'true' },
+          timeout: 60000,
+        });
+        if (aiResponse.data && Array.isArray(aiResponse.data.faces)) {
+          faces = aiResponse.data.faces;
+          faceIndexStatus = faces.length > 0 ? 'INDEXED' : 'NO_FACE';
+          lastAiErr = null;
+          break;
+        }
+      } catch (aiErr: any) {
+        lastAiErr = aiErr;
+        console.warn(`[AI Warning]: Face detection failed on ${baseUrl}:`, aiErr.message);
+      }
+    }
+
+    if (lastAiErr && faces.length === 0) {
       faceIndexStatus = 'FAILED';
     }
     console.log(`Detected ${faces.length} faces in photo ${mediaId}`);

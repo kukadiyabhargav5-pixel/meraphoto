@@ -2,7 +2,18 @@ import { Request, Response } from 'express';
 import axios from 'axios';
 import { FaceEmbedding, Media, Studio } from '../models';
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://127.0.0.1:8000';
+const getCandidateAiUrls = (): string[] => {
+  const envUrl = process.env.AI_SERVICE_URL;
+  const list = [
+    envUrl,
+    'http://maraphotoes-ai:10000',
+    'http://meraphoto-ai:10000',
+    'https://maraphotoes-ai.onrender.com',
+    'https://meraphoto-ai.onrender.com',
+    'http://127.0.0.1:8000',
+  ].filter(Boolean) as string[];
+  return Array.from(new Set(list));
+};
 
 // InsightFace (ArcFace buffalo_l) cosine similarity thresholds
 // Set to 0.40 for strict, highly accurate "microscan" matching
@@ -48,16 +59,34 @@ export const searchBySelfie = async (req: Request, res: Response) => {
     // 1. Call AI service to extract embedding for the selfie
     let faces: any[] = [];
     try {
-      const formData = new FormData();
-      const fileBlob = new Blob([new Uint8Array(file.buffer)], { type: file.mimetype });
-      formData.append('file', fileBlob, 'selfie.jpg');
+      let lastAiErr: any = null;
+      const candidateUrls = getCandidateAiUrls();
 
-      const aiResponse = await axios.post(`${AI_SERVICE_URL}/detect-faces`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data', 'bypass-tunnel-reminder': 'true' },
-        timeout: 30000,
-      });
+      for (const baseUrl of candidateUrls) {
+      try {
+        const formData = new FormData();
+        const fileBlob = new Blob([new Uint8Array(file.buffer)], { type: file.mimetype });
+        formData.append('file', fileBlob, 'selfie.jpg');
 
-      faces = aiResponse.data.faces || [];
+        const aiResponse = await axios.post(`${baseUrl}/detect-faces`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data', 'bypass-tunnel-reminder': 'true' },
+          timeout: 45000,
+        });
+
+        if (aiResponse.data && Array.isArray(aiResponse.data.faces)) {
+          faces = aiResponse.data.faces;
+          lastAiErr = null;
+          break;
+        }
+      } catch (err: any) {
+        lastAiErr = err;
+        console.warn(`[AI Search] Attempt on ${baseUrl} failed:`, err.message);
+      }
+    }
+
+    if (lastAiErr && faces.length === 0) {
+      throw lastAiErr;
+    }
     } catch (aiErr: any) {
       console.error('[AI Search] AI service connection error:', aiErr.message);
       

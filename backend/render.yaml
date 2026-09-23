@@ -54,12 +54,12 @@ services:
       - key: OPENROUTER_API_KEY
         sync: false
       - key: AI_SERVICE_URL
-        sync: false
+        value: http://maraphotoes-ai:10000
       - key: FRONTEND_URL
-        sync: false
+        value: https://meraphoto.vercel.app
 
   - type: web
-    name: meraphoto-ai
+    name: maraphotoes-ai
     runtime: python
     plan: free
     region: oregon
@@ -75,3 +75,5 @@ services:
         value: 3.11.9
       - key: INSIGHTFACE_MODEL
         value: buffalo_sc
+      - key: PORT
+        value: 10000

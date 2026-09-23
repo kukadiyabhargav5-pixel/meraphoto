@@ -4,7 +4,18 @@ import { Media, FaceEmbedding, Event } from '../models';
 import { insertFaceEmbedding, isQdrantAvailable } from '../services/qdrantService';
 import axios from 'axios';
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://127.0.0.1:8000';
+const getCandidateAiUrls = (): string[] => {
+  const envUrl = process.env.AI_SERVICE_URL;
+  const list = [
+    envUrl,
+    'http://maraphotoes-ai:10000',
+    'http://meraphoto-ai:10000',
+    'https://maraphotoes-ai.onrender.com',
+    'https://meraphoto-ai.onrender.com',
+    'http://127.0.0.1:8000',
+  ].filter(Boolean) as string[];
+  return Array.from(new Set(list));
+};
 
 /**
  * Downloads a file from a URL as a Buffer
@@ -143,12 +154,22 @@ export const rebuildFaceIndex = async (req: AuthRequest, res: Response) => {
             const fileBlob = new Blob([new Uint8Array(buffer)], { type: 'image/jpeg' });
             formData.append('file', fileBlob, 'image.jpg');
 
-            const aiResponse = await axios.post(`${AI_SERVICE_URL}/detect-faces`, formData, {
-              headers: { 'Content-Type': 'multipart/form-data', 'bypass-tunnel-reminder': 'true' },
-              timeout: 60000,
-            });
-
-            const faces = aiResponse.data.faces || [];
+            let faces: any[] = [];
+            const candidateUrls = getCandidateAiUrls();
+            for (const baseUrl of candidateUrls) {
+              try {
+                const aiResponse = await axios.post(`${baseUrl}/detect-faces`, formData, {
+                  headers: { 'Content-Type': 'multipart/form-data', 'bypass-tunnel-reminder': 'true' },
+                  timeout: 60000,
+                });
+                if (aiResponse.data && Array.isArray(aiResponse.data.faces)) {
+                  faces = aiResponse.data.faces;
+                  break;
+                }
+              } catch (err: any) {
+                console.warn(`[FaceIndex] Endpoint ${baseUrl} failed:`, err.message);
+              }
+            }
 
             // Get image dimensions for metadata
             const sharp = await import('sharp');
@@ -254,12 +275,22 @@ export const retryFailedIndexing = async (req: AuthRequest, res: Response) => {
           const fileBlob = new Blob([new Uint8Array(buffer)], { type: 'image/jpeg' });
           formData.append('file', fileBlob, 'image.jpg');
 
-          const aiResponse = await axios.post(`${AI_SERVICE_URL}/detect-faces`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data', 'bypass-tunnel-reminder': 'true' },
-            timeout: 60000,
-          });
-
-          const faces = aiResponse.data.faces || [];
+          let faces: any[] = [];
+          const candidateUrls = getCandidateAiUrls();
+          for (const baseUrl of candidateUrls) {
+            try {
+              const aiResponse = await axios.post(`${baseUrl}/detect-faces`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data', 'bypass-tunnel-reminder': 'true' },
+                timeout: 60000,
+              });
+              if (aiResponse.data && Array.isArray(aiResponse.data.faces)) {
+                faces = aiResponse.data.faces;
+                break;
+              }
+            } catch (err: any) {
+              console.warn(`[FaceIndex] Single photo endpoint ${baseUrl} failed:`, err.message);
+            }
+          }
 
           const sharp = await import('sharp');
           const metadata = await sharp.default(buffer).metadata();
