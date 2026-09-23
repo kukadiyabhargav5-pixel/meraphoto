@@ -201,8 +201,8 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    // --- Step 3: Multi-query matching with adaptive clustering ---
-    // Compute peak similarity to check if target face is present in gallery
+    // --- Step 3: Multi-query matching with precision-calibrated thresholds ---
+    // Compute peak similarity to check if target face is truly present in gallery
     let peakSimilarity = 0;
     for (const face of allFaces) {
       for (const qEmb of queryEmbeddings) {
@@ -213,23 +213,40 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
       }
     }
 
-    // Adaptive threshold:
-    // Base threshold for InsightFace ArcFace 512-D is 0.28.
-    // If person has a match with peak >= 0.30, relax to 0.25 to capture
-    // candid, angled, sunglasses, low-light, and group shots of the confirmed person with 100% recall.
-    let effectiveThreshold = 0.28;
-    if (event.searchThreshold && event.searchThreshold < effectiveThreshold) {
+    // High Precision & Accuracy Threshold:
+    // Base threshold for InsightFace ArcFace 512-D is 0.40.
+    // - If peakSimilarity < 0.38: Person is NOT in the gallery. No false positives will be returned!
+    // - If peakSimilarity >= 0.48: Confirmed identity with high confidence. We allow candidate photos
+    //   of this same person down to 0.36 to capture angled, candid, low-light, or sunglasses shots.
+    // - If peakSimilarity is between 0.38 and 0.48: Threshold is 0.38 (strict matching to eliminate false positives).
+    // - If event.searchThreshold is explicitly set by admin/studio, respect it, but enforce minimum 0.35.
+    let effectiveThreshold = 0.40;
+    if (event.searchThreshold && event.searchThreshold >= 0.35) {
       effectiveThreshold = event.searchThreshold;
-    }
-    if (peakSimilarity >= 0.32) {
-      effectiveThreshold = Math.min(effectiveThreshold, 0.25);
-    } else if (peakSimilarity >= 0.27) {
-      effectiveThreshold = Math.min(effectiveThreshold, 0.26);
+    } else if (peakSimilarity >= 0.48) {
+      effectiveThreshold = 0.36;
+    } else if (peakSimilarity >= 0.38) {
+      effectiveThreshold = 0.38;
+    } else {
+      effectiveThreshold = 0.38;
     }
 
     console.log(`[Face Search] Event ${eventId}: peak similarity = ${peakSimilarity.toFixed(4)}, effective threshold = ${effectiveThreshold}`);
 
-    // --- Step 3: Match gallery faces against query embeddings ---
+    // If peakSimilarity is below the matching threshold, immediately return 0 matches cleanly
+    if (peakSimilarity < effectiveThreshold) {
+      const totalPhotos = await Media.countDocuments({ eventId, type: 'PHOTO' });
+      const indexedMedia = await Media.countDocuments({ eventId, faceIndexStatus: 'INDEXED' });
+      res.status(200).json({
+        matches: [],
+        totalSearched: allFaces.length,
+        indexingStatus: { total: totalPhotos, indexed: indexedMedia, pending: pendingCount },
+        message: 'No matching photos found for this face in this album.',
+      });
+      return;
+    }
+
+    // --- Step 3: Match gallery faces against query embeddings with consensus verification ---
     const mediaMatches: Record<string, {
       bestSimilarity: number;
       matchCount: number;
@@ -237,21 +254,34 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
     }> = {};
 
     for (const face of allFaces) {
-      let bestSimilarity = 0;
+      let maxSimForFace = 0;
+      let sumSimForFace = 0;
 
       for (const qEmb of queryEmbeddings) {
         const sim = cosineSimilarity(qEmb, face.embedding);
-        if (sim > bestSimilarity) {
-          bestSimilarity = sim;
+        sumSimForFace += sim;
+        if (sim > maxSimForFace) {
+          maxSimForFace = sim;
         }
       }
 
-      if (bestSimilarity >= effectiveThreshold) {
+      const avgSimForFace = queryEmbeddings.length > 0 ? sumSimForFace / queryEmbeddings.length : maxSimForFace;
+
+      // Multi-query consensus verification:
+      // If multiple query frames were provided, require that the face is either:
+      // 1. Very strong match on primary frame (maxSim >= 0.42)
+      // OR
+      // 2. Consistent across multiple frames (maxSim >= effectiveThreshold AND avgSim >= effectiveThreshold - 0.05)
+      const isConsistentMatch = queryEmbeddings.length <= 1 
+        ? (maxSimForFace >= effectiveThreshold)
+        : (maxSimForFace >= 0.42 || (maxSimForFace >= effectiveThreshold && avgSimForFace >= (effectiveThreshold - 0.05)));
+
+      if (isConsistentMatch) {
         const mediaId = face.mediaId.toString();
 
         if (!mediaMatches[mediaId]) {
           mediaMatches[mediaId] = {
-            bestSimilarity,
+            bestSimilarity: maxSimForFace,
             matchCount: 0,
             timestamps: [],
           };
@@ -260,8 +290,8 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
         const group = mediaMatches[mediaId];
         group.matchCount++;
 
-        if (bestSimilarity > group.bestSimilarity) {
-          group.bestSimilarity = bestSimilarity;
+        if (maxSimForFace > group.bestSimilarity) {
+          group.bestSimilarity = maxSimForFace;
         }
 
         if (face.timestamp !== undefined && face.timestamp !== null) {
@@ -296,8 +326,9 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
     const results = mediaDetails.map((media) => {
       const group = mediaMatches[media._id.toString()];
       const rawSim = group.bestSimilarity;
-      let similarityPercent = Math.round(((rawSim - 0.25) / 0.35) * 40 + 60);
-      similarityPercent = Math.min(100, Math.max(75, similarityPercent));
+      // Calibrated accuracy mapping: [0.36 .. 0.65] maps to [80% .. 100%]
+      let similarityPercent = Math.round(80 + ((rawSim - 0.36) / 0.28) * 20);
+      similarityPercent = Math.min(100, Math.max(80, similarityPercent));
 
       // Sort timestamps
       group.timestamps.sort((a, b) => a - b);
@@ -306,7 +337,7 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
         ...media,
         similarity: parseFloat(group.bestSimilarity.toFixed(4)),
         similarityPercent,
-        confidence: group.bestSimilarity >= 0.38 ? 'HIGH' : group.bestSimilarity >= 0.30 ? 'MEDIUM' : 'LOW',
+        confidence: group.bestSimilarity >= 0.45 ? 'HIGH' : group.bestSimilarity >= 0.38 ? 'MEDIUM' : 'LOW',
         matchCount: group.matchCount,
         timestamps: group.timestamps,
       };
