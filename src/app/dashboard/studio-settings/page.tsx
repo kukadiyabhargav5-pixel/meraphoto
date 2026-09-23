@@ -162,7 +162,7 @@ export default function StudioSettingsPage() {
   const pc = planConfig[plan] || planConfig.BASIC;
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8 font-poppins">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-3 xs:p-4 md:p-8 font-poppins">
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes settingsFadeIn {
           from { opacity: 0; transform: translateY(16px); }

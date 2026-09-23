@@ -463,18 +463,18 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8 font-poppins">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-3 xs:p-4 md:p-8 font-poppins">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
         
         {/* Top Header Row */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard/events" className="inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-slate-900 hover:text-slate-700 text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-4">
+            <Link href="/dashboard/events" className="inline-flex w-fit items-center gap-1.5 px-3 sm:px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-slate-900 hover:text-slate-700 text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer min-h-[44px]">
               <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
               <span>Back to Events</span>
             </Link>
-            <div className="flex flex-wrap items-center gap-3 ml-2 border-l-2 border-slate-200 pl-4">
-              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{event.name}</h1>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 border-l-2 border-slate-200 pl-3 sm:pl-4">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight">{event.name}</h1>
               {(() => {
                 const baseDateStr = event.date || event.createdAt;
                 if (!baseDateStr) return null;
@@ -910,16 +910,16 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
           </div>
 
           <div className="mt-8">
-             <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-4">
-                  <h3 className="text-lg font-bold text-slate-900">Media Files ({mediaItems.filter(item => mediaFilter === 'ALL' || item.type === mediaFilter).length})</h3>
+             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div className="flex flex-wrap items-center gap-2.5 sm:gap-4">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900">Media Files ({mediaItems.filter(item => mediaFilter === 'ALL' || item.type === mediaFilter).length})</h3>
                   {mediaItems.length > 0 && (
                     <button 
                       onClick={() => {
                         setIsSelectionMode(!isSelectionMode);
                         setSelectedMediaIds([]);
                       }}
-                      className={`text-[10px] font-bold px-3 py-1.5 rounded-full transition-colors uppercase tracking-wider ${isSelectionMode ? 'bg-[#c5a880] text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+                      className={`text-[10px] font-bold px-3 py-1.5 rounded-full transition-colors uppercase tracking-wider min-h-[36px] flex items-center cursor-pointer ${isSelectionMode ? 'bg-[#c5a880] text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
                     >
                       {isSelectionMode ? 'Cancel Selection' : 'Select'}
                     </button>
@@ -928,14 +928,14 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                     <button 
                       onClick={() => handleDeleteMedia(selectedMediaIds)}
                       disabled={isDeleting}
-                      className="text-[10px] font-bold px-3 py-1.5 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors flex items-center gap-1 uppercase tracking-wider"
+                      className="text-[10px] font-bold px-3 py-1.5 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors flex items-center gap-1 uppercase tracking-wider min-h-[36px] cursor-pointer"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       {isDeleting ? 'Deleting...' : `Delete (${selectedMediaIds.length})`}
                     </button>
                   )}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
                    <div className="relative">
                      <button 
                        onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
@@ -1024,7 +1024,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                  No media files uploaded yet. Select files to start.
                </div>
             ) : (
-               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-12">
+               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-4 pb-12">
                  {mediaItems.filter(item => mediaFilter === 'ALL' || item.type === mediaFilter).map((item, idx) => (
                    <div 
                      key={idx} 

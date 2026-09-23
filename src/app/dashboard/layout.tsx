@@ -223,6 +223,17 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('studio_logo_updated', handleLogoUpdated);
   }, []);
 
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileOpen]);
+
   const currentPlan = (studio?.subscriptionPlan || authStudio?.subscriptionPlan || 'BASIC').toUpperCase();
   const isBasicPlan = currentPlan === 'BASIC' || currentPlan === 'STARTER';
 
@@ -257,21 +268,22 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
       {/* ===== MOBILE OVERLAY ===== */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm"
+          className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-xs"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
       {/* ===== MOBILE SIDEBAR DRAWER ===== */}
       <aside
-        className={`fixed top-0 left-0 h-full w-72 bg-[#0c0c0e] text-slate-100 flex flex-col p-6 z-50 shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed top-0 left-0 h-[100dvh] w-72 max-w-[85vw] bg-[#0c0c0e] text-slate-100 flex flex-col p-5 sm:p-6 z-50 shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Close button */}
         <button
           onClick={() => setMobileOpen(false)}
-          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+          className="absolute top-3.5 right-3.5 p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+          aria-label="Close menu"
         >
           <X className="h-5 w-5" />
         </button>
@@ -287,17 +299,18 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
       {/* ===== MAIN CONTENT ===== */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile Top Bar */}
-        <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-[#0c0c0e] border-b border-white/5 sticky top-0 z-30">
+        <header className="lg:hidden flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-[#0c0c0e] border-b border-white/5 sticky top-0 z-30">
           <button
             onClick={() => setMobileOpen(true)}
-            className="p-2 shrink-0 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            className="p-2.5 shrink-0 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
+            aria-label="Open navigation menu"
           >
             <Menu className="h-6 w-6" />
           </button>
           <Link href="/dashboard" className="flex-1 flex justify-center overflow-hidden px-2">
-            <img src={logoState} alt="Studio Logo" className={`h-8 w-auto max-w-full object-contain ${logoState === '/logo.png' ? 'filter invert' : ''}`} />
+            <img src={logoState} alt="Studio Logo" className={`h-8 w-auto max-w-[150px] xs:max-w-[180px] object-contain ${logoState === '/logo.png' ? 'filter invert' : ''}`} />
           </Link>
-          <div className="w-10 shrink-0" /> {/* spacer to balance the menu button */}
+          <div className="w-11 shrink-0" /> {/* spacer to balance the menu button */}
         </header>
 
         {/* Page Content */}

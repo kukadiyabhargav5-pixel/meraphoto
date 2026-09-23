@@ -134,26 +134,26 @@ export default function StudioBrandingPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8 flex items-center justify-center">
-      <div className="flex flex-col gap-8 w-full max-w-xl">
-            <h1 className="text-2xl font-extrabold text-slate-900 text-center">Studio Branding</h1>
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-3 xs:p-4 md:p-8 flex items-center justify-center">
+      <div className="flex flex-col gap-6 sm:gap-8 w-full max-w-xl">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 text-center">Studio Branding</h1>
             
-            <form onSubmit={handleUpdateBranding} className="bg-[#f8f7f4] text-slate-900 border border-slate-200 p-8 rounded-3xl flex flex-col gap-5 shadow-sm">
+            <form onSubmit={handleUpdateBranding} className="bg-[#f8f7f4] text-slate-900 border border-slate-200 p-5 xs:p-7 sm:p-8 rounded-2xl sm:rounded-3xl flex flex-col gap-5 shadow-sm">
               <div className="flex flex-col gap-1">
                 <label className="text-[12px] text-slate-600 font-bold uppercase tracking-wider">Studio Name</label>
-                <input type="text" required value={studioName} onChange={(e) => setStudioName(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]" />
+                <input type="text" required value={studioName} onChange={(e) => setStudioName(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-base sm:text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]" />
               </div>
               
               <div className="flex flex-col gap-1">
                 <label className="text-[12px] text-slate-600 font-bold uppercase tracking-wider">Studio Logo</label>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col xs:flex-row items-start xs:items-center gap-3">
                   {studioLogo ? (
                     <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200 bg-[#f8f7f4] text-slate-900 shrink-0">
                       <img src={studioLogo} alt="Studio Logo Preview" className="w-full h-full object-contain p-1" />
                       <button
                         type="button"
                         onClick={() => setStudioLogo('')}
-                        className="absolute inset-0 bg-black/55 hover:bg-black/70 flex items-center justify-center text-slate-900 text-[10px] font-bold opacity-0 hover:opacity-100 transition-opacity"
+                        className="absolute inset-0 bg-black/55 hover:bg-black/70 flex items-center justify-center text-white text-[10px] font-bold opacity-0 hover:opacity-100 transition-opacity"
                       >
                         Remove
                       </button>
@@ -163,8 +163,8 @@ export default function StudioBrandingPage() {
                       <Camera className="h-6 w-6" />
                     </div>
                   )}
-                  <div className="flex-1">
-                    <label className="inline-flex items-center justify-center px-4 py-3 bg-white border border-[#c5a880]/30 hover:bg-[#c5a880]/10 text-[#b59a72] rounded-xl text-xs font-extrabold cursor-pointer transition-all shadow-sm w-full text-center">
+                  <div className="flex-1 w-full">
+                    <label className="inline-flex items-center justify-center px-4 py-3 min-h-[44px] bg-white border border-[#c5a880]/30 hover:bg-[#c5a880]/10 text-[#b59a72] rounded-xl text-xs font-extrabold cursor-pointer transition-all shadow-sm w-full text-center">
                       {uploadingAsset === 'studioLogo' ? (
                         <span className="flex items-center gap-1.5 justify-center">
                           <Loader className="h-3.5 w-3.5 animate-spin" /> Uploading...
@@ -186,10 +186,10 @@ export default function StudioBrandingPage() {
 
               <div className="flex flex-col gap-1">
                 <label className="text-[12px] text-slate-600 font-bold uppercase tracking-wider">Custom Domain (requires Enterprise Plan)</label>
-                <input type="text" disabled={studio.subscriptionPlan !== 'ENTERPRISE'} value={studioCustomDomain} onChange={(e) => setStudioCustomDomain(e.target.value)}  className="w-full bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#c5a880] focus:bg-white/[0.04] disabled:opacity-50" />
+                <input type="text" disabled={studio.subscriptionPlan !== 'ENTERPRISE'} value={studioCustomDomain} onChange={(e) => setStudioCustomDomain(e.target.value)}  className="w-full bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-lg px-3 py-2.5 text-base sm:text-sm text-slate-900 focus:outline-none focus:border-[#c5a880] focus:bg-white/[0.04] disabled:opacity-50" />
               </div>
 
-              <button type="submit" disabled={isSaving} className="w-full mt-4 bg-[#c5a880] hover:bg-[#b59a72] text-slate-900 font-bold py-3.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+              <button type="submit" disabled={isSaving} className="w-full mt-4 bg-[#c5a880] hover:bg-[#b59a72] text-slate-900 font-bold py-3.5 min-h-[44px] rounded-xl text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer">
                 {isSaving ? <Loader className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
                 {isSaving ? 'Saving...' : 'Save Studio Changes'}
               </button>

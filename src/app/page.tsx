@@ -230,10 +230,19 @@ export default function HomePage() {
         .stats-grid {
           max-width: 1280px;
           margin: 0 auto;
-          padding: 0 24px;
+          padding: 0 16px;
           display: grid;
           grid-template-columns: repeat(2, 1fr);
-          gap: 24px;
+          gap: 16px;
+        }
+        @media (max-width: 375px) {
+          .stats-grid {
+            padding: 0 12px;
+            gap: 12px;
+          }
+        }
+        @media (min-width: 640px) {
+          .stats-grid { padding: 0 24px; gap: 24px; }
         }
         @media (min-width: 1024px) {
           .stats-grid { grid-template-columns: repeat(4, 1fr); gap: 48px; }
@@ -248,17 +257,19 @@ export default function HomePage() {
         }
         .stat-value {
           font-family: 'Cormorant Garamond', serif;
-          font-size: clamp(1.75rem, 4vw, 3rem);
+          font-size: clamp(1.4rem, 6vw, 3rem);
           font-weight: 300;
           color: #c5a880;
           margin-bottom: 4px;
+          line-height: 1.15;
         }
         .stat-label {
-          font-size: 10px;
+          font-size: clamp(8.5px, 2.2vw, 10px);
           color: #9ca3af;
           font-weight: 800;
           text-transform: uppercase;
-          letter-spacing: 0.12em;
+          letter-spacing: 0.08em;
+          line-height: 1.3;
         }
 
         /* ── WORKFLOW ── */
@@ -766,7 +777,7 @@ export default function HomePage() {
         .contact-input {
           width: 100%;
           padding: 14px 16px;
-          font-size: 14px;
+          font-size: 16px;
           font-weight: 600;
           color: #09090b;
           background: #faf9f6;
@@ -774,6 +785,9 @@ export default function HomePage() {
           border-radius: 12px;
           outline: none;
           transition: all 0.3s;
+        }
+        @media (min-width: 768px) {
+          .contact-input { font-size: 14px; }
         }
         .contact-input:focus {
           border-color: #c5a880;
@@ -898,6 +912,7 @@ export default function HomePage() {
           left: 50%;
           transform: translate(-50%, -50%);
           width: 800px;
+          max-width: 100vw;
           height: 300px;
           border-radius: 50%;
           background: radial-gradient(circle, rgba(197,168,128,0.1) 0%, transparent 70%);

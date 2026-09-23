@@ -117,34 +117,34 @@ export default function DashboardOverview() {
   ];
 
   return (
-    <div className="p-4 lg:p-8 max-w-7xl mx-auto pb-16">
+    <div className="p-3 xs:p-4 lg:p-8 max-w-7xl mx-auto pb-16">
 
       {/* ═══ Welcome Banner ═══ */}
       <motion.div
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="relative overflow-hidden rounded-3xl mb-8"
+        className="relative overflow-hidden rounded-2xl sm:rounded-3xl mb-6 sm:mb-8"
         style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' }}
       >
         {/* Orbs */}
-        <div className="absolute top-0 right-0 w-80 h-80 rounded-full opacity-20"
+        <div className="absolute top-0 right-0 w-80 h-80 rounded-full opacity-20 pointer-events-none"
           style={{ background: 'radial-gradient(circle, #c5a880 0%, transparent 70%)' }} />
-        <div className="absolute -bottom-20 -left-20 w-60 h-60 rounded-full opacity-10"
+        <div className="absolute -bottom-20 -left-20 w-60 h-60 rounded-full opacity-10 pointer-events-none"
           style={{ background: 'radial-gradient(circle, #6366f1 0%, transparent 70%)' }} />
 
-        <div className="relative z-10 p-6 lg:p-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg shrink-0"
+        <div className="relative z-10 p-4 xs:p-6 lg:p-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shadow-lg shrink-0"
               style={{ background: 'linear-gradient(135deg, #c5a880, #a07c4c)' }}>
-              <Camera className="w-7 h-7 text-white" />
+              <Camera className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
             </div>
             <div>
               <motion.h1
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className="text-xl lg:text-2xl font-black text-white tracking-tight"
+                className="text-lg xs:text-xl lg:text-2xl font-black text-white tracking-tight"
               >
                 {greeting}, <span className="text-[#c5a880]">{user?.name || stats.studioName || 'Studio'}</span>
               </motion.h1>
@@ -157,24 +157,24 @@ export default function DashboardOverview() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap w-full sm:w-auto">
             <button
               onClick={() => fetchStats(true)}
               disabled={refreshing}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-white/10 border border-white/10
-                text-white text-xs font-bold hover:bg-white/20 transition-all disabled:opacity-50 backdrop-blur-sm cursor-pointer"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-white/10 border border-white/10
+                text-white text-xs font-bold hover:bg-white/20 transition-all disabled:opacity-50 backdrop-blur-sm cursor-pointer min-h-[44px]"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </button>
             <button
               onClick={() => handleBlockClick('/dashboard/studio-settings')}
-              className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl
                 bg-gradient-to-r from-[#c5a880] to-[#a07c4c] text-white text-xs font-black
-                shadow-lg shadow-[#c5a880]/20 hover:shadow-xl hover:shadow-[#c5a880]/30 hover:-translate-y-0.5 transition-all cursor-pointer"
+                shadow-lg shadow-[#c5a880]/20 hover:shadow-xl hover:shadow-[#c5a880]/30 hover:-translate-y-0.5 transition-all cursor-pointer min-h-[44px]"
             >
               {isBasicPlan ? <Lock className="w-3.5 h-3.5" /> : <Settings className="w-3.5 h-3.5" />}
-              <span className="hidden xs:inline">{isBasicPlan ? 'Upgrade Plan' : 'Manage Studio'}</span>
+              <span>{isBasicPlan ? 'Upgrade Plan' : 'Manage Studio'}</span>
             </button>
           </div>
         </div>
@@ -267,7 +267,7 @@ export default function DashboardOverview() {
                       <span>{card.label}</span>
                       {isBasicPlan && <Lock className="w-3 h-3 text-amber-500/70" />}
                     </div>
-                    <div className="text-2xl font-black text-slate-900 tracking-tighter flex items-baseline gap-1">
+                    <div className="text-xl xs:text-2xl font-black text-slate-900 tracking-tight flex items-baseline gap-1">
                       <AnimatedCount value={card.value} />
                     </div>
                   </div>

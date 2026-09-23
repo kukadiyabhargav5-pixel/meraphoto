@@ -138,7 +138,10 @@ export default function ClientGallery() {
       }
       return m.thumbnailUrl || base;
     }
-    const url = m.compressedUrl || m.url || m.r2Url || '';
+    if (isThumbnail && m.thumbnailUrl && !m.thumbnailUrl.endsWith('.mp4')) {
+      return m.thumbnailUrl;
+    }
+    const url = (isThumbnail && m.thumbnailUrl ? m.thumbnailUrl : null) || m.compressedUrl || m.thumbnailUrl || m.url || m.r2Url || '';
     if (url.startsWith('localdb://')) {
       const id = url.replace('localdb://', '');
       if (localUrls[id]) return localUrls[id];
@@ -156,6 +159,44 @@ export default function ClientGallery() {
 
   // Lightbox / Detail view
   const [selectedItem, setSelectedItem] = useState<any>(null);
+
+  // Touch swipe refs for mobile lightbox navigation
+  const touchStartXRef = useRef<number | null>(null);
+  const touchEndXRef = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0].clientX;
+    touchEndXRef.current = null;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndXRef.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartXRef.current === null || touchEndXRef.current === null) return;
+    const diff = touchStartXRef.current - touchEndXRef.current;
+    if (Math.abs(diff) > 40) {
+      const baseGalleryMedia = searchActive ? matchedMedia : media;
+      const currentFiltered = baseGalleryMedia.filter(m => mediaTypeFilter === 'ALL' || m.type === mediaTypeFilter);
+      if (selectedItem) {
+        const currentIndex = currentFiltered.findIndex(m => m._id === selectedItem._id);
+        if (diff > 0) {
+          // Swiped Left -> Next
+          if (currentIndex < currentFiltered.length - 1) {
+            setSelectedItem(currentFiltered[currentIndex + 1]);
+          }
+        } else {
+          // Swiped Right -> Prev
+          if (currentIndex > 0) {
+            setSelectedItem(currentFiltered[currentIndex - 1]);
+          }
+        }
+      }
+    }
+    touchStartXRef.current = null;
+    touchEndXRef.current = null;
+  };
 
   // Selection for bulk downloads
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
@@ -697,86 +738,15 @@ export default function ClientGallery() {
     );
   }
 
-  // 2. Guest Sign-In Page
-  if (!isGuest && !isLocked) {
-    return (
-      <div className="min-h-screen bg-[#f8f7f4] text-[#0F172A] flex flex-col items-center justify-center p-4 sm:p-6 relative">
-        <div className="w-full max-w-md bg-white border border-[#e5e7eb] p-6 sm:p-10 rounded-3xl text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10">
-          <button
-            type="button"
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                localStorage.setItem(`mara_guest_${slug}`, 'true');
-              }
-              setIsGuest(true);
-            }}
-            className="absolute top-4 right-4 text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
-          >
-            Skip ✕
-          </button>
-          <div className="w-14 h-14 rounded-2xl bg-[#fdfbf9] border border-[#c5a880]/20 flex items-center justify-center mx-auto mb-5 sm:mb-6">
-            <User className="h-6 w-6 text-[#c5a880]" />
-          </div>
-          <h2 className="text-xl sm:text-2xl font-extrabold text-[#111827] tracking-tight">{event?.name || 'Event Gallery'}</h2>
-          <p className="text-xs text-[#6b7280] font-medium mt-1.5 mb-6 sm:mb-8">Please enter your details to view the album.</p>
-          
-          <form onSubmit={handleGuestSubmit} className="flex flex-col gap-4 sm:gap-5 text-left">
-            <div>
-              <label className="text-[11px] font-bold text-[#4b5563] mb-1.5 block uppercase tracking-wider">Full Name *</label>
-              <div className="relative">
-                <input 
-                  type="text" 
-                  required
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                  className="w-full bg-[#fcfcfc] border border-[#e5e7eb] rounded-xl px-4 py-3 sm:py-3.5 pl-11 text-sm text-[#111827] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] focus:bg-white transition-all shadow-sm"
-                />
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#9ca3af]" />
-              </div>
-            </div>
-            
-            <div>
-              <label className="text-[11px] font-bold text-[#4b5563] mb-1.5 block uppercase tracking-wider">Phone Number *</label>
-              <div className="relative">
-                <input 
-                  type="tel" 
-                  required
-                  value={guestPhone}
-                  onChange={(e) => setGuestPhone(e.target.value)}
-                  className="w-full bg-[#fcfcfc] border border-[#e5e7eb] rounded-xl px-4 py-3 sm:py-3.5 pl-11 text-sm text-[#111827] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] focus:bg-white transition-all shadow-sm"
-                />
-                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#9ca3af]" />
-              </div>
-            </div>
+  const baseGalleryMedia = searchActive ? matchedMedia : media;
+  const galleryMedia = baseGalleryMedia.filter(m => mediaTypeFilter === 'ALL' || m.type === mediaTypeFilter);
 
-            <div>
-              <label className="text-[11px] font-bold text-[#4b5563] mb-1.5 block uppercase tracking-wider">Email Address (Optional)</label>
-              <div className="relative">
-                <input 
-                  type="email" 
-                  value={guestEmail}
-                  onChange={(e) => setGuestEmail(e.target.value)}
-                  className="w-full bg-[#fcfcfc] border border-[#e5e7eb] rounded-xl px-4 py-3 sm:py-3.5 pl-11 text-sm text-[#111827] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] focus:bg-white transition-all shadow-sm"
-                />
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#9ca3af]" />
-              </div>
-            </div>
-
-            {guestError && (
-              <div className="mt-1 bg-[#fef2f2] border border-[#fecaca] text-[#b91c1c] p-3 sm:p-3.5 rounded-xl text-xs flex items-center justify-center gap-2 font-semibold shadow-sm">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{guestError}</span>
-              </div>
-            )}
-            
-            <button 
-              type="submit" 
-              disabled={guestSubmitting}
-              className="mt-4 sm:mt-6 bg-[#c5a880] hover:bg-[#b09672] active:scale-95 text-[#09090b] font-extrabold py-3.5 sm:py-4 rounded-xl text-sm transition-all shadow-[0_4px_14px_0_rgba(197,168,128,0.39)] w-full flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
-            >
-              {guestSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Enter Gallery'}
-            </button>
-
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col relative selection:bg-orange-500 selection:text-white">
+      {/* 2. Guest Sign-In Modal (Non-blocking) */}
+      {!isGuest && !isLocked && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 xs:p-4 sm:p-6 overflow-y-auto">
+          <div className="w-full max-w-md bg-white border border-[#e5e7eb] p-5 xs:p-6 sm:p-10 rounded-2xl sm:rounded-3xl text-center shadow-2xl relative my-auto animate-in zoom-in-95 duration-200">
             <button
               type="button"
               onClick={() => {
@@ -785,21 +755,89 @@ export default function ClientGallery() {
                 }
                 setIsGuest(true);
               }}
-              className="mt-1 text-xs font-bold text-slate-500 hover:text-slate-900 underline text-center cursor-pointer py-1"
+              className="absolute top-3.5 right-3.5 text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition-colors cursor-pointer min-h-[36px] flex items-center justify-center"
             >
-              Skip and Browse Photos Directly
+              Skip ✕
             </button>
-          </form>
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#fdfbf9] border border-[#c5a880]/20 flex items-center justify-center mx-auto mb-4 sm:mb-6">
+              <User className="h-6 w-6 text-[#c5a880]" />
+            </div>
+            <h2 className="text-xl sm:text-2xl font-extrabold text-[#111827] tracking-tight">{event?.name || 'Event Gallery'}</h2>
+            <p className="text-xs text-[#6b7280] font-medium mt-1.5 mb-5 sm:mb-8">Please enter your details to view the album.</p>
+            
+            <form onSubmit={handleGuestSubmit} className="flex flex-col gap-3.5 sm:gap-5 text-left">
+              <div>
+                <label className="text-[11px] font-bold text-[#4b5563] mb-1.5 block uppercase tracking-wider">Full Name *</label>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    required
+                    value={guestName}
+                    onChange={(e) => setGuestName(e.target.value)}
+                    className="w-full bg-[#fcfcfc] border border-[#e5e7eb] rounded-xl px-4 py-3 sm:py-3.5 pl-11 text-base sm:text-sm text-[#111827] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] focus:bg-white transition-all shadow-sm"
+                  />
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#9ca3af]" />
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-[11px] font-bold text-[#4b5563] mb-1.5 block uppercase tracking-wider">Phone Number *</label>
+                <div className="relative">
+                  <input 
+                    type="tel" 
+                    required
+                    value={guestPhone}
+                    onChange={(e) => setGuestPhone(e.target.value)}
+                    className="w-full bg-[#fcfcfc] border border-[#e5e7eb] rounded-xl px-4 py-3 sm:py-3.5 pl-11 text-base sm:text-sm text-[#111827] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] focus:bg-white transition-all shadow-sm"
+                  />
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#9ca3af]" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-[#4b5563] mb-1.5 block uppercase tracking-wider">Email Address (Optional)</label>
+                <div className="relative">
+                  <input 
+                    type="email" 
+                    value={guestEmail}
+                    onChange={(e) => setGuestEmail(e.target.value)}
+                    className="w-full bg-[#fcfcfc] border border-[#e5e7eb] rounded-xl px-4 py-3 sm:py-3.5 pl-11 text-base sm:text-sm text-[#111827] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] focus:bg-white transition-all shadow-sm"
+                  />
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#9ca3af]" />
+                </div>
+              </div>
+
+              {guestError && (
+                <div className="mt-1 bg-[#fef2f2] border border-[#fecaca] text-[#b91c1c] p-3 sm:p-3.5 rounded-xl text-xs flex items-center justify-center gap-2 font-semibold shadow-sm">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{guestError}</span>
+                </div>
+              )}
+              
+              <button 
+                type="submit" 
+                disabled={guestSubmitting}
+                className="mt-3 sm:mt-5 bg-[#c5a880] hover:bg-[#b09672] active:scale-95 text-[#09090b] font-extrabold py-3.5 sm:py-4 rounded-xl text-sm transition-all shadow-[0_4px_14px_0_rgba(197,168,128,0.39)] w-full flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer min-h-[44px]"
+              >
+                {guestSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Enter Gallery'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    localStorage.setItem(`mara_guest_${slug}`, 'true');
+                  }
+                  setIsGuest(true);
+                }}
+                className="mt-1 text-xs font-bold text-slate-500 hover:text-slate-900 underline text-center cursor-pointer py-2 min-h-[44px] flex items-center justify-center"
+              >
+                Skip and Browse Photos Directly
+              </button>
+            </form>
+          </div>
         </div>
-      </div>
-    );
-  }
-
-  const baseGalleryMedia = searchActive ? matchedMedia : media;
-  const galleryMedia = baseGalleryMedia.filter(m => mediaTypeFilter === 'ALL' || m.type === mediaTypeFilter);
-
-  return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col relative selection:bg-orange-500 selection:text-white">
+      )}
       {/* Whitelabel Header */}
       <header className="sticky top-0 z-40 glass-panel border-b border-slate-200 bg-white/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-20 flex items-center justify-between gap-2 sm:gap-4">
@@ -1752,45 +1790,54 @@ export default function ClientGallery() {
 
       {/* Lightbox - Kept dark for focus on media */}
       {selectedItem && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col justify-between p-6">
-          <div className="flex items-center justify-between w-full absolute top-6 left-0 px-6 z-10 pointer-events-none">
-            <div></div>
-            <div className="flex items-center gap-4 pointer-events-auto">
-              <a href={resolveMediaUrl(selectedItem)} target="_blank" className="bg-white/10 hover:bg-white/20 px-4 py-2 text-white rounded-lg flex items-center gap-2 font-bold text-sm transition-colors border border-white/10">
+        <div 
+          className="fixed inset-0 z-50 bg-black/95 flex flex-col justify-between p-3 sm:p-6 select-none touch-pan-y"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          <div className="flex items-center justify-between w-full absolute top-3 sm:top-6 left-0 px-3 sm:px-6 z-30 pointer-events-none">
+            <span className="text-xs text-white/60 font-mono font-medium tracking-wider pointer-events-auto">
+              {galleryMedia.findIndex(m => m._id === selectedItem._id) + 1} / {galleryMedia.length}
+            </span>
+            <div className="flex items-center gap-2 sm:gap-4 pointer-events-auto">
+              <a href={resolveMediaUrl(selectedItem)} target="_blank" download className="bg-white/10 hover:bg-white/20 px-3 sm:px-4 py-2 text-white rounded-xl flex items-center gap-2 font-bold text-xs sm:text-sm transition-colors border border-white/10 min-h-[40px]">
                 <Download className="h-4 w-4" />
-                Download
+                <span className="hidden xs:inline">Download</span>
               </a>
-              <button onClick={() => setSelectedItem(null)} className="bg-white/10 hover:bg-rose-500/90 px-4 py-2 text-white rounded-lg flex items-center gap-2 font-bold text-sm transition-colors border border-white/10">
+              <button onClick={() => setSelectedItem(null)} className="bg-white/10 hover:bg-rose-500/90 px-3 sm:px-4 py-2 text-white rounded-xl flex items-center gap-2 font-bold text-xs sm:text-sm transition-colors border border-white/10 min-h-[40px] cursor-pointer">
                 <X className="h-4 w-4" />
-                Cancel
+                <span>Close</span>
               </button>
             </div>
           </div>
 
-          <div className="flex-1 flex items-center justify-center p-4 relative h-full w-full">
+          <div className="flex-1 flex items-center justify-center p-2 sm:p-4 relative h-full w-full">
             {/* Previous Button */}
             {galleryMedia.findIndex(m => m._id === selectedItem._id) > 0 && (
               <button 
                 onClick={(e) => { e.stopPropagation(); setSelectedItem(galleryMedia[galleryMedia.findIndex(m => m._id === selectedItem._id) - 1]); }} 
-                className="absolute left-4 p-4 rounded-full bg-white/5 hover:bg-white/15 text-white transition-colors border border-white/10 z-20"
+                className="absolute left-1.5 sm:left-4 p-2 sm:p-3.5 rounded-full bg-black/50 hover:bg-black/80 text-white transition-all hover:scale-105 border border-white/15 z-20 backdrop-blur-md min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer shadow-lg"
+                title="Previous photo"
               >
-                <ChevronLeft className="h-8 w-8" />
+                <ChevronLeft className="h-5 w-5 sm:h-7 sm:w-7" />
               </button>
             )}
 
             {selectedItem.type === 'PHOTO' ? (
-              <img src={resolveMediaUrl(selectedItem)} alt="detailed preview" className="max-w-[85vw] max-h-[85vh] object-contain rounded-xl select-none" />
+              <img src={resolveMediaUrl(selectedItem)} alt="detailed preview" className="max-w-[95vw] sm:max-w-[85vw] max-h-[82dvh] sm:max-h-[85vh] object-contain rounded-xl select-none" />
             ) : (
-              <video ref={playerRef} controls src={resolveMediaUrl(selectedItem)} className="max-w-[85vw] max-h-[85vh] object-contain rounded-xl" />
+              <video ref={playerRef} controls src={resolveMediaUrl(selectedItem)} className="max-w-[95vw] sm:max-w-[85vw] max-h-[82dvh] sm:max-h-[85vh] object-contain rounded-xl" />
             )}
 
             {/* Next Button */}
             {galleryMedia.findIndex(m => m._id === selectedItem._id) < galleryMedia.length - 1 && (
               <button 
                 onClick={(e) => { e.stopPropagation(); setSelectedItem(galleryMedia[galleryMedia.findIndex(m => m._id === selectedItem._id) + 1]); }} 
-                className="absolute right-4 p-4 rounded-full bg-white/5 hover:bg-white/15 text-white transition-colors border border-white/10 z-20"
+                className="absolute right-1.5 sm:right-4 p-2 sm:p-3.5 rounded-full bg-black/50 hover:bg-black/80 text-white transition-all hover:scale-105 border border-white/15 z-20 backdrop-blur-md min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer shadow-lg"
+                title="Next photo"
               >
-                <ChevronRight className="h-8 w-8" />
+                <ChevronRight className="h-5 w-5 sm:h-7 sm:w-7" />
               </button>
             )}
           </div>

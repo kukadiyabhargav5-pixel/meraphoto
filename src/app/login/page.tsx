@@ -114,26 +114,26 @@ export default function LoginPage() {
 
   return (
     <PublicWrapper>
-      <div className="min-h-[calc(100vh-80px)] flex items-center justify-center p-4 bg-gradient-to-br from-[#faf9f6] via-[#f5f2eb] to-[#faf9f6] relative overflow-hidden font-poppins">
+      <div className="min-h-[calc(100vh-64px)] min-h-[calc(100dvh-64px)] flex items-center justify-center p-3 xs:p-4 sm:p-6 bg-gradient-to-br from-[#faf9f6] via-[#f5f2eb] to-[#faf9f6] relative overflow-hidden font-poppins">
         {/* Decorative Orbs */}
-        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-gradient-to-r from-[#c5a880]/15 to-transparent rounded-full blur-[100px] animate-pulse pointer-events-none" />
-        <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] bg-gradient-to-t from-[#c5a880]/10 to-transparent rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute top-[-20%] right-[-10%] w-[600px] max-w-full h-[600px] bg-gradient-to-r from-[#c5a880]/15 to-transparent rounded-full blur-[100px] animate-pulse pointer-events-none" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[400px] max-w-full h-[400px] bg-gradient-to-t from-[#c5a880]/10 to-transparent rounded-full blur-[80px] pointer-events-none" />
         
         {/* Login Card */}
-        <div className="w-full max-w-[440px] bg-white/80 backdrop-blur-xl rounded-[24px] border border-white/40 shadow-2xl p-8 sm:p-10 relative z-10 animate-fade-in-up">
+        <div className="w-full max-w-[440px] bg-white/85 backdrop-blur-xl rounded-[24px] border border-white/40 shadow-2xl p-5 xs:p-6 sm:p-10 relative z-10 animate-fade-in-up">
           
           <div className="flex justify-center mb-2">
-            <img src="/logo.png" alt="Mara Photo" className="h-10 object-contain" />
+            <img src="/logo.png" alt="Mara Photo" className="h-9 sm:h-10 object-contain" />
           </div>
           
-          <h1 className="text-[28px] font-light text-slate-900 text-center font-serif-luxury mb-1">
+          <h1 className="text-2xl sm:text-[28px] font-light text-slate-900 text-center font-serif-luxury mb-1">
             Welcome Back
           </h1>
-          <p className="text-[13px] font-semibold text-slate-400 text-center mb-8">
+          <p className="text-xs sm:text-[13px] font-semibold text-slate-400 text-center mb-6 sm:mb-8">
             Sign in to your Mara Photo studio
           </p>
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5">
             
             <div className="relative group">
               <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-4 h-4 pointer-events-none text-slate-400 peer-focus:text-[#c5a880] transition-colors z-10">
@@ -141,7 +141,7 @@ export default function LoginPage() {
               </div>
               <input 
                 type="email" id="loginEmail" required placeholder="Email Address"
-                className="peer w-full bg-slate-50/80 border border-slate-200 rounded-xl pl-11 pr-4 pt-6 pb-2 text-sm font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#c5a880]/20 focus:border-[#c5a880] transition-all outline-none shadow-sm placeholder-transparent" 
+                className="peer w-full bg-slate-50/80 border border-slate-200 rounded-xl pl-11 pr-4 pt-6 pb-2 text-base sm:text-sm font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#c5a880]/20 focus:border-[#c5a880] transition-all outline-none shadow-sm placeholder-transparent" 
                 value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} autoComplete="email"
               />
               <label htmlFor="loginEmail" className="absolute left-11 top-[6px] text-[9px] font-bold text-slate-400 uppercase tracking-widest transition-all peer-placeholder-shown:top-[15px] peer-placeholder-shown:text-[13px] peer-placeholder-shown:normal-case peer-focus:top-[6px] peer-focus:text-[9px] peer-focus:uppercase peer-focus:text-[#c5a880]">
@@ -155,20 +155,20 @@ export default function LoginPage() {
               </div>
               <input 
                 id="loginPassword" required placeholder="Password"
-                className="peer w-full bg-slate-50/80 border border-slate-200 rounded-xl pl-11 pr-12 pt-6 pb-2 text-sm font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#c5a880]/20 focus:border-[#c5a880] transition-all outline-none shadow-sm placeholder-transparent" 
+                className="peer w-full bg-slate-50/80 border border-slate-200 rounded-xl pl-11 pr-12 pt-6 pb-2 text-base sm:text-sm font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#c5a880]/20 focus:border-[#c5a880] transition-all outline-none shadow-sm placeholder-transparent" 
                 value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} autoComplete="current-password"
                 type={showPassword ? 'text' : 'password'}
               />
               <label htmlFor="loginPassword" className="absolute left-11 top-[6px] text-[9px] font-bold text-slate-400 uppercase tracking-widest transition-all peer-placeholder-shown:top-[15px] peer-placeholder-shown:text-[13px] peer-placeholder-shown:normal-case peer-focus:top-[6px] peer-focus:text-[9px] peer-focus:uppercase peer-focus:text-[#c5a880]">
                 Password
               </label>
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-900 transition-colors bg-white/50 hover:bg-slate-100 rounded-lg">
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-slate-900 transition-colors bg-white/50 hover:bg-slate-100 rounded-lg min-w-[36px] min-h-[36px] flex items-center justify-center">
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
 
-            <div className="flex items-center justify-between pt-1">
-              <label className="flex items-center gap-2 cursor-pointer group">
+            <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
+              <label className="flex items-center gap-2 cursor-pointer group select-none">
                 <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-[#c5a880] focus:ring-[#c5a880] transition-colors" />
                 <span className="text-xs font-semibold text-slate-500 group-hover:text-slate-700 transition-colors">Remember Me</span>
               </label>
@@ -177,18 +177,18 @@ export default function LoginPage() {
               </Link>
             </div>
 
-            <button type="submit" disabled={loading} className="w-full bg-slate-900 hover:bg-[#c5a880] text-white py-4 rounded-xl text-[13px] font-black uppercase tracking-widest shadow-xl shadow-slate-900/10 hover:shadow-[#c5a880]/30 transition-all duration-300 flex items-center justify-center gap-2 mt-2 group disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:bg-slate-900">
+            <button type="submit" disabled={loading} className="w-full bg-slate-900 hover:bg-[#c5a880] text-white py-3.5 sm:py-4 rounded-xl text-[13px] font-black uppercase tracking-widest shadow-xl shadow-slate-900/10 hover:shadow-[#c5a880]/30 transition-all duration-300 flex items-center justify-center gap-2 mt-2 group disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:bg-slate-900 min-h-[44px]">
               {loading ? <Loader className="w-4 h-4 animate-spin" /> : <>Sign In <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></>}
             </button>
           </form>
 
-          <div className="flex items-center gap-4 my-6">
+          <div className="flex items-center gap-4 my-5 sm:my-6">
             <div className="flex-1 h-px bg-slate-200"></div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Or continue with</span>
             <div className="flex-1 h-px bg-slate-200"></div>
           </div>
           
-          <div className="flex justify-center w-full">
+          <div className="flex justify-center w-full max-w-full overflow-hidden">
              <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || 'dummy-client-id'}>
                <GoogleLogin
                  onSuccess={handleGoogleSuccess}
@@ -197,12 +197,12 @@ export default function LoginPage() {
                  size="large"
                  text="continue_with"
                  shape="pill"
-                 width={250}
+                 width={240}
                />
              </GoogleOAuthProvider>
           </div>
 
-          <div className="mt-8 text-center text-[13px] font-semibold text-slate-500">
+          <div className="mt-6 sm:mt-8 text-center text-xs sm:text-[13px] font-semibold text-slate-500">
             Don&apos;t have an account? <Link href="/signup" className="text-[#c5a880] hover:text-slate-900 font-bold ml-1 transition-colors">Create Account</Link>
           </div>
 
