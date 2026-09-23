@@ -907,32 +907,43 @@ export default function DedicatedFaceScanPage() {
                     {/* Touch-Friendly Capture Action Buttons */}
                     <div className="w-full flex flex-col gap-2.5">
                       {cameraActive ? (
-                        <div className="flex gap-2 w-full">
-                          <button
-                            type="button"
-                            onClick={handleCapture}
-                            disabled={isCapturing}
-                            className="flex-1 bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-105 active:scale-[0.98] text-slate-950 font-black py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition-all shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer min-h-[48px]"
-                          >
-                            {isCapturing ? (
-                              <>
-                                <Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-slate-950" />
-                                <span>Scanning Face & Matching...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
-                                <span>Capture Selfie & Scan Face</span>
-                              </>
-                            )}
-                          </button>
+                        <div className="flex flex-col gap-2 w-full">
+                          <div className="flex gap-2 w-full">
+                            <button
+                              type="button"
+                              onClick={handleCapture}
+                              disabled={isCapturing}
+                              className="flex-1 bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-105 active:scale-[0.98] text-slate-950 font-black py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition-all shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer min-h-[48px]"
+                            >
+                              {isCapturing ? (
+                                <>
+                                  <Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-slate-950" />
+                                  <span>Scanning Face & Matching...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
+                                  <span>Capture Selfie & Scan Face</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={openNativeCamera}
+                              title="Open phone camera app"
+                              className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 px-4 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer min-h-[48px]"
+                            >
+                              <Camera className="w-5 h-5 text-slate-700" />
+                            </button>
+                          </div>
+                          {/* Dedicated 1-tap mobile phone camera button */}
                           <button
                             type="button"
                             onClick={openNativeCamera}
-                            title="Open phone camera app"
-                            className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 px-4 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer min-h-[48px]"
+                            className="sm:hidden w-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[42px]"
                           >
-                            <Camera className="w-5 h-5 text-slate-700" />
+                            <Camera className="w-4 h-4 text-[#c5a880]" />
+                            <span>Or Open Phone Camera Directly</span>
                           </button>
                         </div>
                       ) : selfiePreview ? (
@@ -1063,24 +1074,6 @@ export default function DedicatedFaceScanPage() {
                         </div>
                       </div>
                     )}
-
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      className="hidden"
-                      accept="image/*"
-                    />
-
-                    {/* Native Camera input fallback with direct capture */}
-                    <input
-                      type="file"
-                      ref={nativeCameraInputRef}
-                      accept="image/*"
-                      capture="user"
-                      onChange={handleNativeCameraCapture}
-                      className="hidden"
-                    />
                   </div>
                 )}
 
@@ -1197,10 +1190,10 @@ export default function DedicatedFaceScanPage() {
                 </div>
 
                 {/* Big Spacious Responsive Grid */}
-                <div className={`w-full grid gap-6 sm:gap-8 lg:gap-10 transition-all duration-300 ${
+                <div className={`w-full grid gap-2.5 sm:gap-6 lg:gap-8 transition-all duration-300 ${
                   photoSize === 'huge'
                     ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3'
-                    : 'grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4'
+                    : 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4'
                 }`}>
                   {matchedPhotos.map((photo, index) => {
                     const imgSrc = resolveMediaUrl(photo);
@@ -1208,13 +1201,19 @@ export default function DedicatedFaceScanPage() {
                       <div
                         key={photo._id}
                         onClick={() => setSelectedPhoto(photo)}
-                        className="smooth-photo-zoom-card group aspect-[3/4] shadow-md hover:shadow-2xl"
+                        className="smooth-photo-zoom-card group aspect-[3/4] rounded-xl sm:rounded-2xl overflow-hidden shadow-xs hover:shadow-xl border border-slate-200 cursor-pointer active:scale-[0.98] transition-all bg-slate-100"
                       >
                         <img
                           src={imgSrc}
                           alt={`Matched Memory ${index + 1}`}
-                          className="smooth-zoom-img"
+                          className="w-full h-full object-cover smooth-zoom-img"
                           loading="lazy"
+                          onError={(e) => {
+                            const fallback = photo.r2Url || photo.thumbnailUrl || photo.url;
+                            if (fallback && e.currentTarget.src !== fallback) {
+                              e.currentTarget.src = fallback;
+                            }
+                          }}
                         />
 
                         {/* Smooth Luxury Hover Overlay */}
@@ -1305,6 +1304,24 @@ export default function DedicatedFaceScanPage() {
           </div>
         </div>
       )}
+
+      {/* Always-mounted File & Native Camera Inputs */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        className="hidden"
+        accept="image/*"
+      />
+
+      <input
+        type="file"
+        ref={nativeCameraInputRef}
+        accept="image/*"
+        capture="user"
+        onChange={handleNativeCameraCapture}
+        className="hidden"
+      />
     </div>
   );
 }

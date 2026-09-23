@@ -702,13 +702,25 @@ export default function ClientGallery() {
     return (
       <div className="min-h-screen bg-[#f8f7f4] text-[#0F172A] flex flex-col items-center justify-center p-4 sm:p-6 relative">
         <div className="w-full max-w-md bg-white border border-[#e5e7eb] p-6 sm:p-10 rounded-3xl text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10">
-          <div className="w-14 h-14 rounded-2xl bg-[#fdfbf9] border border-[#c5a880]/20 flex items-center justify-center mx-auto mb-6">
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                localStorage.setItem(`mara_guest_${slug}`, 'true');
+              }
+              setIsGuest(true);
+            }}
+            className="absolute top-4 right-4 text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
+          >
+            Skip ✕
+          </button>
+          <div className="w-14 h-14 rounded-2xl bg-[#fdfbf9] border border-[#c5a880]/20 flex items-center justify-center mx-auto mb-5 sm:mb-6">
             <User className="h-6 w-6 text-[#c5a880]" />
           </div>
-          <h2 className="text-2xl font-extrabold text-[#111827] tracking-tight">{event?.name || 'Event Gallery'}</h2>
-          <p className="text-xs text-[#6b7280] font-medium mt-2 mb-8">Please enter your details to view the album.</p>
+          <h2 className="text-xl sm:text-2xl font-extrabold text-[#111827] tracking-tight">{event?.name || 'Event Gallery'}</h2>
+          <p className="text-xs text-[#6b7280] font-medium mt-1.5 mb-6 sm:mb-8">Please enter your details to view the album.</p>
           
-          <form onSubmit={handleGuestSubmit} className="flex flex-col gap-5 text-left">
+          <form onSubmit={handleGuestSubmit} className="flex flex-col gap-4 sm:gap-5 text-left">
             <div>
               <label className="text-[11px] font-bold text-[#4b5563] mb-1.5 block uppercase tracking-wider">Full Name *</label>
               <div className="relative">
@@ -717,7 +729,7 @@ export default function ClientGallery() {
                   required
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
-                  className="w-full bg-[#fcfcfc] border border-[#e5e7eb] rounded-xl px-4 py-3.5 pl-11 text-sm text-[#111827] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] focus:bg-white transition-all shadow-sm"
+                  className="w-full bg-[#fcfcfc] border border-[#e5e7eb] rounded-xl px-4 py-3 sm:py-3.5 pl-11 text-sm text-[#111827] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] focus:bg-white transition-all shadow-sm"
                 />
                 <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#9ca3af]" />
               </div>
@@ -731,7 +743,7 @@ export default function ClientGallery() {
                   required
                   value={guestPhone}
                   onChange={(e) => setGuestPhone(e.target.value)}
-                  className="w-full bg-[#fcfcfc] border border-[#e5e7eb] rounded-xl px-4 py-3.5 pl-11 text-sm text-[#111827] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] focus:bg-white transition-all shadow-sm"
+                  className="w-full bg-[#fcfcfc] border border-[#e5e7eb] rounded-xl px-4 py-3 sm:py-3.5 pl-11 text-sm text-[#111827] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] focus:bg-white transition-all shadow-sm"
                 />
                 <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#9ca3af]" />
               </div>
@@ -744,14 +756,14 @@ export default function ClientGallery() {
                   type="email" 
                   value={guestEmail}
                   onChange={(e) => setGuestEmail(e.target.value)}
-                  className="w-full bg-[#fcfcfc] border border-[#e5e7eb] rounded-xl px-4 py-3.5 pl-11 text-sm text-[#111827] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] focus:bg-white transition-all shadow-sm"
+                  className="w-full bg-[#fcfcfc] border border-[#e5e7eb] rounded-xl px-4 py-3 sm:py-3.5 pl-11 text-sm text-[#111827] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] focus:bg-white transition-all shadow-sm"
                 />
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#9ca3af]" />
               </div>
             </div>
 
             {guestError && (
-              <div className="mt-2 bg-[#fef2f2] border border-[#fecaca] text-[#b91c1c] p-3.5 rounded-xl text-xs flex items-center justify-center gap-2 font-semibold shadow-sm">
+              <div className="mt-1 bg-[#fef2f2] border border-[#fecaca] text-[#b91c1c] p-3 sm:p-3.5 rounded-xl text-xs flex items-center justify-center gap-2 font-semibold shadow-sm">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{guestError}</span>
               </div>
@@ -760,9 +772,22 @@ export default function ClientGallery() {
             <button 
               type="submit" 
               disabled={guestSubmitting}
-              className="mt-6 bg-[#c5a880] hover:bg-[#b09672] text-[#09090b] font-extrabold py-4 rounded-xl text-sm transition-all shadow-[0_4px_14px_0_rgba(197,168,128,0.39)] w-full flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="mt-4 sm:mt-6 bg-[#c5a880] hover:bg-[#b09672] active:scale-95 text-[#09090b] font-extrabold py-3.5 sm:py-4 rounded-xl text-sm transition-all shadow-[0_4px_14px_0_rgba(197,168,128,0.39)] w-full flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
             >
               {guestSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Enter Gallery'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem(`mara_guest_${slug}`, 'true');
+                }
+                setIsGuest(true);
+              }}
+              className="mt-1 text-xs font-bold text-slate-500 hover:text-slate-900 underline text-center cursor-pointer py-1"
+            >
+              Skip and Browse Photos Directly
             </button>
           </form>
         </div>
@@ -777,9 +802,9 @@ export default function ClientGallery() {
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col relative selection:bg-orange-500 selection:text-white">
       {/* Whitelabel Header */}
       <header className="sticky top-0 z-40 glass-panel border-b border-slate-200 bg-white/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-            <div className="h-9 sm:h-10 max-w-[130px] sm:max-w-[170px] flex items-center justify-start shrink-0 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-20 flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
+            <div className="h-8 sm:h-10 max-w-[100px] sm:max-w-[170px] flex items-center justify-start shrink-0 overflow-hidden">
               <img 
                 src={event?.studioId?.logoUrl || '/studio-gold-icon.png'} 
                 alt={event?.studioId?.name || "Studio Logo"} 
@@ -787,39 +812,39 @@ export default function ClientGallery() {
                   (e.currentTarget as HTMLImageElement).src = '/studio-gold-icon.png';
                 }}
                 style={{
-                  maxHeight: '38px',
-                  maxWidth: '140px',
+                  maxHeight: '34px',
+                  maxWidth: '120px',
                   width: 'auto',
                   height: 'auto',
                   objectFit: 'contain',
                   display: 'block'
                 }}
-                className="max-h-9 sm:max-h-10 w-auto max-w-[130px] sm:max-w-[170px] object-contain rounded drop-shadow-sm" 
+                className="max-h-8 sm:max-h-10 w-auto max-w-[100px] sm:max-w-[170px] object-contain rounded drop-shadow-sm" 
               />
             </div>
             {event?.studioId?.name && (
-              <span className="font-extrabold text-xs sm:text-sm tracking-widest text-[#c5a880] uppercase truncate max-w-[130px] sm:max-w-[200px]">
+              <span className="font-extrabold text-[11px] sm:text-sm tracking-wider sm:tracking-widest text-[#c5a880] uppercase truncate max-w-[100px] xs:max-w-[140px] sm:max-w-[200px]">
                 {event?.studioId?.name}
               </span>
             )}
           </div>
           
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             {/* Social Icons */}
-            <div className="flex items-center gap-2 sm:gap-3 mr-2">
+            <div className="flex items-center gap-1.5 sm:gap-3">
               {event?.studioId?.instagramUrl && (
-                <a href={event.studioId.instagramUrl} target="_blank" rel="noreferrer" className="group w-9 h-9 rounded-full bg-white/60 backdrop-blur-md border border-white/80 shadow-[0_2px_10px_rgba(0,0,0,0.04)] flex items-center justify-center text-slate-600 hover:scale-110 hover:-translate-y-1 hover:shadow-[0_8px_20px_rgba(236,72,153,0.3)] hover:bg-gradient-to-tr hover:from-purple-500 hover:via-pink-500 hover:to-orange-400 hover:text-white hover:border-transparent transition-all duration-300">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-300 group-hover:scale-110"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                <a href={event.studioId.instagramUrl} target="_blank" rel="noreferrer" className="group w-7.5 h-7.5 sm:w-9 sm:h-9 rounded-full bg-white/60 backdrop-blur-md border border-white/80 shadow-[0_2px_10px_rgba(0,0,0,0.04)] flex items-center justify-center text-slate-600 hover:scale-110 hover:-translate-y-0.5 hover:bg-gradient-to-tr hover:from-purple-500 hover:via-pink-500 hover:to-orange-400 hover:text-white transition-all">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
                 </a>
               )}
               {event?.studioId?.facebookUrl && (
-                <a href={event.studioId.facebookUrl} target="_blank" rel="noreferrer" className="group w-9 h-9 rounded-full bg-white/60 backdrop-blur-md border border-white/80 shadow-[0_2px_10px_rgba(0,0,0,0.04)] flex items-center justify-center text-slate-600 hover:scale-110 hover:-translate-y-1 hover:shadow-[0_8px_20px_rgba(24,119,242,0.3)] hover:bg-[#1877F2] hover:text-white hover:border-transparent transition-all duration-300">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-300 group-hover:scale-110"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+                <a href={event.studioId.facebookUrl} target="_blank" rel="noreferrer" className="group w-7.5 h-7.5 sm:w-9 sm:h-9 rounded-full bg-white/60 backdrop-blur-md border border-white/80 shadow-[0_2px_10px_rgba(0,0,0,0.04)] flex items-center justify-center text-slate-600 hover:scale-110 hover:-translate-y-0.5 hover:bg-[#1877F2] hover:text-white transition-all">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
                 </a>
               )}
               {event?.studioId?.customDomain && (
-                <a href={`https://${event.studioId.customDomain}`} target="_blank" rel="noreferrer" className="group w-9 h-9 rounded-full bg-white/60 backdrop-blur-md border border-white/80 shadow-[0_2px_10px_rgba(0,0,0,0.04)] flex items-center justify-center text-slate-600 hover:scale-110 hover:-translate-y-1 hover:shadow-[0_8px_20px_rgba(0,0,0,0.1)] hover:bg-slate-900 hover:text-white hover:border-transparent transition-all duration-300">
-                  <Globe className="w-4 h-4 transition-transform duration-300 group-hover:scale-110" />
+                <a href={`https://${event.studioId.customDomain}`} target="_blank" rel="noreferrer" className="group w-7.5 h-7.5 sm:w-9 sm:h-9 rounded-full bg-white/60 backdrop-blur-md border border-white/80 shadow-[0_2px_10px_rgba(0,0,0,0.04)] flex items-center justify-center text-slate-600 hover:scale-110 hover:-translate-y-0.5 hover:bg-slate-900 hover:text-white transition-all">
+                  <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </a>
               )}
             </div>
@@ -835,34 +860,32 @@ export default function ClientGallery() {
 
       {/* Top Action Buttons (Responsive for Mobile & Desktop) */}
       <div className="w-full bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-            <span className="sm:hidden font-extrabold text-slate-800 text-sm truncate max-w-[180px]">{event?.name}</span>
-            <span className="sm:hidden text-slate-300">•</span>
-            <span className="text-slate-600 font-semibold">{media.length} items</span>
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4">
+          <div className="flex items-center justify-between sm:justify-start gap-2 text-xs font-bold text-slate-500">
+            <span className="sm:hidden font-extrabold text-slate-800 text-xs sm:text-sm truncate max-w-[200px]">{event?.name}</span>
+            <span className="text-slate-500 font-semibold text-[11px] sm:text-xs bg-slate-100 px-2.5 py-0.5 rounded-full">{media.length} items</span>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
+          <div className="grid grid-cols-2 sm:flex sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
             <Link
               href={`/e/${slug}/scan`}
-              className="bg-gradient-to-r from-[#c5a880] to-[#b09672] hover:brightness-105 active:scale-95 text-slate-950 font-black px-5 py-3 rounded-xl shadow-[0_4px_14px_0_rgba(197,168,128,0.39)] flex justify-center items-center gap-2 transition-all cursor-pointer text-xs sm:text-sm"
+              className="bg-gradient-to-r from-[#c5a880] to-[#b09672] hover:brightness-105 active:scale-95 text-slate-950 font-black px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-xl shadow-[0_4px_14px_0_rgba(197,168,128,0.39)] flex justify-center items-center gap-1.5 sm:gap-2 transition-all cursor-pointer text-xs sm:text-sm col-span-2 sm:col-span-1 min-h-[42px]"
             >
-              <ScanFace className="h-4.5 w-4.5 stroke-[2.5]" />
+              <ScanFace className="h-4 w-4 sm:h-4.5 sm:w-4.5 stroke-[2.5]" />
               <span>AI Face Scan (Full Screen)</span>
             </Link>
 
             <button 
               onClick={() => setSearchModalOpen(true)} 
-              className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-4 py-3 rounded-xl flex justify-center items-center gap-2 transition-all text-xs sm:text-sm cursor-pointer"
+              className="bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 font-bold px-2.5 sm:px-4 py-2.5 sm:py-3 rounded-xl flex justify-center items-center gap-1.5 transition-all text-xs sm:text-sm cursor-pointer min-h-[42px]"
             >
-              <Sparkles className="h-4 w-4 text-[#c5a880]" />
-              <span>Quick Popup Search</span>
+              <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#c5a880]" />
+              <span>Quick Popup</span>
             </button>
             
             <button 
               onClick={async () => {
                 try {
-                  // If the user hasn't selected any, download ALL by mapping media
                   const idsToDownload = selectedMediaIds.length > 0 ? selectedMediaIds : media.map(m => m._id);
                   if (idsToDownload.length === 0) return;
                   const res = await apiClient.post('/media/download-bulk', { mediaIds: idsToDownload });
@@ -874,34 +897,34 @@ export default function ClientGallery() {
                   console.error(err);
                 }
               }} 
-              className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold px-5 py-3 rounded-xl shadow-[0_4px_14px_0_rgba(0,0,0,0.15)] flex justify-center items-center gap-2 transition-all text-xs sm:text-sm cursor-pointer"
+              className="bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-extrabold px-2.5 sm:px-5 py-2.5 sm:py-3 rounded-xl shadow-[0_4px_14px_0_rgba(0,0,0,0.15)] flex justify-center items-center gap-1.5 transition-all text-xs sm:text-sm cursor-pointer min-h-[42px]"
             >
-              <Download className="h-4.5 w-4.5" />
-              <span>Download All Images</span>
+              <Download className="h-3.5 w-3.5 sm:h-4.5 sm:w-4.5" />
+              <span>Download All</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* Gallery Controls bar */}
-      <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-4 sm:py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200">
+      <div className="max-w-7xl mx-auto w-full px-3 sm:px-6 py-3 sm:py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           <div className="relative">
             <button 
               onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
-              className="flex items-center justify-between gap-2 text-xs bg-white border border-slate-200 rounded-xl px-4 py-2.5 outline-none text-slate-700 font-extrabold hover:border-[#c5a880] cursor-pointer shadow-sm min-w-[140px] transition-all duration-300"
+              className="flex items-center justify-between gap-2 text-xs bg-white border border-slate-200 rounded-xl px-3.5 py-2 sm:px-4 sm:py-2.5 outline-none text-slate-700 font-extrabold hover:border-[#c5a880] cursor-pointer shadow-sm min-w-[130px] sm:min-w-[140px] transition-all duration-300"
             >
               <div className="flex items-center gap-2">
-                {mediaTypeFilter === 'ALL' && <LayoutGrid className="w-4 h-4 text-[#c5a880]" />}
-                {mediaTypeFilter === 'PHOTO' && <ImageIcon className="w-4 h-4 text-[#c5a880]" />}
-                {mediaTypeFilter === 'VIDEO' && <Video className="w-4 h-4 text-[#c5a880]" />}
+                {mediaTypeFilter === 'ALL' && <LayoutGrid className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#c5a880]" />}
+                {mediaTypeFilter === 'PHOTO' && <ImageIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#c5a880]" />}
+                {mediaTypeFilter === 'VIDEO' && <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#c5a880]" />}
                 <span>
                   {mediaTypeFilter === 'ALL' && 'All Media'}
                   {mediaTypeFilter === 'PHOTO' && 'Photos'}
                   {mediaTypeFilter === 'VIDEO' && 'Videos'}
                 </span>
               </div>
-              <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${filterDropdownOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-300 ${filterDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {filterDropdownOpen && (
@@ -932,33 +955,33 @@ export default function ClientGallery() {
           </div>
 
           {searchActive && searchStats && (
-            <span className="text-xs text-slate-400 font-semibold ml-4">
+            <span className="text-xs text-slate-400 font-semibold ml-1 sm:ml-4">
               Scanned {searchStats.totalSearched} face(s) in album
             </span>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
           {searchActive && (
-            <button onClick={clearSearch} className="text-xs text-rose-600 hover:text-rose-500 font-bold underline flex items-center gap-1">
+            <button onClick={clearSearch} className="text-xs text-rose-600 hover:text-rose-500 font-bold underline flex items-center gap-1 cursor-pointer">
               <X className="h-3.5 w-3.5" />
               Clear AI Results
             </button>
           )}
 
           {isMultiSelect ? (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <span className="text-xs text-slate-500 font-bold">Selected: <strong>{selectedMediaIds.length}</strong></span>
-              <button onClick={handleBulkDownload} disabled={selectedMediaIds.length === 0} className="bg-[#FF6B00] hover:bg-[#E05E00] text-white text-xs font-bold px-4 py-2 rounded-lg disabled:opacity-50 flex items-center gap-1.5 transition-colors shadow-sm">
+              <button onClick={handleBulkDownload} disabled={selectedMediaIds.length === 0} className="bg-[#FF6B00] hover:bg-[#E05E00] text-white text-xs font-bold px-3.5 py-2 rounded-lg disabled:opacity-50 flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer">
                 <Download className="h-3.5 w-3.5" />
                 Download Selected
               </button>
-              <button onClick={() => { setIsMultiSelect(false); setSelectedMediaIds([]); }} className="text-xs text-slate-500 hover:text-slate-700">
+              <button onClick={() => { setIsMultiSelect(false); setSelectedMediaIds([]); }} className="text-xs text-slate-500 hover:text-slate-700 cursor-pointer">
                 Cancel
               </button>
             </div>
           ) : (
-            <button onClick={() => setIsMultiSelect(true)} className="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 bg-white rounded-lg px-3.5 py-2 hover:bg-slate-50 transition-colors shadow-sm font-semibold">
+            <button onClick={() => setIsMultiSelect(true)} className="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 bg-white rounded-lg px-3 py-1.5 sm:px-3.5 sm:py-2 hover:bg-slate-50 transition-colors shadow-sm font-semibold cursor-pointer">
               Select Multiple
             </button>
           )}
@@ -966,163 +989,234 @@ export default function ClientGallery() {
       </div>
 
       {/* Gallery Items Grid */}
-      <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
+      <div className="flex-1 max-w-7xl mx-auto w-full px-2.5 sm:px-6 py-4 sm:py-8">
         {galleryMedia.length > 0 ? (
           <div>
             {searchActive && (
-              <div className="mb-8 bg-gradient-to-r from-orange-50 to-orange-100 border border-orange-100 text-[#FF6B00] p-5 rounded-2xl text-sm font-semibold flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-[#FF6B00] flex items-center justify-center shrink-0">
-                  <ScanFace className="h-5 w-5 text-white" />
+              <div className="mb-5 sm:mb-8 bg-gradient-to-r from-orange-50 to-orange-100 border border-orange-100 text-[#FF6B00] p-3.5 sm:p-5 rounded-2xl text-xs sm:text-sm font-semibold flex items-center gap-3 sm:gap-4">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#FF6B00] flex items-center justify-center shrink-0">
+                  <ScanFace className="h-4.5 w-4.5 sm:h-5 sm:w-5 text-white" />
                 </div>
                 <div>
-                  <p className="font-bold">Found {galleryMedia.length} matching photo{galleryMedia.length !== 1 ? 's' : ''}</p>
-                  <p className="text-xs text-[#FF6B00] mt-0.5 font-medium">AI matched your face across the entire album. Photos are sorted by similarity.</p>
+                  <p className="font-bold text-xs sm:text-sm">Found {galleryMedia.length} matching photo{galleryMedia.length !== 1 ? 's' : ''}</p>
+                  <p className="text-[11px] sm:text-xs text-[#FF6B00] mt-0.5 font-medium">AI matched your face across the entire album. Photos are sorted by similarity.</p>
                 </div>
               </div>
             )}
 
-            {viewType === 'masonry' ? (
-               <MasonryPhotoAlbum 
-                 photos={galleryMedia.map(m => ({
-                    src: resolveMediaUrl(m, true),
-                    width: m.width || (m.type === 'VIDEO' ? 1920 : 1600),
-                    height: m.height || (m.type === 'VIDEO' ? 1080 : 1200),
-                    key: m._id,
-                    media: m
-                 }))}
-                 columns={(containerWidth) => {
-                   if (containerWidth < 400) return 2;
-                   if (containerWidth < 700) return 3;
-                   if (containerWidth < 1000) return 5;
-                   return 6;
-                 }}
-                 spacing={16}
-                 render={{
-                   wrapper: ({ style, children, ...rest }, { photo }) => {
-                     const m = (photo as any).media;
-                     const isSelected = selectedMediaIds.includes(m._id);
-                     return (
-                       <div 
-                         {...rest} 
-                         style={{ ...style, overflow: 'hidden', borderRadius: '1rem' }} 
-                         className={`group relative transition-all duration-500 ease-out bg-slate-100 flex items-center justify-center ${isSelected ? 'border-2 border-[#c5a880] ring-4 ring-[#c5a880]/20 shadow-lg scale-95' : 'shadow-sm hover:shadow-xl hover:-translate-y-1.5 z-0 hover:z-10 cursor-pointer'}`}
-                       >
-                         {children}
-                       </div>
-                     );
-                   },
-                   image: ({ style, className, ...rest }) => (
-                     <img 
-                       {...rest} 
-                       style={{
-                         ...style,
-                         transition: 'transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), filter 0.6s ease',
-                         willChange: 'transform',
-                         backfaceVisibility: 'hidden',
-                         WebkitBackfaceVisibility: 'hidden'
-                       }} 
-                       className={`${className} group-hover:scale-110 object-cover`} 
-                     />
-                   ),
-                   extras: (_, { photo }) => {
-                     const m = (photo as any).media;
-                     const isSelected = selectedMediaIds.includes(m._id);
-                     return (
-                       <>
-                         {/* Video overlay */}
-                         {m.type === 'VIDEO' && (
-                           <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/35 transition-colors pointer-events-none z-10">
-                             <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center">
-                               <Play className="h-5 w-5 text-white fill-white ml-0.5" />
-                             </div>
-                           </div>
-                         )}
+            {/* Native 2-Column Mobile Photo Grid (<640px) */}
+            <div className="sm:hidden grid grid-cols-2 gap-2 w-full">
+              {galleryMedia.map((m) => {
+                const isSelected = selectedMediaIds.includes(m._id);
+                const imgSrc = resolveMediaUrl(m, true);
+                return (
+                  <div
+                    key={m._id}
+                    onClick={() => {
+                      if (isMultiSelect) {
+                        toggleSelectMedia(m._id);
+                      } else {
+                        setSelectedItem(m);
+                      }
+                    }}
+                    className={`relative aspect-[3/4] rounded-xl overflow-hidden bg-slate-100 border transition-all cursor-pointer shadow-xs active:scale-[0.98] ${
+                      isSelected ? 'border-2 border-[#c5a880] ring-2 ring-[#c5a880]/30 shadow-md' : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <img
+                      src={imgSrc}
+                      alt=""
+                      loading="lazy"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const fallback = m.r2Url || m.thumbnailUrl || m.url;
+                        if (fallback && e.currentTarget.src !== fallback) {
+                          e.currentTarget.src = fallback;
+                        }
+                      }}
+                    />
+                    {m.type === 'VIDEO' && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
+                        <div className="w-9 h-9 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center">
+                          <Play className="h-4 w-4 text-white fill-white ml-0.5" />
+                        </div>
+                      </div>
+                    )}
+                    {isMultiSelect && (
+                      <div className="absolute top-2 left-2 z-10">
+                        <div className={`w-5 h-5 rounded-md border flex items-center justify-center ${isSelected ? 'bg-[#c5a880] border-[#c5a880] text-white shadow-sm' : 'border-white/80 bg-black/30'}`}>
+                          {isSelected && <Check className="h-3.5 w-3.5" />}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
 
-                         {isMultiSelect ? (
-                           <div className="absolute inset-0 bg-black/10 flex items-start justify-start p-3 cursor-pointer z-30" onClick={() => toggleSelectMedia(m._id)}>
-                             <div className={`w-5.5 h-5.5 rounded-md border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#c5a880] border-[#c5a880] text-white shadow-md' : 'border-white/60 bg-black/20 backdrop-blur-sm hover:bg-black/40'}`}>
-                               {isSelected && <Check className="h-4.5 w-4.5" />}
-                             </div>
-                           </div>
-                         ) : (
-                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-500 cursor-pointer z-30" onClick={() => setSelectedItem(m)} />
-                         )}
-                       </>
-                     );
-                   }
-                 }}
-               />
-            ) : (
-               <RowsPhotoAlbum 
-                 photos={galleryMedia.map(m => ({
-                    src: resolveMediaUrl(m, true),
-                    width: m.width || (m.type === 'VIDEO' ? 1920 : 1600),
-                    height: m.height || (m.type === 'VIDEO' ? 1080 : 1200),
-                    key: m._id,
-                    media: m
-                 }))}
-                 targetRowHeight={140}
-                 spacing={16}
-                 render={{
-                   wrapper: ({ style, children, ...rest }, { photo }) => {
-                     const m = (photo as any).media;
-                     const isSelected = selectedMediaIds.includes(m._id);
-                     return (
-                       <div 
-                         {...rest} 
-                         style={{ ...style, overflow: 'hidden', borderRadius: '1rem' }} 
-                         className={`group relative transition-all duration-500 ease-out bg-slate-100 flex items-center justify-center ${isSelected ? 'border-2 border-[#c5a880] ring-4 ring-[#c5a880]/20 shadow-lg scale-95' : 'shadow-sm hover:shadow-xl hover:-translate-y-1.5 z-0 hover:z-10 cursor-pointer'}`}
-                       >
-                         {children}
-                       </div>
-                     );
-                   },
-                   image: ({ style, className, ...rest }) => (
-                     <img 
-                       {...rest} 
-                       style={{
-                         ...style,
-                         transition: 'transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), filter 0.6s ease',
-                         willChange: 'transform',
-                         backfaceVisibility: 'hidden',
-                         WebkitBackfaceVisibility: 'hidden'
-                       }} 
-                       className={`${className} group-hover:scale-110 object-cover`} 
-                     />
-                   ),
-                   extras: (_, { photo }) => {
-                     const m = (photo as any).media;
-                     const isSelected = selectedMediaIds.includes(m._id);
-                     return (
-                       <>
-                         {/* Video overlay */}
-                         {m.type === 'VIDEO' && (
-                           <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/35 transition-colors pointer-events-none z-10">
-                             <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center">
-                               <Play className="h-5 w-5 text-white fill-white ml-0.5" />
-                             </div>
-                           </div>
-                         )}
+            {/* Desktop / Tablet Masonry (>640px) */}
+            <div className="hidden sm:block">
+              {viewType === 'masonry' ? (
+                <MasonryPhotoAlbum 
+                  photos={galleryMedia.map(m => ({
+                     src: resolveMediaUrl(m, true),
+                     width: m.width || (m.type === 'VIDEO' ? 1920 : 1600),
+                     height: m.height || (m.type === 'VIDEO' ? 1080 : 1200),
+                     key: m._id,
+                     media: m
+                  }))}
+                  columns={(containerWidth) => {
+                    if (containerWidth < 400) return 2;
+                    if (containerWidth < 700) return 3;
+                    if (containerWidth < 1000) return 5;
+                    return 6;
+                  }}
+                  spacing={16}
+                  render={{
+                    wrapper: ({ style, children, ...rest }, { photo }) => {
+                      const m = (photo as any).media;
+                      const isSelected = selectedMediaIds.includes(m._id);
+                      return (
+                        <div 
+                          {...rest} 
+                          style={{ ...style, overflow: 'hidden', borderRadius: '1rem' }} 
+                          className={`group relative transition-all duration-500 ease-out bg-slate-100 flex items-center justify-center ${isSelected ? 'border-2 border-[#c5a880] ring-4 ring-[#c5a880]/20 shadow-lg scale-95' : 'shadow-sm hover:shadow-xl hover:-translate-y-1.5 z-0 hover:z-10 cursor-pointer'}`}
+                        >
+                          {children}
+                        </div>
+                      );
+                    },
+                    image: ({ style, className, ...rest }, { photo }) => {
+                      const m = (photo as any).media;
+                      return (
+                        <img 
+                          {...rest} 
+                          onError={(e) => {
+                            const fallback = m?.r2Url || m?.thumbnailUrl || m?.url;
+                            if (fallback && e.currentTarget.src !== fallback) {
+                              e.currentTarget.src = fallback;
+                            }
+                          }}
+                          style={{
+                            ...style,
+                            transition: 'transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), filter 0.6s ease',
+                            willChange: 'transform',
+                            backfaceVisibility: 'hidden',
+                            WebkitBackfaceVisibility: 'hidden'
+                          }} 
+                          className={`${className} group-hover:scale-110 object-cover`} 
+                        />
+                      );
+                    },
+                    extras: (_, { photo }) => {
+                      const m = (photo as any).media;
+                      const isSelected = selectedMediaIds.includes(m._id);
+                      return (
+                        <>
+                          {/* Video overlay */}
+                          {m.type === 'VIDEO' && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/35 transition-colors pointer-events-none z-10">
+                              <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center">
+                                <Play className="h-5 w-5 text-white fill-white ml-0.5" />
+                              </div>
+                            </div>
+                          )}
 
-                         {isMultiSelect ? (
-                           <div className="absolute inset-0 bg-black/10 flex items-start justify-start p-3 cursor-pointer z-30" onClick={() => toggleSelectMedia(m._id)}>
-                             <div className={`w-5.5 h-5.5 rounded-md border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#c5a880] border-[#c5a880] text-white shadow-md' : 'border-white/60 bg-black/20 backdrop-blur-sm hover:bg-black/40'}`}>
-                               {isSelected && <Check className="h-4.5 w-4.5" />}
-                             </div>
-                           </div>
-                         ) : (
-                           <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a]/80 via-[#0f172a]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end items-center pb-6 cursor-pointer z-30" onClick={() => setSelectedItem(m)}>
-                             <div className="transform translate-y-4 group-hover:translate-y-0 transition-all duration-500 delay-75 p-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white shadow-xl hover:bg-white/25 hover:scale-110">
-                               <ZoomIn className="h-5 w-5" />
-                             </div>
-                           </div>
-                         )}
-                       </>
-                     );
-                   }
-                 }}
-               />
-            )}
+                          {isMultiSelect ? (
+                            <div className="absolute inset-0 bg-black/10 flex items-start justify-start p-3 cursor-pointer z-30" onClick={() => toggleSelectMedia(m._id)}>
+                              <div className={`w-5.5 h-5.5 rounded-md border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#c5a880] border-[#c5a880] text-white shadow-md' : 'border-white/60 bg-black/20 backdrop-blur-sm hover:bg-black/40'}`}>
+                                {isSelected && <Check className="h-4.5 w-4.5" />}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-500 cursor-pointer z-30" onClick={() => setSelectedItem(m)} />
+                          )}
+                        </>
+                      );
+                    }
+                  }}
+                />
+              ) : (
+                <RowsPhotoAlbum 
+                  photos={galleryMedia.map(m => ({
+                     src: resolveMediaUrl(m, true),
+                     width: m.width || (m.type === 'VIDEO' ? 1920 : 1600),
+                     height: m.height || (m.type === 'VIDEO' ? 1080 : 1200),
+                     key: m._id,
+                     media: m
+                  }))}
+                  targetRowHeight={140}
+                  spacing={16}
+                  render={{
+                    wrapper: ({ style, children, ...rest }, { photo }) => {
+                      const m = (photo as any).media;
+                      const isSelected = selectedMediaIds.includes(m._id);
+                      return (
+                        <div 
+                          {...rest} 
+                          style={{ ...style, overflow: 'hidden', borderRadius: '1rem' }} 
+                          className={`group relative transition-all duration-500 ease-out bg-slate-100 flex items-center justify-center ${isSelected ? 'border-2 border-[#c5a880] ring-4 ring-[#c5a880]/20 shadow-lg scale-95' : 'shadow-sm hover:shadow-xl hover:-translate-y-1.5 z-0 hover:z-10 cursor-pointer'}`}
+                        >
+                          {children}
+                        </div>
+                      );
+                    },
+                    image: ({ style, className, ...rest }, { photo }) => {
+                      const m = (photo as any).media;
+                      return (
+                        <img 
+                          {...rest} 
+                          onError={(e) => {
+                            const fallback = m?.r2Url || m?.thumbnailUrl || m?.url;
+                            if (fallback && e.currentTarget.src !== fallback) {
+                              e.currentTarget.src = fallback;
+                            }
+                          }}
+                          style={{
+                            ...style,
+                            transition: 'transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), filter 0.6s ease',
+                            willChange: 'transform',
+                            backfaceVisibility: 'hidden',
+                            WebkitBackfaceVisibility: 'hidden'
+                          }} 
+                          className={`${className} group-hover:scale-110 object-cover`} 
+                        />
+                      );
+                    },
+                    extras: (_, { photo }) => {
+                      const m = (photo as any).media;
+                      const isSelected = selectedMediaIds.includes(m._id);
+                      return (
+                        <>
+                          {/* Video overlay */}
+                          {m.type === 'VIDEO' && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/35 transition-colors pointer-events-none z-10">
+                              <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center">
+                                <Play className="h-5 w-5 text-white fill-white ml-0.5" />
+                              </div>
+                            </div>
+                          )}
+
+                          {isMultiSelect ? (
+                            <div className="absolute inset-0 bg-black/10 flex items-start justify-start p-3 cursor-pointer z-30" onClick={() => toggleSelectMedia(m._id)}>
+                              <div className={`w-5.5 h-5.5 rounded-md border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#c5a880] border-[#c5a880] text-white shadow-md' : 'border-white/60 bg-black/20 backdrop-blur-sm hover:bg-black/40'}`}>
+                                {isSelected && <Check className="h-4.5 w-4.5" />}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a]/80 via-[#0f172a]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end items-center pb-6 cursor-pointer z-30" onClick={() => setSelectedItem(m)}>
+                              <div className="transform translate-y-4 group-hover:translate-y-0 transition-all duration-500 delay-75 p-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white shadow-xl hover:bg-white/25 hover:scale-110">
+                                <ZoomIn className="h-5 w-5" />
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    }
+                  }}
+                />
+              )}
+            </div>
           </div>
         ) : (
           <div className="py-24 text-center glass-panel bg-white border-slate-200 rounded-3xl flex flex-col items-center justify-center p-8 max-w-xl mx-auto text-slate-500 shadow-sm">
@@ -1597,23 +1691,6 @@ export default function ClientGallery() {
                           </div>
                         </div>
                       )}
-                      <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        onChange={handleSelfieUploadChange} 
-                        className="hidden" 
-                        accept="image/*" 
-                      />
-
-                      {/* Native camera fallback input */}
-                      <input 
-                        type="file" 
-                        ref={nativeCameraInputRef} 
-                        accept="image/*" 
-                        capture="user" 
-                        onChange={handleNativeCameraCapture} 
-                        className="hidden" 
-                      />
                     </div>
                   )}
                 </>
@@ -1651,6 +1728,23 @@ export default function ClientGallery() {
                   <span>Cancel / Close</span>
                 </button>
               </div>
+
+              {/* Always mounted hidden file inputs for native photo capture & file pick */}
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleSelfieUploadChange} 
+                className="hidden" 
+                accept="image/*" 
+              />
+              <input 
+                type="file" 
+                ref={nativeCameraInputRef} 
+                accept="image/*" 
+                capture="user" 
+                onChange={handleNativeCameraCapture} 
+                className="hidden" 
+              />
             </div>
           </div>
         </div>
