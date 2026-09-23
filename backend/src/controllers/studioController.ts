@@ -169,7 +169,7 @@ export const updateMyStudio = async (req: AuthRequest, res: Response) => {
           const parts = logoUrl.split(',');
           const base64Data = parts[1];
           const buffer = Buffer.from(base64Data, 'base64');
-          const { uploadFile } = await import('../services/storageService');
+          const { uploadFile } = await import('../services/StorageService');
           const { url } = await uploadFile(buffer, 'studios/logos');
           studio.logoUrl = url;
           if (studio.watermark) studio.watermark.logoUrl = url;
@@ -237,7 +237,7 @@ export const uploadStudioLogo = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'No logo image file uploaded' });
     }
 
-    const { uploadFile } = await import('../services/storageService');
+    const { uploadFile } = await import('../services/StorageService');
     const { url } = await uploadFile(file.buffer, 'studios/logos');
 
     let studio = await Studio.findOne({ ownerId: req.user._id });

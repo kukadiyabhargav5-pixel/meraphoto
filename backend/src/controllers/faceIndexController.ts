@@ -144,7 +144,7 @@ export const rebuildFaceIndex = async (req: AuthRequest, res: Response) => {
             formData.append('file', fileBlob, 'image.jpg');
 
             const aiResponse = await axios.post(`${AI_SERVICE_URL}/detect-faces`, formData, {
-              headers: { 'Content-Type': 'multipart/form-data' },
+              headers: { 'Content-Type': 'multipart/form-data', 'bypass-tunnel-reminder': 'true' },
               timeout: 60000,
             });
 
@@ -255,7 +255,7 @@ export const retryFailedIndexing = async (req: AuthRequest, res: Response) => {
           formData.append('file', fileBlob, 'image.jpg');
 
           const aiResponse = await axios.post(`${AI_SERVICE_URL}/detect-faces`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
+            headers: { 'Content-Type': 'multipart/form-data', 'bypass-tunnel-reminder': 'true' },
             timeout: 60000,
           });
 

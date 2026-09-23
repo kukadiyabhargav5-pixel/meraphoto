@@ -29,7 +29,7 @@ const extractEmbeddingsFromFile = async (file: Express.Multer.File): Promise<any
   formData.append('file', file.buffer, file.originalname || 'selfie.jpg');
 
   const aiResponse = await axios.post(`${AI_SERVICE_URL}/detect-faces`, formData, {
-    headers: { ...formData.getHeaders() },
+    headers: { ...formData.getHeaders(), 'bypass-tunnel-reminder': 'true' },
     timeout: 30000,
   });
 
@@ -50,7 +50,7 @@ const triggerAutoIndexing = async (eventId: string) => {
     const pendingPhotos = await Media.find({
       eventId,
       type: 'PHOTO',
-      faceIndexStatus: { $in: ['PENDING', null] },
+      faceIndexStatus: { $in: ['PENDING', null, 'FAILED'] },
     }).select('_id compressedUrl r2Url url studioId eventId').lean();
 
     if (pendingPhotos.length === 0) {
@@ -75,7 +75,7 @@ const triggerAutoIndexing = async (eventId: string) => {
         formData.append('file', buffer, 'photo.jpg');
 
         const aiRes = await axios.post(`${AI_SERVICE_URL}/detect-faces`, formData, {
-          headers: { ...formData.getHeaders() },
+          headers: { ...formData.getHeaders(), 'bypass-tunnel-reminder': 'true' },
           timeout: 60000,
         });
 
@@ -147,6 +147,7 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
 
     // --- Step 1: Extract query embeddings from all uploaded frames ---
     const queryEmbeddings: number[][] = [];
+    let lastAiError: any = null;
 
     for (const file of files) {
       try {
@@ -156,19 +157,20 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
           queryEmbeddings.push(faces[0].embedding);
         }
       } catch (aiErr: any) {
+        lastAiError = aiErr;
         console.error('[Face Search] AI service error for frame:', aiErr.message);
-        if (aiErr.code === 'ECONNREFUSED') {
-          res.status(503).json({
-            error: 'AI Face Detection service is not running. Please start the AI service.',
-          });
-          return;
-        }
       }
     }
 
     if (queryEmbeddings.length === 0) {
+      if (lastAiError) {
+        res.status(503).json({
+          error: 'AI Face Recognition service is currently warming up or temporarily busy. Please wait a few seconds and try again.',
+        });
+        return;
+      }
       res.status(400).json({
-        error: 'No face detected in the uploaded photo. Please try a clearer, well-lit photo of your face.',
+        error: 'No face detected in the uploaded photo. Please try a clearer, well-lit photo looking directly at the camera.',
       });
       return;
     }
@@ -180,7 +182,7 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
     const pendingCount = await Media.countDocuments({
       eventId,
       type: 'PHOTO',
-      faceIndexStatus: { $in: ['PENDING', null] },
+      faceIndexStatus: { $in: ['PENDING', null, 'FAILED'] },
     });
     if (pendingCount > 0) {
       triggerAutoIndexing(eventId.toString());
@@ -212,17 +214,17 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
     }
 
     // Adaptive threshold:
-    // Base threshold for InsightFace ArcFace 512-D is 0.30.
-    // If the person is identified in at least one photo (peak >= 0.34), relax to 0.28 to capture
-    // candid, angled, low-light, and group shots of the confirmed person with 100% recall.
-    let effectiveThreshold = 0.30;
+    // Base threshold for InsightFace ArcFace 512-D is 0.28.
+    // If person has a match with peak >= 0.30, relax to 0.25 to capture
+    // candid, angled, sunglasses, low-light, and group shots of the confirmed person with 100% recall.
+    let effectiveThreshold = 0.28;
     if (event.searchThreshold && event.searchThreshold < effectiveThreshold) {
       effectiveThreshold = event.searchThreshold;
     }
-    if (peakSimilarity >= 0.34) {
-      effectiveThreshold = Math.min(effectiveThreshold, 0.28);
-    } else if (peakSimilarity >= 0.29) {
-      effectiveThreshold = Math.min(effectiveThreshold, 0.285);
+    if (peakSimilarity >= 0.32) {
+      effectiveThreshold = Math.min(effectiveThreshold, 0.25);
+    } else if (peakSimilarity >= 0.27) {
+      effectiveThreshold = Math.min(effectiveThreshold, 0.26);
     }
 
     console.log(`[Face Search] Event ${eventId}: peak similarity = ${peakSimilarity.toFixed(4)}, effective threshold = ${effectiveThreshold}`);

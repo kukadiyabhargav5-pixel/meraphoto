@@ -10,7 +10,7 @@ import {
   Camera, Upload, ArrowLeft, ScanFace, Sparkles, Check, X,
   RefreshCw, Download, ShieldCheck, SwitchCamera, AlertCircle,
   Loader, ZoomIn, Share2, Layers, CheckCircle2, ChevronRight,
-  ChevronLeft, Eye, Heart, Image as ImageIcon
+  ChevronLeft, Eye, Heart, Image as ImageIcon, Video
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 
@@ -57,7 +57,9 @@ export default function DedicatedFaceScanPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nativeCameraInputRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const eventRef = useRef<any>(null);
 
   // States
   const [loading, setLoading] = useState(true);
@@ -66,9 +68,12 @@ export default function DedicatedFaceScanPage() {
   const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('user');
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
+  const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceIndex, setSelectedDeviceIndex] = useState<number>(0);
   const [shutterFlash, setShutterFlash] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isStartingCamera, setIsStartingCamera] = useState(false);
 
   // Selfie file & preview
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
@@ -99,6 +104,7 @@ export default function DedicatedFaceScanPage() {
       try {
         const res = await apiClient.get(`/event/code/${slug}`);
         setEvent(res.data.event);
+        eventRef.current = res.data.event;
       } catch (err) {
         console.error('Failed to load event:', err);
       } finally {
@@ -133,8 +139,71 @@ export default function DedicatedFaceScanPage() {
   }, [localUrls]);
 
   // ── Camera Management ──────────────────────────
-  const startCamera = useCallback(async (facing = cameraFacing) => {
+  const attachStreamToVideo = useCallback((v: HTMLVideoElement | null, stream: MediaStream | null) => {
+    if (!v) return;
+    if (!stream) {
+      v.srcObject = null;
+      return;
+    }
+    if (v.srcObject !== stream) {
+      v.srcObject = stream;
+    }
+    v.muted = true;
+    v.defaultMuted = true;
+    v.playsInline = true;
+    v.setAttribute('playsinline', 'true');
+    v.setAttribute('webkit-playsinline', 'true');
+    v.setAttribute('muted', 'true');
+
+    const p = v.play();
+    if (p !== undefined) {
+      p.then(() => {
+        if (v.videoWidth > 0) {
+          setCameraReady(true);
+        }
+      }).catch(err => {
+        console.warn('Play prevented by policy, tap to play:', err);
+      });
+    }
+  }, []);
+
+  const openNativeCamera = useCallback(() => {
+    if (nativeCameraInputRef.current) {
+      nativeCameraInputRef.current.value = '';
+      nativeCameraInputRef.current.click();
+    }
+  }, []);
+
+  const handleNativeCameraCapture = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const previewUrl = URL.createObjectURL(file);
+      setSelfiePreview(previewUrl);
+      setSelfieFile(file);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+      setCameraActive(false);
+      setCameraReady(false);
+      // Use eventRef.current to avoid stale closure
+      const currentEvent = eventRef.current;
+      if (currentEvent) {
+        performSearchWithEvent([file], currentEvent);
+      }
+    }
+  }, []);
+
+  const startCamera = useCallback(async (forcedFacing?: 'user' | 'environment') => {
+    setIsStartingCamera(true);
     try {
+      if (typeof window === 'undefined' || !navigator?.mediaDevices?.getUserMedia) {
+        setCameraActive(false);
+        setCameraReady(false);
+        setSearchError('Live camera requires HTTPS or secure context. Tap "Take Selfie with Phone Camera" below to take your selfie.');
+        return;
+      }
+
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
         streamRef.current = null;
@@ -143,35 +212,56 @@ export default function DedicatedFaceScanPage() {
       setCameraReady(false);
       setSearchError('');
 
-      const constraints: MediaStreamConstraints = {
-        video: {
-          facingMode: { ideal: facing },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      };
+      const targetFacing = forcedFacing || cameraFacing;
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      let stream: MediaStream | null = null;
+
+      // Prioritize front selfie camera
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: targetFacing,
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+      } catch (e1) {
+        console.warn('Constrained getUserMedia failed, trying basic facingMode:', e1);
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: targetFacing },
+            audio: false,
+          });
+        } catch (e2) {
+          console.warn('FacingMode failed, trying generic video:', e2);
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        }
+      }
+
       streamRef.current = stream;
       setCameraActive(true);
 
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play()
-            .then(() => setCameraReady(true))
-            .catch(console.error);
-        }
-      }, 150);
+      if (videoRef.current) {
+        attachStreamToVideo(videoRef.current, stream);
+      }
     } catch (err: any) {
       console.error('Camera access error:', err);
       setCameraActive(false);
       setCameraReady(false);
-      setSearchError('Camera access denied or unavailable. Please enable camera permission or upload a photo instead.');
-      setActiveTab('upload');
+      const isDenied = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
+      setSearchError(
+        isDenied
+          ? 'Camera permission denied. Tap "Take Selfie with Phone Camera" below to snap your selfie directly.'
+          : 'Could not connect to live camera. Tap "Take Selfie with Phone Camera" below.'
+      );
+    } finally {
+      setIsStartingCamera(false);
     }
-  }, [cameraFacing]);
+  }, [cameraFacing, attachStreamToVideo]);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -182,24 +272,22 @@ export default function DedicatedFaceScanPage() {
     setCameraReady(false);
   }, []);
 
-  const toggleCameraFacing = () => {
+  const toggleCamera = () => {
     const nextFacing = cameraFacing === 'user' ? 'environment' : 'user';
     setCameraFacing(nextFacing);
-    if (cameraActive) {
-      startCamera(nextFacing);
-    }
+    startCamera(nextFacing);
   };
 
   useEffect(() => {
     if (activeTab === 'camera' && !hasSearched) {
-      startCamera(cameraFacing);
+      startCamera();
     } else {
       stopCamera();
     }
     return () => {
       stopCamera();
     };
-  }, [activeTab, hasSearched, startCamera, stopCamera, cameraFacing]);
+  }, [activeTab, hasSearched]);
 
   // Clean up selfie preview URL
   useEffect(() => {
@@ -209,8 +297,9 @@ export default function DedicatedFaceScanPage() {
   }, [selfiePreview]);
 
   // ── Perform AI Face Matching ──────────────────
-  const performSearch = async (files: File[]) => {
-    if (!event || files.length === 0) return;
+  // Internal search function that accepts event directly to avoid stale closures
+  const performSearchWithEvent = async (files: File[], eventData: any) => {
+    if (!eventData || files.length === 0) return;
     setSearchLoading(true);
     setIsMatchedSuccess(false);
     setSearchError('');
@@ -237,8 +326,9 @@ export default function DedicatedFaceScanPage() {
     }, 160);
 
     try {
-      const res = await apiClient.post(`/event/${event._id}/face-search`, formData, {
+      const res = await apiClient.post(`/event/${eventData._id}/face-search`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000,
       });
 
       clearInterval(progressTimer);
@@ -279,35 +369,76 @@ export default function DedicatedFaceScanPage() {
       setIsMatchedSuccess(false);
       setSearchProgress(0);
       setSearchStage('');
-      const msg = err.response?.data?.error || 'AI Face Matching failed. Please try again.';
+      const status = err.response?.status;
+      let msg = err.response?.data?.error || 'AI Face Matching failed. Please try again.';
+      if (status === 503) {
+        msg = 'AI Face Recognition service is warming up. Please wait 10 seconds and try again.';
+      } else if (!err.response && err.message?.includes('Network Error')) {
+        msg = 'Network error: Could not reach the server. Please check your internet connection.';
+      }
       setSearchError(msg);
     }
   };
 
+  // Wrapper that uses current event state
+  const performSearch = async (files: File[]) => {
+    const currentEvent = event || eventRef.current;
+    await performSearchWithEvent(files, currentEvent);
+  };
+
   // ── Capture from Live Camera ──────────────────
   const handleCapture = async () => {
-    if (!videoRef.current || isCapturing) return;
+    const video = videoRef.current;
+    if (!video || !streamRef.current || isCapturing) return;
+
+    // Check if video actually has frames ready
+    if (video.videoWidth === 0 || video.videoHeight === 0 || video.readyState < 2) {
+      setSearchError('Camera feed is still initializing. Please wait a moment for the preview to appear.');
+      return;
+    }
+
     setIsCapturing(true);
     setSearchError('');
     setShutterFlash(true);
     setTimeout(() => setShutterFlash(false), 300);
 
-    const video = videoRef.current;
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 720;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) {
       setIsCapturing(false);
       return;
     }
 
-    // Mirror if front camera
+    // Mirror if front camera with proper save/restore
+    ctx.save();
     if (cameraFacing === 'user') {
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
     }
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+
+    // Verify the frame is not completely dark/black (e.g. privacy shutter closed or IR camera selected)
+    try {
+      const sampleData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let brightnessSum = 0;
+      const step = Math.max(1, Math.floor(sampleData.data.length / (4 * 400))); // sample ~400 pixels
+      let samples = 0;
+      for (let i = 0; i < sampleData.data.length; i += step * 4) {
+        brightnessSum += (sampleData.data[i] + sampleData.data[i + 1] + sampleData.data[i + 2]) / 3;
+        samples++;
+      }
+      const avgBrightness = samples > 0 ? brightnessSum / samples : 0;
+      if (avgBrightness < 3) {
+        setIsCapturing(false);
+        setSearchError('The camera preview is pitch black. Please open your webcam privacy shutter, check lighting, or click "Switch Camera".');
+        return;
+      }
+    } catch (e) {
+      console.warn('Brightness check skipped:', e);
+    }
 
     const primaryBlob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', 0.95));
     if (!primaryBlob) {
@@ -637,7 +768,7 @@ export default function DedicatedFaceScanPage() {
                 <div className="bg-slate-100 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl flex mb-4 sm:mb-6 border border-slate-200 gap-1">
                   <button
                     type="button"
-                    onClick={() => { setActiveTab('camera'); startCamera(cameraFacing); }}
+                    onClick={() => { setActiveTab('camera'); startCamera(); }}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 sm:py-3 rounded-lg sm:rounded-xl text-xs sm:text-sm font-black transition-all duration-300 min-h-[42px] cursor-pointer ${
                       activeTab === 'camera'
                         ? 'bg-gradient-to-r from-[#c5a880] to-[#b09672] text-white shadow-[0_4px_15px_rgba(197,168,128,0.3)]'
@@ -665,24 +796,74 @@ export default function DedicatedFaceScanPage() {
                 {activeTab === 'camera' && (
                   <div className="flex flex-col items-center gap-4 sm:gap-5">
                     {/* Viewfinder Container */}
-                    <div className="relative w-full aspect-[4/5] sm:aspect-[4/3] max-h-[50vh] sm:max-h-[390px] rounded-2xl sm:rounded-3xl overflow-hidden bg-slate-950 border-2 border-[#c5a880]/40 shadow-xl flex items-center justify-center group">
+                    <div 
+                      onClick={() => {
+                        if (videoRef.current && videoRef.current.paused) {
+                          videoRef.current.play().then(() => setCameraReady(true)).catch(() => {});
+                        }
+                      }}
+                      className="relative w-full aspect-[4/5] sm:aspect-[4/3] max-h-[52vh] sm:max-h-[420px] rounded-2xl sm:rounded-3xl overflow-hidden bg-slate-950 border-2 border-[#c5a880]/40 shadow-xl flex items-center justify-center group"
+                    >
                       <video
-                        ref={videoRef}
+                        ref={(el) => {
+                          videoRef.current = el;
+                          if (el && streamRef.current && el.srcObject !== streamRef.current) {
+                            attachStreamToVideo(el, streamRef.current);
+                          }
+                        }}
                         autoPlay
                         playsInline
                         muted
-                        className={`w-full h-full object-cover ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
+                        onLoadedMetadata={(e) => {
+                          const v = e.currentTarget;
+                          v.play().catch(() => {});
+                          if (v.videoWidth > 0) setCameraReady(true);
+                        }}
+                        onCanPlay={(e) => {
+                          const v = e.currentTarget;
+                          v.play().catch(() => {});
+                          if (v.videoWidth > 0) setCameraReady(true);
+                        }}
+                        onPlaying={(e) => {
+                          const v = e.currentTarget;
+                          if (v.videoWidth > 0) setCameraReady(true);
+                        }}
+                        className={`absolute inset-0 w-full h-full object-cover ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
                       />
 
-                      {/* Camera Initializing state */}
-                      {!cameraReady && cameraActive && (
-                        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center gap-2.5 z-10">
-                          <div className="w-10 h-10 rounded-full bg-[#c5a880]/20 flex items-center justify-center animate-spin">
-                            <Loader className="w-5 h-5 text-[#c5a880]" />
-                          </div>
-                          <span className="text-[11px] font-mono font-bold text-slate-300 tracking-wider">INITIALIZING CAMERA...</span>
+                      {/* Viewfinder States: Selfie Preview vs Starting vs Inactive */}
+                      {selfiePreview && !cameraActive ? (
+                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black overflow-hidden">
+                          <img src={selfiePreview} alt="Selfie" className="w-full h-full object-cover" />
                         </div>
-                      )}
+                      ) : !cameraActive ? (
+                        <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center gap-3 z-10 p-6 text-center">
+                          {isStartingCamera ? (
+                            <>
+                              <div className="w-12 h-12 rounded-full bg-[#c5a880]/20 border border-[#c5a880]/40 flex items-center justify-center animate-spin">
+                                <Loader className="w-6 h-6 text-[#c5a880]" />
+                              </div>
+                              <span className="text-xs font-mono font-bold text-slate-200 tracking-wider">CONNECTING SELFIE CAMERA...</span>
+                              <span className="text-[11px] text-slate-400">Please allow camera permissions if prompted</span>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-14 h-14 rounded-2xl bg-[#c5a880]/15 border border-[#c5a880]/30 flex items-center justify-center mb-1 shadow-md">
+                                <Camera className="w-7 h-7 text-[#c5a880]" />
+                              </div>
+                              <span className="text-xs font-bold text-slate-200">Live Camera Inactive</span>
+                              <button
+                                type="button"
+                                onClick={() => startCamera()}
+                                className="bg-gradient-to-r from-[#c5a880] to-[#b09672] text-slate-950 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow-md hover:brightness-105 active:scale-95 transition-all mt-1"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                <span>Start Live Camera</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      ) : null}
 
                       {/* Shutter flash effect */}
                       {shutterFlash && (
@@ -691,7 +872,7 @@ export default function DedicatedFaceScanPage() {
 
                       {/* Biometric HUD Corner Brackets */}
                       <div className="absolute top-3 left-3 w-4 h-4 sm:w-5 sm:h-5 border-t-2 border-l-2 border-[#c5a880] rounded-tl pointer-events-none z-10 opacity-80" />
-                      <div className="absolute top-3 right-14 sm:right-16 w-4 h-4 sm:w-5 sm:h-5 border-t-2 border-r-2 border-[#c5a880] rounded-tr pointer-events-none z-10 opacity-80" />
+                      <div className="absolute top-3 right-28 sm:right-32 w-4 h-4 sm:w-5 sm:h-5 border-t-2 border-r-2 border-[#c5a880] rounded-tr pointer-events-none z-10 opacity-80" />
                       <div className="absolute bottom-3 left-3 w-4 h-4 sm:w-5 sm:h-5 border-b-2 border-l-2 border-[#c5a880] rounded-bl pointer-events-none z-10 opacity-80" />
                       <div className="absolute bottom-3 right-3 w-4 h-4 sm:w-5 sm:h-5 border-b-2 border-r-2 border-[#c5a880] rounded-br pointer-events-none z-10 opacity-80" />
 
@@ -708,37 +889,106 @@ export default function DedicatedFaceScanPage() {
                         </span>
                       </div>
 
-                      {/* Camera Flip Button */}
+                      {/* Camera Switch / Flip Button */}
                       <button
                         type="button"
-                        onClick={toggleCameraFacing}
-                        className="absolute top-2.5 right-2.5 sm:top-3.5 sm:right-3.5 bg-white/95 backdrop-blur-md hover:bg-white text-slate-800 p-2 sm:p-2.5 rounded-xl border border-slate-200 transition-all hover:scale-105 active:scale-95 shadow-md flex items-center gap-1.5 text-xs font-bold cursor-pointer z-30 min-h-[38px] min-w-[38px] justify-center"
-                        title="Switch Camera (Front/Back)"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleCamera();
+                        }}
+                        className="absolute top-2.5 right-2.5 sm:top-3.5 sm:right-3.5 bg-white/95 backdrop-blur-md hover:bg-white text-slate-800 px-3 py-1.5 sm:py-2 rounded-xl border border-slate-200 transition-all hover:scale-105 active:scale-95 shadow-md flex items-center gap-1.5 text-xs font-bold cursor-pointer z-30 min-h-[38px]"
+                        title="Switch Camera (Front / Back)"
                       >
                         <SwitchCamera className="w-4 h-4 text-[#c5a880]" />
-                        <span className="hidden sm:inline">{cameraFacing === 'user' ? 'Front' : 'Back'}</span>
+                        <span>{cameraFacing === 'user' ? 'Front (Selfie)' : 'Back Camera'}</span>
                       </button>
                     </div>
 
-                    {/* Touch-Friendly Capture Action Button */}
-                    <button
-                      type="button"
-                      onClick={handleCapture}
-                      disabled={isCapturing || !cameraActive}
-                      className="w-full bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-105 active:scale-[0.98] text-slate-950 font-black py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition-all shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer min-h-[48px]"
-                    >
-                      {isCapturing ? (
-                        <>
-                          <Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-slate-950" />
-                          <span>Scanning Burst Frames...</span>
-                        </>
+                    {/* Touch-Friendly Capture Action Buttons */}
+                    <div className="w-full flex flex-col gap-2.5">
+                      {cameraActive ? (
+                        <div className="flex gap-2 w-full">
+                          <button
+                            type="button"
+                            onClick={handleCapture}
+                            disabled={isCapturing}
+                            className="flex-1 bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-105 active:scale-[0.98] text-slate-950 font-black py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition-all shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer min-h-[48px]"
+                          >
+                            {isCapturing ? (
+                              <>
+                                <Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-slate-950" />
+                                <span>Scanning Face & Matching...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
+                                <span>Capture Selfie & Scan Face</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={openNativeCamera}
+                            title="Open phone camera app"
+                            className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 px-4 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer min-h-[48px]"
+                          >
+                            <Camera className="w-5 h-5 text-slate-700" />
+                          </button>
+                        </div>
+                      ) : selfiePreview ? (
+                        <div className="flex flex-col sm:flex-row gap-2.5 w-full">
+                          <button
+                            type="button"
+                            onClick={() => selfieFile && performSearch([selfieFile])}
+                            disabled={searchLoading}
+                            className="flex-1 bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-105 active:scale-[0.98] text-slate-950 font-black py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition-all shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 cursor-pointer min-h-[48px] disabled:opacity-60"
+                          >
+                            {searchLoading ? (
+                              <>
+                                <Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-slate-950" />
+                                <span>Scanning Face & Matching...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
+                                <span>Scan This Selfie with AI</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelfieFile(null);
+                              setSelfiePreview(null);
+                              startCamera();
+                            }}
+                            className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-bold py-3.5 sm:py-4 px-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer min-h-[48px]"
+                          >
+                            <RefreshCw className="w-4 h-4 text-[#c5a880]" />
+                            <span>Retake Photo</span>
+                          </button>
+                        </div>
                       ) : (
-                        <>
-                          <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
-                          <span>Capture & Scan Face</span>
-                        </>
+                        <div className="flex flex-col sm:flex-row gap-2.5 w-full">
+                          <button
+                            type="button"
+                            onClick={openNativeCamera}
+                            className="flex-1 bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-105 active:scale-[0.98] text-slate-950 font-black py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition-all shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 cursor-pointer min-h-[48px]"
+                          >
+                            <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
+                            <span>Take Selfie with Phone Camera</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => startCamera()}
+                            className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-bold py-3.5 sm:py-4 px-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer min-h-[48px]"
+                          >
+                            <RefreshCw className="w-4 h-4 text-[#c5a880]" />
+                            <span>Retry Live Webcam</span>
+                          </button>
+                        </div>
                       )}
-                    </button>
+                    </div>
                   </div>
                 )}
 
@@ -820,6 +1070,16 @@ export default function DedicatedFaceScanPage() {
                       onChange={handleFileChange}
                       className="hidden"
                       accept="image/*"
+                    />
+
+                    {/* Native Camera input fallback with direct capture */}
+                    <input
+                      type="file"
+                      ref={nativeCameraInputRef}
+                      accept="image/*"
+                      capture="user"
+                      onChange={handleNativeCameraCapture}
+                      className="hidden"
                     />
                   </div>
                 )}

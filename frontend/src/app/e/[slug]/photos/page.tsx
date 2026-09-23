@@ -88,6 +88,7 @@ export default function EventPhotosPage() {
   const streamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nativeCameraInputRef = useRef<HTMLInputElement>(null);
 
   const [localUrls, setLocalUrls] = useState<Record<string, string>>({});
   const [mediaTypeFilter, setMediaTypeFilter] = useState<'ALL' | 'PHOTO' | 'VIDEO'>('ALL');
@@ -265,22 +266,71 @@ export default function EventPhotosPage() {
     }
   };
 
+  const openNativeCamera = () => {
+    if (nativeCameraInputRef.current) {
+      nativeCameraInputRef.current.value = '';
+      nativeCameraInputRef.current.click();
+    }
+  };
+
+  const handleNativeCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelfieFile(file);
+      setSelfiePreview(URL.createObjectURL(file));
+      stopCamera();
+      performAiSearch([file]);
+    }
+  };
+
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 } });
+      if (typeof window === 'undefined' || !navigator?.mediaDevices?.getUserMedia) {
+        setCameraActive(false);
+        setCameraReady(false);
+        setAiError('Live camera requires HTTPS or secure context. Tap "Take Photo with Camera" below to take a selfie directly.');
+        return;
+      }
+
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+      setCameraActive(false);
+      setCameraReady(false);
+
+      let stream: MediaStream | null = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } 
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+
       streamRef.current = stream;
       setCameraActive(true);
       
-      // Foolproof fallback to ensure the stream attaches after render
-      setTimeout(() => {
-        if (videoRef.current && videoRef.current.srcObject !== stream) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().then(() => setCameraReady(true)).catch(console.error);
-        }
-      }, 200);
-      
-    } catch (err) {
-      setAiError('Could not access camera. Please allow camera permission or upload a photo instead.');
+      const v = videoRef.current;
+      if (v) {
+        v.srcObject = stream;
+        v.muted = true;
+        v.defaultMuted = true;
+        v.playsInline = true;
+        v.setAttribute('playsinline', 'true');
+        v.setAttribute('webkit-playsinline', 'true');
+        v.setAttribute('muted', 'true');
+        v.play().then(() => {
+          if (v.videoWidth > 0) setCameraReady(true);
+        }).catch(() => {});
+      }
+    } catch (err: any) {
+      console.error('Camera error in photos page:', err);
+      setAiError(
+        err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError'
+          ? 'Camera permission denied. Tap "Take Photo with Camera" below to take a photo directly.'
+          : 'Could not connect to live webcam. Tap "Take Photo with Camera" below.'
+      );
       setCameraActive(false);
     }
   };
@@ -306,12 +356,17 @@ export default function EventPhotosPage() {
 
   const captureFromCamera = async () => {
     if (!videoRef.current || !canvasRef.current || isCapturing) return;
+    const video = videoRef.current;
+    if (video.videoWidth === 0 || video.readyState < 2) {
+      setAiError('Camera feed is still initializing. Please wait a moment.');
+      return;
+    }
+
     setIsCapturing(true);
     setAiError('');
     setShutterFlash(true);
     setTimeout(() => setShutterFlash(false), 350);
 
-    const video = videoRef.current;
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
@@ -1061,7 +1116,7 @@ export default function EventPhotosPage() {
                   {/* Camera View */}
                   {aiTab === 'camera' && (
                     <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                      {cameraActive && (
+                      {cameraActive ? (
                         <div className="w-full rounded-3xl border-2 border-[#c5a880]/50 overflow-hidden bg-slate-950 relative shadow-[0_0_30px_rgba(197,168,128,0.25)] group">
                           <video 
                             ref={(node) => {
@@ -1094,37 +1149,80 @@ export default function EventPhotosPage() {
                             </span>
                           </div>
                         </div>
-                      )}
-
-                      {!cameraActive && (
-                        <div className="rounded-3xl bg-[#faf9f6] border border-slate-200 p-10 flex flex-col items-center justify-center gap-4 text-center w-full">
-                          <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center animate-pulse border border-slate-200">
-                            <Video className="h-8 w-8 text-[#c5a880]" />
+                      ) : (
+                        <div className="rounded-3xl bg-[#faf9f6] border border-slate-200 p-8 flex flex-col items-center justify-center gap-4 text-center w-full shadow-sm">
+                          <div className="w-16 h-16 bg-[#c5a880]/15 rounded-2xl flex items-center justify-center border border-[#c5a880]/30 shadow-md">
+                            <Camera className="h-8 w-8 text-[#c5a880]" />
                           </div>
-                          <p className="text-sm text-slate-600 font-bold">Initializing Camera...</p>
+                          <div>
+                            <p className="text-sm text-slate-800 font-extrabold">Ready to Take Selfie</p>
+                            <p className="text-xs text-slate-500 font-medium mt-1 max-w-xs">
+                              Tap below to open your phone camera directly or launch the live webcam feed.
+                            </p>
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs mt-2">
+                            <button
+                              type="button"
+                              onClick={openNativeCamera}
+                              className="flex-1 bg-gradient-to-r from-[#c5a880] to-[#b09672] text-slate-950 font-black py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md hover:brightness-105 active:scale-95 transition-all cursor-pointer"
+                            >
+                              <Camera className="w-4 h-4 text-slate-950" />
+                              <span>Take Photo</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={startCamera}
+                              className="flex-1 bg-white hover:bg-slate-50 text-slate-700 font-bold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-200 active:scale-95 transition-all shadow-sm cursor-pointer"
+                            >
+                              <Video className="w-4 h-4 text-[#c5a880]" />
+                              <span>Live Webcam</span>
+                            </button>
+                          </div>
                         </div>
                       )}
 
-                      {cameraActive && (
-                        <button 
-                          type="button"
-                          onClick={captureFromCamera} 
-                          disabled={isCapturing}
-                          className="w-full bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-110 text-slate-950 font-black py-4 rounded-2xl text-sm transition-all duration-300 shadow-[0_8px_30px_rgba(197,168,128,0.4)] hover:shadow-[0_8px_40px_rgba(197,168,128,0.6)] hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed"
-                        >
-                          {isCapturing ? (
-                            <>
-                              <Loader className="h-5 w-5 animate-spin text-slate-950" />
-                              <span>Scanning & Analyzing Face...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Camera className="h-5 w-5 text-slate-950" />
-                              <span>Capture Photo & Scan Face</span>
-                            </>
-                          )}
-                        </button>
-                      )}
+                      {/* Capture Action Bar */}
+                      <div className="w-full flex flex-col gap-2.5">
+                        {cameraActive ? (
+                          <div className="flex gap-2 w-full">
+                            <button 
+                              type="button"
+                              onClick={captureFromCamera} 
+                              disabled={isCapturing}
+                              className="flex-1 bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-110 text-slate-950 font-black py-4 rounded-2xl text-sm transition-all duration-300 shadow-[0_8px_30px_rgba(197,168,128,0.4)] hover:shadow-[0_8px_40px_rgba(197,168,128,0.6)] hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
+                            >
+                              {isCapturing ? (
+                                <>
+                                  <Loader className="h-5 w-5 animate-spin text-slate-950" />
+                                  <span>Scanning & Analyzing Face...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Camera className="h-5 w-5 text-slate-950" />
+                                  <span>Capture Photo & Scan Face</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={openNativeCamera}
+                              title="Take photo with phone camera"
+                              className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 px-4 rounded-2xl flex items-center justify-center transition-all cursor-pointer"
+                            >
+                              <Camera className="w-5 h-5 text-slate-700" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={openNativeCamera}
+                            className="w-full bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-110 text-slate-950 font-black py-4 rounded-2xl text-sm transition-all duration-300 shadow-[0_8px_30px_rgba(197,168,128,0.4)] flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            <Camera className="h-5 w-5 text-slate-950" />
+                            <span>Take Photo with Camera</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -1199,6 +1297,16 @@ export default function EventPhotosPage() {
                         onChange={handleFileChange} 
                         className="hidden" 
                         accept="image/*" 
+                      />
+
+                      {/* Native camera fallback input */}
+                      <input 
+                        type="file" 
+                        ref={nativeCameraInputRef} 
+                        accept="image/*" 
+                        capture="user" 
+                        onChange={handleNativeCameraCapture} 
+                        className="hidden" 
                       />
                     </div>
                   )}

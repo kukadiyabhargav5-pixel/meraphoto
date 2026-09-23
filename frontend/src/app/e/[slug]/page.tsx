@@ -51,6 +51,7 @@ export default function ClientGallery() {
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nativeCameraInputRef = useRef<HTMLInputElement>(null);
   const playerRef = useRef<HTMLVideoElement>(null);
 
   // States
@@ -208,6 +209,23 @@ export default function ClientGallery() {
     };
   }, [selfiePreview]);
 
+  // Sync webcam stream to video element whenever stream or search tab changes
+  useEffect(() => {
+    if (webcamStream && videoRef.current) {
+      const v = videoRef.current;
+      if (v.srcObject !== webcamStream) {
+        v.srcObject = webcamStream;
+      }
+      v.muted = true;
+      v.defaultMuted = true;
+      v.playsInline = true;
+      v.setAttribute('playsinline', 'true');
+      v.setAttribute('webkit-playsinline', 'true');
+      v.setAttribute('muted', 'true');
+      v.play().catch(() => {});
+    }
+  }, [webcamStream, searchTab]);
+
   // Keyboard navigation for Lightbox
   useEffect(() => {
     if (!selectedItem) return;
@@ -290,23 +308,64 @@ export default function ClientGallery() {
     }
   };
 
+  const openNativeCamera = () => {
+    if (nativeCameraInputRef.current) {
+      nativeCameraInputRef.current.value = '';
+      nativeCameraInputRef.current.click();
+    }
+  };
+
+  const handleNativeCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelfieFile(file);
+      setSelfiePreview(URL.createObjectURL(file));
+      stopWebcam();
+      performMultiFrameSearch([file]);
+    }
+  };
+
   // ── Camera handling ──────────────────────
   const startWebcam = async () => {
     setSearchTab('camera');
     setSearchError('');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { width: 640, height: 480, facingMode: 'user' } 
-      });
+      if (typeof window === 'undefined' || !navigator?.mediaDevices?.getUserMedia) {
+        setSearchError('Live webcam preview requires HTTPS or secure context. Tap "Take Photo with Camera" below to take a photo directly.');
+        return;
+      }
+
+      if (webcamStream) {
+        webcamStream.getTracks().forEach((track) => track.stop());
+      }
+      let stream: MediaStream | null = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } 
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
       setWebcamStream(stream);
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      }, 100);
-    } catch (err) {
-      setSearchError('Could not access camera. Please allow camera permissions or upload a photo instead.');
-      setSearchTab('upload');
+      if (videoRef.current) {
+        const v = videoRef.current;
+        v.srcObject = stream;
+        v.muted = true;
+        v.defaultMuted = true;
+        v.playsInline = true;
+        v.setAttribute('playsinline', 'true');
+        v.setAttribute('webkit-playsinline', 'true');
+        v.setAttribute('muted', 'true');
+        v.play().catch(() => {});
+      }
+    } catch (err: any) {
+      console.error('startWebcam error:', err);
+      const isDenied = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
+      setSearchError(
+        isDenied
+          ? 'Camera permission denied. Tap "Take Photo with Camera" below to use your camera directly.'
+          : 'Could not connect to live webcam. Tap "Take Photo with Camera" below.'
+      );
     }
   };
 
@@ -319,6 +378,12 @@ export default function ClientGallery() {
 
   const capturePhoto = async () => {
     if (!videoRef.current || isCapturing) return;
+    const video = videoRef.current;
+    if (video.videoWidth === 0 || video.readyState < 2) {
+      setSearchError('Camera feed is still initializing. Please wait a moment.');
+      return;
+    }
+
     setIsCapturing(true);
     setSearchError('');
     setIsMatchedSuccess(false);
@@ -327,7 +392,6 @@ export default function ClientGallery() {
     setShutterFlash(true);
     setTimeout(() => setShutterFlash(false), 300);
 
-    const video = videoRef.current;
     const canvas = document.createElement('canvas');
     const videoWidth = video.videoWidth || 1280;
     const videoHeight = video.videoHeight || 720;
@@ -339,8 +403,13 @@ export default function ClientGallery() {
       return;
     }
 
-    // Capture primary frame in native aspect ratio and resolution
+    // Mirror image for front selfie camera
+    ctx.save();
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
+    ctx.restore();
+
     const primaryBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
     if (!primaryBlob) {
       setIsCapturing(false);
@@ -358,7 +427,11 @@ export default function ClientGallery() {
     for (let i = 1; i <= 2; i++) {
       await new Promise(r => setTimeout(r, 120));
       if (videoRef.current) {
+        ctx.save();
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
         ctx.drawImage(videoRef.current, 0, 0, videoWidth, videoHeight);
+        ctx.restore();
         const b = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
         if (b) {
           frames.push(new File([b], `frame_${i}.jpg`, { type: 'image/jpeg' }));
@@ -1354,45 +1427,104 @@ export default function ClientGallery() {
                   </div>
 
                   {/* Camera View */}
-                  {searchTab === 'camera' && webcamStream && (
+                  {searchTab === 'camera' && (
                     <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                      <div className="w-full rounded-3xl border-2 border-[#c5a880]/50 overflow-hidden bg-slate-950 relative shadow-[0_0_30px_rgba(197,168,128,0.25)] group">
-                        <video ref={videoRef} autoPlay playsInline muted className="w-full h-auto max-h-[50vh] object-contain scale-x-[-1] opacity-90 transition-opacity duration-300 group-hover:opacity-100" />
-                        
-                        {/* Shutter flash effect */}
-                        {shutterFlash && (
-                          <div className="absolute inset-0 bg-white z-50 animate-shutter-flash pointer-events-none" />
-                        )}
+                      {webcamStream ? (
+                        <>
+                          <div className="w-full rounded-3xl border-2 border-[#c5a880]/50 overflow-hidden bg-slate-950 relative shadow-[0_0_30px_rgba(197,168,128,0.25)] group">
+                            <video 
+                              ref={(node) => {
+                                (videoRef as any).current = node;
+                                if (node && webcamStream && node.srcObject !== webcamStream) {
+                                  node.srcObject = webcamStream;
+                                  node.play().catch(() => {});
+                                }
+                              }} 
+                              autoPlay 
+                              playsInline 
+                              muted 
+                              className="w-full h-auto max-h-[50vh] object-contain scale-x-[-1] opacity-90 transition-opacity duration-300 group-hover:opacity-100" 
+                            />
+                            
+                            {/* Shutter flash effect */}
+                            {shutterFlash && (
+                              <div className="absolute inset-0 bg-white z-50 animate-shutter-flash pointer-events-none" />
+                            )}
 
-                        {/* Face guide overlay */}
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="w-40 sm:w-56 h-40 sm:h-56 border-2 border-[#c5a880] rounded-full border-dashed shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-500 group-hover:scale-105" />
-                          {/* Scanning laser */}
-                          <div className="absolute w-40 sm:w-56 h-0.5 bg-gradient-to-r from-transparent via-[#c5a880] to-transparent animate-scan-laser shadow-[0_0_12px_rgba(197,168,128,0.9)]" />
+                            {/* Face guide overlay */}
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <div className="w-40 sm:w-56 h-40 sm:h-56 border-2 border-[#c5a880] rounded-full border-dashed shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-500 group-hover:scale-105" />
+                              {/* Scanning laser */}
+                              <div className="absolute w-40 sm:w-56 h-0.5 bg-gradient-to-r from-transparent via-[#c5a880] to-transparent animate-scan-laser shadow-[0_0_12px_rgba(197,168,128,0.9)]" />
+                            </div>
+                            <div className="absolute bottom-3 sm:bottom-6 left-0 right-0 text-center animate-pulse-soft">
+                              <span className="text-[9px] sm:text-[10px] tracking-widest text-white font-mono font-bold bg-black/80 backdrop-blur-md px-3 sm:px-6 py-1 sm:py-2 rounded-full border border-white/20 shadow-lg">
+                                ALIGN FACE IN CIRCLE
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="w-full flex gap-2.5">
+                            <button 
+                              onClick={capturePhoto} 
+                              disabled={isCapturing}
+                              className="flex-1 bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-110 text-slate-950 font-black py-4 rounded-2xl text-sm transition-all duration-300 shadow-[0_8px_30px_rgba(197,168,128,0.4)] hover:shadow-[0_8px_40px_rgba(197,168,128,0.6)] hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
+                            >
+                              {isCapturing ? (
+                                <>
+                                  <Loader className="h-5 w-5 animate-spin text-slate-950" />
+                                  <span>Scanning & Analyzing Face...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Camera className="h-5 w-5 text-slate-950" />
+                                  <span>Capture Photo & Scan Face</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={openNativeCamera}
+                              title="Take photo with phone camera"
+                              className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 px-4 rounded-2xl flex items-center justify-center transition-all cursor-pointer"
+                            >
+                              <Camera className="w-5 h-5 text-slate-700" />
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="w-full flex flex-col items-center gap-4">
+                          <div className="rounded-3xl bg-[#faf9f6] border border-slate-200 p-8 flex flex-col items-center justify-center gap-4 text-center w-full shadow-sm">
+                            <div className="w-16 h-16 bg-[#c5a880]/15 rounded-2xl flex items-center justify-center border border-[#c5a880]/30 shadow-md">
+                              <Camera className="h-8 w-8 text-[#c5a880]" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-slate-800 font-extrabold">Ready to Scan Face</p>
+                              <p className="text-xs text-slate-500 font-medium mt-1 max-w-xs">
+                                Start your selfie camera or capture a quick photo with your device camera.
+                              </p>
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs mt-2">
+                              <button
+                                type="button"
+                                onClick={startWebcam}
+                                className="flex-1 bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] text-slate-950 font-black py-3.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md hover:brightness-105 active:scale-95 transition-all cursor-pointer"
+                              >
+                                <Video className="w-4 h-4 text-slate-950" />
+                                <span>Start Live Camera</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={openNativeCamera}
+                                className="flex-1 bg-white hover:bg-slate-50 text-slate-700 font-bold py-3.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-200 active:scale-95 transition-all shadow-sm cursor-pointer"
+                              >
+                                <Camera className="w-4 h-4 text-[#c5a880]" />
+                                <span>Phone Camera</span>
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                        <div className="absolute bottom-3 sm:bottom-6 left-0 right-0 text-center animate-pulse-soft">
-                          <span className="text-[9px] sm:text-[10px] tracking-widest text-white font-mono font-bold bg-black/80 backdrop-blur-md px-3 sm:px-6 py-1 sm:py-2 rounded-full border border-white/20 shadow-lg">
-                            ALIGN FACE IN CIRCLE
-                          </span>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={capturePhoto} 
-                        disabled={isCapturing}
-                        className="w-full bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-110 text-slate-950 font-black py-4 rounded-2xl text-sm transition-all duration-300 shadow-[0_8px_30px_rgba(197,168,128,0.4)] hover:shadow-[0_8px_40px_rgba(197,168,128,0.6)] hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed"
-                      >
-                        {isCapturing ? (
-                          <>
-                            <Loader className="h-5 w-5 animate-spin text-slate-950" />
-                            <span>Scanning & Analyzing Face...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Camera className="h-5 w-5 text-slate-950" />
-                            <span>Capture Photo & Scan Face</span>
-                          </>
-                        )}
-                      </button>
+                      )}
                     </div>
                   )}
 
@@ -1471,6 +1603,16 @@ export default function ClientGallery() {
                         onChange={handleSelfieUploadChange} 
                         className="hidden" 
                         accept="image/*" 
+                      />
+
+                      {/* Native camera fallback input */}
+                      <input 
+                        type="file" 
+                        ref={nativeCameraInputRef} 
+                        accept="image/*" 
+                        capture="user" 
+                        onChange={handleNativeCameraCapture} 
+                        className="hidden" 
                       />
                     </div>
                   )}

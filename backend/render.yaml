@@ -57,3 +57,21 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
+
+  - type: web
+    name: meraphoto-ai
+    runtime: python
+    plan: free
+    region: oregon
+    repo: https://github.com/kukadiyabhargav5-pixel/meraphotoes.git
+    branch: main
+    rootDir: ai-service
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && python -c "from insightface.app import FaceAnalysis; app = FaceAnalysis(name='buffalo_sc', allowed_modules=['detection', 'recognition']); app.prepare(ctx_id=-1, det_size=(640, 640))"
+    startCommand: python app/main.py
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: INSIGHTFACE_MODEL
+        value: buffalo_sc

@@ -295,7 +295,7 @@ export const processPhoto = async (mediaId: string, studioId: string) => {
     let faceIndexStatus: 'INDEXED' | 'NO_FACE' | 'FAILED' = 'NO_FACE';
     try {
       const aiResponse = await axios.post(`${AI_SERVICE_URL}/detect-faces`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { 'Content-Type': 'multipart/form-data', 'bypass-tunnel-reminder': 'true' },
         timeout: 60000, // 60 second timeout for large images
       });
       faces = aiResponse.data.faces || [];
@@ -434,7 +434,7 @@ export const processVideo = async (mediaId: string, studioId: string) => {
 
         try {
           const aiResponse = await axios.post(`${AI_SERVICE_URL}/detect-faces`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
+            headers: { 'Content-Type': 'multipart/form-data', 'bypass-tunnel-reminder': 'true' },
           });
 
           const faces = aiResponse.data?.faces || [];

@@ -7,3 +7,7 @@ dist/
 *.png
 *.jpeg
 !src/**/*.ts
+__pycache__/
+*.pyc
+venv/
+.venv/

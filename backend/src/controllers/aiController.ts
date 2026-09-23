@@ -53,7 +53,7 @@ export const searchBySelfie = async (req: Request, res: Response) => {
       formData.append('file', fileBlob, 'selfie.jpg');
 
       const aiResponse = await axios.post(`${AI_SERVICE_URL}/detect-faces`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { 'Content-Type': 'multipart/form-data', 'bypass-tunnel-reminder': 'true' },
         timeout: 30000,
       });
 
@@ -61,9 +61,18 @@ export const searchBySelfie = async (req: Request, res: Response) => {
     } catch (aiErr: any) {
       console.error('[AI Search] AI service connection error:', aiErr.message);
       
-      if (aiErr.code === 'ECONNREFUSED') {
+      const isOffline =
+        aiErr.code === 'ECONNREFUSED' ||
+        aiErr.cause?.code === 'ECONNREFUSED' ||
+        aiErr.message?.includes('ECONNREFUSED') ||
+        aiErr.message?.includes('ENOTFOUND') ||
+        aiErr.message?.includes('connect') ||
+        aiErr.code === 'ECONNABORTED' ||
+        !aiErr.response;
+
+      if (isOffline) {
         return res.status(503).json({ 
-          error: 'AI Face Detection service is not running. Please start the AI service on port 8000.' 
+          error: 'AI Face Detection service is currently offline or unreachable. Please start the AI service.' 
         });
       }
       return res.status(500).json({ 
