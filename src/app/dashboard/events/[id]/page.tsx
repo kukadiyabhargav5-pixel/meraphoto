@@ -257,24 +257,42 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
       const workerCount = Math.min(concurrency, fileArray.length);
       await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
-      // Send the resulting data to the backend
-      if (mediaList.length > 0) {
-        await apiClient.post(`/media/event/${event._id}/bulk-create`, { mediaList });
-      }
+      // ── Upload complete: show 100% briefly then auto-dismiss ──
+      // Set uploadComplete flag so the UI shows "Upload Complete!" state
+      setUploadProgress(prev => ({ ...prev, current: prev.total })); // Ensure 100%
       
-      if (failed > 0) {
-        toast.error(`Uploaded ${successful}, failed ${failed}`);
-      } else {
-        toast.success(`Successfully uploaded ${files.length} file${files.length > 1 ? 's' : ''}! Click "Save Event Details" to save & deduct credits.`, { duration: 5000 });
+      // Dismiss the upload modal after a brief success flash (1.5s)
+      setTimeout(() => {
+        setUploadingMedia(false);
+        setUploadProgress({ current: 0, total: 0 });
+      }, 1500);
+
+      // Run post-upload tasks in background (don't block the UI)
+      try {
+        if (mediaList.length > 0) {
+          await apiClient.post(`/media/event/${event._id}/bulk-create`, { mediaList });
+        }
+        
+        if (failed > 0) {
+          toast.error(`Uploaded ${successful}, failed ${failed}`);
+        } else {
+          toast.success(`Successfully uploaded ${files.length} file${files.length > 1 ? 's' : ''}! Click "Save Event Details" to save & deduct credits.`, { duration: 5000 });
+        }
+        
+        // Refresh event data & credits in background
+        fetchEventDetails();
+        fetchCredits();
+        window.dispatchEvent(new Event('studio_plan_updated'));
+      } catch (postErr: any) {
+        console.error('Post-upload processing error:', postErr);
+        toast.error('Files uploaded but saving to database may have failed. Please refresh the page.');
       }
-      await fetchEventDetails();
-      await fetchCredits();
-      window.dispatchEvent(new Event('studio_plan_updated'));
     } catch (err: any) {
        console.error('Upload error:', err);
        toast.error(err?.response?.data?.error || err.message || 'Upload failed. Please check console.');
-    } finally {
        setUploadingMedia(false);
+       setUploadProgress({ current: 0, total: 0 });
+    } finally {
        if (e.target) e.target.value = '';
     }
   };
@@ -820,29 +838,57 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
             {/* Real-time Upload Progress Banner */}
             {uploadingMedia && (
-              <div className="mb-6 p-5 rounded-2xl bg-white border-2 border-[#c5a880] shadow-xl animate-in fade-in zoom-in-95 duration-300">
+              <div className={`mb-6 p-5 rounded-2xl bg-white border-2 shadow-xl animate-in fade-in zoom-in-95 duration-300 ${
+                uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                  ? 'border-emerald-400'
+                  : 'border-[#c5a880]'
+              }`}>
                 <div className="flex items-center justify-between mb-2.5">
                   <div className="flex items-center gap-2.5">
-                    <Loader2 className="w-5 h-5 text-[#c5a880] animate-spin" />
-                    <span className="text-sm font-black text-slate-900">
-                      Uploading Media...
+                    {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total ? (
+                      <Check className="w-5 h-5 text-emerald-500 stroke-[3]" />
+                    ) : (
+                      <Loader2 className="w-5 h-5 text-[#c5a880] animate-spin" />
+                    )}
+                    <span className={`text-sm font-black ${
+                      uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                        ? 'text-emerald-600'
+                        : 'text-slate-900'
+                    }`}>
+                      {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                        ? 'Upload Complete!'
+                        : 'Uploading Media...'}
                     </span>
                   </div>
-                  <span className="text-xs font-mono font-bold bg-[#c5a880]/10 text-[#c5a880] border border-[#c5a880]/25 px-2.5 py-1 rounded-lg">
+                  <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded-lg border ${
+                    uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                      ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                      : 'bg-[#c5a880]/10 text-[#c5a880] border-[#c5a880]/25'
+                  }`}>
                     {uploadProgress.total > 0 ? Math.round((uploadProgress.current / uploadProgress.total) * 100) : 0}%
                   </span>
                 </div>
                 {/* Progress bar */}
                 <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mb-2.5 border border-slate-200">
                   <div 
-                    className="h-full bg-gradient-to-r from-[#c5a880] to-[#b09672] transition-all duration-300 rounded-full relative"
+                    className={`h-full transition-all duration-300 rounded-full relative ${
+                      uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                        ? 'bg-gradient-to-r from-emerald-400 to-emerald-500'
+                        : 'bg-gradient-to-r from-[#c5a880] to-[#b09672]'
+                    }`}
                     style={{ width: `${uploadProgress.total > 0 ? Math.round((uploadProgress.current / uploadProgress.total) * 100) : 0}%` }}
                   >
-                    <div className="absolute inset-0 bg-white/30 animate-pulse" />
+                    {!(uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total) && (
+                      <div className="absolute inset-0 bg-white/30 animate-pulse" />
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center justify-between text-xs font-bold text-slate-500">
-                  <span>File {uploadProgress.current} of {uploadProgress.total}</span>
+                  <span>
+                    {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                      ? `All ${uploadProgress.total} files uploaded ✓`
+                      : `File ${uploadProgress.current} of ${uploadProgress.total}`}
+                  </span>
                 </div>
               </div>
             )}
@@ -992,28 +1038,51 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
             {uploadingMedia && (
                <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
                   <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center border border-white/20">
-                     <div className="w-16 h-16 bg-[#f8f5f0] border border-[#e6d5c0] text-[#c5a880] rounded-full flex items-center justify-center mb-6 shadow-sm">
-                        <Upload className="h-7 w-7 animate-bounce" />
-                     </div>
-                     <h3 className="text-xl font-black text-slate-900 mb-2">Uploading Media</h3>
-                     <p className="text-[11px] font-bold text-slate-500 text-center mb-8 px-2 uppercase tracking-wide">
-                        Optimizing & storing securely.<br/>Please keep this window open.
-                     </p>
-                     
-                     <div className="w-full relative">
-                        <div className="flex w-full justify-between items-end mb-2">
-                           <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Progress</span>
-                           <span className="text-xl font-black text-[#c5a880] leading-none">{Math.round((uploadProgress.current / uploadProgress.total) * 100) || 0}%</span>
-                        </div>
-                        <div className="w-full bg-[#f1f5f9] rounded-full h-3.5 mb-3 overflow-hidden shadow-inner border border-slate-200">
-                           <div 
-                              className="bg-gradient-to-r from-[#b69970] to-[#c5a880] h-full transition-all duration-300 ease-out" 
-                              style={{ width: `${Math.max(2, (uploadProgress.current / uploadProgress.total) * 100)}%` }}
-                           />
-                        </div>
-                        <div className="text-center text-xs font-bold text-slate-700">
-                           {uploadProgress.current} <span className="text-slate-400 mx-1">/</span> {uploadProgress.total} Files Completed
-                        </div>
+                     {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total ? (
+                       <>
+                         <div className="w-16 h-16 bg-emerald-50 border border-emerald-200 text-emerald-500 rounded-full flex items-center justify-center mb-6 shadow-sm animate-in zoom-in-50 duration-300">
+                            <Check className="h-8 w-8 stroke-[3]" />
+                         </div>
+                         <h3 className="text-xl font-black text-emerald-600 mb-2">Upload Complete!</h3>
+                         <p className="text-[11px] font-bold text-slate-500 text-center mb-6 px-2 uppercase tracking-wide">
+                            All files uploaded successfully.<br/>Saving to your gallery...
+                         </p>
+                         <div className="w-full relative">
+                           <div className="w-full bg-emerald-100 rounded-full h-3.5 mb-3 overflow-hidden shadow-inner border border-emerald-200">
+                              <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-full w-full rounded-full transition-all duration-500" />
+                           </div>
+                           <div className="text-center text-xs font-bold text-emerald-600">
+                              {uploadProgress.total} <span className="text-emerald-400 mx-1">/</span> {uploadProgress.total} Files Completed ✓
+                           </div>
+                         </div>
+                       </>
+                     ) : (
+                       <>
+                         <div className="w-16 h-16 bg-[#f8f5f0] border border-[#e6d5c0] text-[#c5a880] rounded-full flex items-center justify-center mb-6 shadow-sm">
+                            <Upload className="h-7 w-7 animate-bounce" />
+                         </div>
+                         <h3 className="text-xl font-black text-slate-900 mb-2">Uploading Media</h3>
+                         <p className="text-[11px] font-bold text-slate-500 text-center mb-8 px-2 uppercase tracking-wide">
+                            Optimizing & storing securely.<br/>Please keep this window open.
+                         </p>
+                         
+                         <div className="w-full relative">
+                            <div className="flex w-full justify-between items-end mb-2">
+                               <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Progress</span>
+                               <span className="text-xl font-black text-[#c5a880] leading-none">{Math.round((uploadProgress.current / uploadProgress.total) * 100) || 0}%</span>
+                            </div>
+                            <div className="w-full bg-[#f1f5f9] rounded-full h-3.5 mb-3 overflow-hidden shadow-inner border border-slate-200">
+                               <div 
+                                  className="bg-gradient-to-r from-[#b69970] to-[#c5a880] h-full transition-all duration-300 ease-out" 
+                                  style={{ width: `${Math.max(2, (uploadProgress.current / uploadProgress.total) * 100)}%` }}
+                               />
+                            </div>
+                            <div className="text-center text-xs font-bold text-slate-700">
+                               {uploadProgress.current} <span className="text-slate-400 mx-1">/</span> {uploadProgress.total} Files Completed
+                            </div>
+                         </div>
+                       </>
+                     )}
                      </div>
                   </div>
                </div>
