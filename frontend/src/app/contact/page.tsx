@@ -27,46 +27,46 @@ export default function ContactPage() {
   return (
     <PublicWrapper>
       <main className="bg-[#faf9f6] text-[#09090b] py-12 md:py-16 font-sans">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8 space-y-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 sm:space-y-16">
           
           {/* ── TOP HERO BANNER: Dark Expert Support Card ── */}
-          <div className="w-full bg-[#09090b] text-white rounded-3xl p-8 md:p-14 relative overflow-hidden border border-[#e3d8c8]/20 shadow-2xl flex flex-col items-center text-center">
+          <div className="w-full bg-[#09090b] text-white rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-14 relative overflow-hidden border border-[#e3d8c8]/20 shadow-2xl flex flex-col items-center text-center">
             {/* Subtle background glow */}
             <div className="absolute inset-0 pointer-events-none select-none">
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[250px] rounded-full bg-[#c5a880]/10 opacity-30 blur-3xl" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] max-w-full h-[250px] rounded-full bg-[#c5a880]/10 opacity-30 blur-3xl" />
             </div>
 
-            <div className="relative z-10 max-w-2xl space-y-6">
-              <h1 className="font-serif-luxury text-4xl sm:text-5xl font-light tracking-tight">
+            <div className="relative z-10 max-w-2xl space-y-5 sm:space-y-6">
+              <h1 className="font-serif-luxury text-3xl sm:text-5xl font-light tracking-tight">
                 Get Instant Help <span className="italic text-[#c5a880]">From Our Experts</span>
               </h1>
-              <p className="text-gray-400 text-sm sm:text-base leading-relaxed font-poppins font-medium">
+              <p className="text-gray-400 text-xs sm:text-base leading-relaxed font-poppins font-medium">
                 Our support team is ready to assist you with any issue. Fast responses, expert guidance, and reliable solutions.
               </p>
 
               {/* Badges row */}
-              <div className="flex flex-wrap items-center justify-center gap-6 pt-2 text-xs md:text-sm font-bold uppercase tracking-wider text-gray-300 font-poppins">
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="w-4.5 h-4.5 text-[#c5a880]" />
+              <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-6 pt-2 text-[11px] sm:text-xs md:text-sm font-bold uppercase tracking-wider text-gray-300 font-poppins">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <MessageSquare className="w-4 h-4 text-[#c5a880]" />
                   <span>Live Chat</span>
                 </div>
                 <div className="hidden sm:block text-[#e3d8c8]/30">•</div>
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4.5 h-4.5 text-[#c5a880]" />
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <Clock className="w-4 h-4 text-[#c5a880]" />
                   <span>9 AM - 6 PM IST</span>
                 </div>
                 <div className="hidden sm:block text-[#e3d8c8]/30">•</div>
-                <div className="flex items-center gap-2">
-                  <Users className="w-4.5 h-4.5 text-[#c5a880]" />
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <Users className="w-4 h-4 text-[#c5a880]" />
                   <span>Team Collaboration</span>
                 </div>
               </div>
 
               {/* CTA button */}
-              <div className="pt-4">
+              <div className="pt-2 sm:pt-4">
                 <a 
                   href="#contact-form"
-                  className="font-poppins inline-flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider text-[#09090b] bg-[#c5a880] hover:bg-white px-9 py-4 rounded-full transition-all duration-300 shadow-md hover:-translate-y-0.5"
+                  className="font-poppins inline-flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider text-[#09090b] bg-[#c5a880] hover:bg-white px-7 sm:px-9 py-3.5 sm:py-4 rounded-full transition-all duration-300 shadow-md hover:-translate-y-0.5 min-h-[44px] w-full xs:w-auto"
                 >
                   Contact Support
                   <ArrowRight className="w-4 h-4" />

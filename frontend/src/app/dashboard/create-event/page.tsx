@@ -245,7 +245,7 @@ export default function CreateEventPage() {
         <div className="absolute bottom-[-15%] left-[-10%] w-[600px] h-[600px] bg-[#e3d8c8]/25 rounded-full blur-[150px] pointer-events-none animate-aura-breathe [animation-delay:2.5s]" />
       </div>
 
-      <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-8 sm:py-12 relative z-10 space-y-8">
+      <div className="max-w-4xl mx-auto w-full px-3 xs:px-4 sm:px-6 py-5 sm:py-12 relative z-10 space-y-6 sm:space-y-8">
         
         {/* Page Header */}
         <div className="text-center space-y-3">
@@ -253,7 +253,7 @@ export default function CreateEventPage() {
             <Sparkles className="w-3.5 h-3.5 text-[#c5a880] animate-pulse-soft" /> 
             <span>Studio Event Creator</span>
           </div>
-          <h1 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight font-serif-luxury">
+          <h1 className="text-2xl xs:text-3xl sm:text-5xl font-black text-slate-900 tracking-tight font-serif-luxury">
             Create New Event
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-lg mx-auto leading-relaxed">
@@ -262,11 +262,11 @@ export default function CreateEventPage() {
         </div>
 
         {/* Wizard Main Card */}
-        <div className="bg-white/95 backdrop-blur-2xl border border-white/80 shadow-[0_20px_50px_rgba(0,0,0,0.08)] rounded-3xl overflow-hidden ring-1 ring-slate-900/5 transition-all">
+        <div className="bg-white/95 backdrop-blur-2xl border border-white/80 shadow-[0_20px_50px_rgba(0,0,0,0.08)] rounded-2xl sm:rounded-3xl overflow-hidden ring-1 ring-slate-900/5 transition-all">
           
           {/* Stepper Navigation Bar */}
-          <div className="bg-gradient-to-r from-white via-slate-50 to-white border-b border-slate-200/80 px-4 sm:px-8 py-5 overflow-x-auto hide-scrollbar relative">
-            <div className="flex items-center justify-between min-w-[560px] relative">
+          <div className="bg-gradient-to-r from-white via-slate-50 to-white border-b border-slate-200/80 px-3 sm:px-8 py-4 sm:py-5 overflow-x-auto hide-scrollbar relative">
+            <div className="flex items-center justify-between min-w-[440px] sm:min-w-[560px] relative">
               {stepLabels.map((item, i) => {
                 const step = i + 1;
                 const isActive = currentStep === step;
@@ -307,7 +307,7 @@ export default function CreateEventPage() {
           </div>
 
           {/* Wizard Content Body */}
-          <div className="p-6 sm:p-10 min-h-[420px]">
+          <div className="p-4 xs:p-6 sm:p-10 min-h-[380px]">
             <form onSubmit={handleSubmit}>
               <AnimatePresence mode="wait" custom={direction}>
                 
@@ -1047,11 +1047,11 @@ export default function CreateEventPage() {
           </div>
 
           {/* Footer Wizard Controls */}
-          <div className="bg-slate-50/90 border-t border-slate-200/80 p-4 sm:p-6 flex items-center justify-between gap-4">
+          <div className="bg-slate-50/90 border-t border-slate-200/80 p-3.5 sm:p-6 flex items-center justify-between gap-3">
             <button 
               type="button" 
               onClick={handleBack} 
-              className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-4 sm:px-5 py-2.5 min-h-[44px] rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
                 currentStep === 1 ? 'opacity-0 pointer-events-none' : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
               }`}
             >
@@ -1062,7 +1062,7 @@ export default function CreateEventPage() {
               <button 
                 type="button" 
                 onClick={handleNext}
-                className="px-7 py-3 rounded-xl bg-slate-900 text-white hover:bg-[#c5a880] hover:text-slate-950 text-xs font-black uppercase tracking-wider shadow-lg shadow-slate-900/15 hover:shadow-xl transition-all duration-300 flex items-center gap-2 cursor-pointer"
+                className="px-5 sm:px-7 py-3 min-h-[44px] rounded-xl bg-slate-900 text-white hover:bg-[#c5a880] hover:text-slate-950 text-xs font-black uppercase tracking-wider shadow-lg shadow-slate-900/15 hover:shadow-xl transition-all duration-300 flex items-center gap-2 cursor-pointer"
               >
                 <span>Continue</span> 
                 <ArrowRight className="w-4 h-4 stroke-[2.5]" />
@@ -1072,7 +1072,7 @@ export default function CreateEventPage() {
                 type="button" 
                 onClick={handleSubmit}
                 disabled={loading}
-                className="px-8 py-3 rounded-xl bg-[#c5a880] text-slate-950 text-xs font-black uppercase tracking-wider shadow-lg shadow-[#c5a880]/30 hover:bg-slate-900 hover:text-[#c5a880] transition-all duration-300 flex items-center gap-2 cursor-pointer"
+                className="px-6 sm:px-8 py-3 min-h-[44px] rounded-xl bg-[#c5a880] text-slate-950 text-xs font-black uppercase tracking-wider shadow-lg shadow-[#c5a880]/30 hover:bg-slate-900 hover:text-[#c5a880] transition-all duration-300 flex items-center gap-2 cursor-pointer"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Sparkles className="w-4 h-4" /> <span>Launch Event</span></>}
               </button>

@@ -238,43 +238,43 @@ export default function SignupPage() {
 
   return (
     <PublicWrapper>
-      <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center p-4 sm:p-8 bg-gradient-to-br from-[#faf9f6] via-[#f5f2eb] to-[#faf9f6] relative overflow-hidden font-poppins">
+      <div className="min-h-[calc(100vh-64px)] min-h-[calc(100dvh-64px)] flex flex-col items-center justify-center p-3 xs:p-4 sm:p-8 bg-gradient-to-br from-[#faf9f6] via-[#f5f2eb] to-[#faf9f6] relative overflow-hidden font-poppins">
         {/* Decorative Background Elements */}
-        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-gradient-to-r from-[#c5a880]/15 to-transparent rounded-full blur-[100px] pointer-events-none" />
-        <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] bg-gradient-to-t from-[#c5a880]/10 to-transparent rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute top-[-20%] right-[-10%] w-[600px] max-w-full h-[600px] bg-gradient-to-r from-[#c5a880]/15 to-transparent rounded-full blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[400px] max-w-full h-[400px] bg-gradient-to-t from-[#c5a880]/10 to-transparent rounded-full blur-[80px] pointer-events-none" />
         
         {/* Signup Card */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          className="w-full max-w-[500px] bg-white/80 backdrop-blur-2xl rounded-3xl border border-white/60 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] p-8 sm:p-10 relative z-10"
+          className="w-full max-w-[500px] bg-white/85 backdrop-blur-2xl rounded-3xl border border-white/60 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] p-4 xs:p-6 sm:p-10 relative z-10"
         >
           
           {/* Header */}
-          <div className="flex flex-col items-center justify-center mb-8">
-            <img src="/logo.png" alt="Mara Photo" className="h-10 object-contain mb-4" />
-            <h1 className="text-2xl font-light text-slate-900 font-serif-luxury tracking-wide">Create an Account</h1>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-1">Join Mara Photo Studio</p>
+          <div className="flex flex-col items-center justify-center mb-6 sm:mb-8">
+            <img src="/logo.png" alt="Mara Photo" className="h-9 sm:h-10 object-contain mb-3 sm:mb-4" />
+            <h1 className="text-xl sm:text-2xl font-light text-slate-900 font-serif-luxury tracking-wide">Create an Account</h1>
+            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-widest mt-1">Join Mara Photo Studio</p>
           </div>
           
           {/* Progress Tabs */}
-          <div className="flex items-center justify-between mb-8 relative">
+          <div className="flex items-center justify-between mb-6 sm:mb-8 relative">
             <div className="absolute top-1/2 left-0 right-0 h-[2px] bg-slate-100 -translate-y-1/2 z-0 hidden sm:block" />
             {stepLabels.map((label, i) => {
               const step = i + 1;
               const isActive = currentStep === step;
               const isPast = currentStep > step;
               return (
-                <div key={step} className="flex-1 flex flex-col items-center gap-2 relative z-10 bg-white/0">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-black transition-all duration-300 ${
+                <div key={step} className="flex-1 flex flex-col items-center gap-1.5 sm:gap-2 relative z-10 bg-white/0">
+                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[10px] sm:text-[11px] font-black transition-all duration-300 ${
                     isActive ? 'bg-[#c5a880] text-white shadow-lg shadow-[#c5a880]/40 ring-4 ring-white' : 
                     isPast ? 'bg-slate-900 text-[#c5a880] ring-4 ring-white' : 
                     'bg-slate-100 text-slate-400 ring-4 ring-white'
                   }`}>
-                    {isPast ? <Check className="w-4 h-4" /> : step}
+                    {isPast ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : step}
                   </div>
-                  <span className={`text-[9px] font-bold uppercase tracking-widest transition-colors ${
+                  <span className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-widest transition-colors ${
                     isActive ? 'text-slate-900' : isPast ? 'text-slate-700' : 'text-slate-400'
                   }`}>
                     {label}
@@ -484,9 +484,9 @@ export default function SignupPage() {
             </AnimatePresence>
             
             {/* Action Buttons */}
-            <div className="flex gap-4 pt-6 mt-6 border-t border-slate-100">
+            <div className="flex gap-2 sm:gap-4 pt-5 sm:pt-6 mt-5 sm:mt-6 border-t border-slate-100">
               {currentStep > 1 && (
-                <button type="button" onClick={handleBack} className="w-[120px] shrink-0 border-2 border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 py-3.5 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2">
+                <button type="button" onClick={handleBack} className="w-[85px] xs:w-[120px] shrink-0 border-2 border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 py-3 sm:py-3.5 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 min-h-[44px]">
                   <ArrowLeft className="w-4 h-4" /> Back
                 </button>
               )}
@@ -495,14 +495,14 @@ export default function SignupPage() {
                 <button 
                   type="button" onClick={handleNext}
                   disabled={(currentStep === 1 && !canProceedStep1()) || (currentStep === 2 && !canProceedStep2())}
-                  className="flex-1 bg-slate-900 hover:bg-[#c5a880] text-white py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-slate-900/10 hover:shadow-[#c5a880]/30 transition-all duration-300 flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 bg-slate-900 hover:bg-[#c5a880] text-white py-3 sm:py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-slate-900/10 hover:shadow-[#c5a880]/30 transition-all duration-300 flex items-center justify-center gap-1.5 sm:gap-2 group disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
                 >
                   Continue <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
               ) : (
                 <button 
                   type="submit" disabled={loading || (!isGoogleUser && (!allPasswordValid || !passwordsMatch))}
-                  className="flex-1 bg-[#c5a880] hover:bg-slate-900 text-slate-900 hover:text-white py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-[#c5a880]/30 hover:shadow-slate-900/30 transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 bg-[#c5a880] hover:bg-slate-900 text-slate-900 hover:text-white py-3 sm:py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-[#c5a880]/30 hover:shadow-slate-900/30 transition-all duration-300 flex items-center justify-center gap-1.5 sm:gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
                 >
                   {loading ? <Loader className="w-4 h-4 animate-spin" /> : 'Create Account'}
                 </button>
@@ -512,13 +512,13 @@ export default function SignupPage() {
 
           {currentStep === 1 && !isGoogleUser && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
-              <div className="flex items-center gap-4 my-8">
+              <div className="flex items-center gap-4 my-6 sm:my-8">
                 <div className="flex-1 h-px bg-slate-200"></div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Or signup with</span>
                 <div className="flex-1 h-px bg-slate-200"></div>
               </div>
               
-              <div className="flex justify-center w-full">
+              <div className="flex justify-center w-full max-w-full overflow-hidden">
                  <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || 'dummy-client-id'}>
                    <GoogleLogin
                      onSuccess={handleGoogleSuccess}
@@ -527,7 +527,7 @@ export default function SignupPage() {
                      size="large"
                      text="continue_with"
                      shape="pill"
-                     width={250}
+                     width={240}
                    />
                  </GoogleOAuthProvider>
               </div>

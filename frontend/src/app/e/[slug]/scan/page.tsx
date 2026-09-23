@@ -114,6 +114,40 @@ export default function DedicatedFaceScanPage() {
     fetchEvent();
   }, [slug]);
 
+  // Touch swipe refs for mobile lightbox navigation
+  const touchStartXRef = useRef<number | null>(null);
+  const touchEndXRef = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0].clientX;
+    touchEndXRef.current = null;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndXRef.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartXRef.current === null || touchEndXRef.current === null) return;
+    const diff = touchStartXRef.current - touchEndXRef.current;
+    if (Math.abs(diff) > 40 && selectedPhoto) {
+      const idx = matchedPhotos.findIndex(p => p._id === selectedPhoto._id);
+      if (diff > 0) {
+        // Swiped Left -> Next
+        if (idx < matchedPhotos.length - 1) {
+          setSelectedPhoto(matchedPhotos[idx + 1]);
+        }
+      } else {
+        // Swiped Right -> Prev
+        if (idx > 0) {
+          setSelectedPhoto(matchedPhotos[idx - 1]);
+        }
+      }
+    }
+    touchStartXRef.current = null;
+    touchEndXRef.current = null;
+  };
+
   // Resolve media URLs
   const resolveMediaUrl = useCallback((m: any, isThumbnail = false) => {
     if (!m) return '';
@@ -123,7 +157,10 @@ export default function DedicatedFaceScanPage() {
       if (base.includes('imagekit.io')) return `${base}/ik-thumbnail.jpg`;
       return m.thumbnailUrl || base;
     }
-    const url = m.compressedUrl || m.url || m.r2Url || '';
+    if (isThumbnail && m.thumbnailUrl && !m.thumbnailUrl.endsWith('.mp4')) {
+      return m.thumbnailUrl;
+    }
+    const url = (isThumbnail && m.thumbnailUrl ? m.thumbnailUrl : null) || m.compressedUrl || m.thumbnailUrl || m.url || m.r2Url || '';
     if (url.startsWith('localdb://')) {
       const id = url.replace('localdb://', '');
       if (localUrls[id]) return localUrls[id];
@@ -1212,7 +1249,7 @@ export default function DedicatedFaceScanPage() {
                     : 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4'
                 }`}>
                   {matchedPhotos.map((photo, index) => {
-                    const imgSrc = resolveMediaUrl(photo);
+                    const imgSrc = resolveMediaUrl(photo, true);
                     return (
                       <div
                         key={photo._id}
@@ -1283,16 +1320,21 @@ export default function DedicatedFaceScanPage() {
 
       {/* ── Fullscreen Lightbox Modal ── */}
       {selectedPhoto && (
-        <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col justify-between p-3 sm:p-6 animate-in fade-in duration-200 safe-bottom">
+        <div 
+          className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col justify-between p-3 sm:p-6 animate-in fade-in duration-200 safe-bottom select-none touch-pan-y"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
           <div className="flex items-center justify-between w-full relative z-10">
             <span className="text-[10px] sm:text-xs font-mono font-bold text-[#c5a880] tracking-wider uppercase">
-              AI Matched Photo
+              AI Matched Photo ({matchedPhotos.findIndex(p => p._id === selectedPhoto._id) + 1} / {matchedPhotos.length})
             </span>
             <div className="flex items-center gap-2 sm:gap-3">
               <a
                 href={resolveMediaUrl(selectedPhoto)}
                 download
-                className="bg-white/10 hover:bg-white/20 border border-white/15 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+                className="bg-white/10 hover:bg-white/20 border border-white/15 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors min-h-[40px]"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Download</span>
@@ -1300,23 +1342,55 @@ export default function DedicatedFaceScanPage() {
               <button
                 type="button"
                 onClick={() => setSelectedPhoto(null)}
-                className="bg-white/10 hover:bg-rose-500/80 text-white p-2 rounded-xl transition-colors border border-white/10 cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center"
+                className="bg-white/10 hover:bg-rose-500/80 text-white p-2 rounded-xl transition-colors border border-white/10 cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          <div className="flex-1 flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+          <div className="flex-1 flex items-center justify-center p-2 sm:p-4 overflow-hidden relative">
+            {/* Previous Button */}
+            {matchedPhotos.findIndex(p => p._id === selectedPhoto._id) > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const idx = matchedPhotos.findIndex(p => p._id === selectedPhoto._id);
+                  if (idx > 0) setSelectedPhoto(matchedPhotos[idx - 1]);
+                }}
+                className="absolute left-1 sm:left-4 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/80 text-white min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer shadow-lg z-20 backdrop-blur-md border border-white/10"
+                title="Previous photo"
+              >
+                <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
+            )}
+
             <img
               src={resolveMediaUrl(selectedPhoto)}
               alt="Full Size View"
-              className="max-h-[75vh] sm:max-h-[82vh] max-w-full object-contain rounded-xl sm:rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-white/10"
+              className="max-h-[75vh] sm:max-h-[82vh] max-w-[95vw] sm:max-w-full object-contain rounded-xl sm:rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-white/10"
             />
+
+            {/* Next Button */}
+            {matchedPhotos.findIndex(p => p._id === selectedPhoto._id) < matchedPhotos.length - 1 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const idx = matchedPhotos.findIndex(p => p._id === selectedPhoto._id);
+                  if (idx < matchedPhotos.length - 1) setSelectedPhoto(matchedPhotos[idx + 1]);
+                }}
+                className="absolute right-1 sm:right-4 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/80 text-white min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer shadow-lg z-20 backdrop-blur-md border border-white/10"
+                title="Next photo"
+              >
+                <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
+            )}
           </div>
 
           <div className="text-center py-1 text-[11px] text-slate-400 font-medium">
-            Tap outside or click &apos;X&apos; to return
+            Swipe left/right to browse • Tap &apos;X&apos; to return
           </div>
         </div>
       )}

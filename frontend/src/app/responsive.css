@@ -75,6 +75,11 @@ button {
   a.btn {
     min-height: 44px; /* Touch-friendly */
   }
+
+  .edit-input {
+    font-size: 16px !important;
+    min-height: 44px;
+  }
 }
 
 /* ─── MODALS: Mobile Containment ─── */

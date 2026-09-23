@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 const FRAME_PREFIX = '/frames/frame_';
 const FRAME_EXT = '.jpg';
 const TOTAL_FRAMES = 35;
-const HEADER_HEIGHT = 80;
+const HEADER_HEIGHT = 64;
 
 /* ─────────────── HELPERS ─────────────── */
 

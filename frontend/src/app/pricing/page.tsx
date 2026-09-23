@@ -74,23 +74,23 @@ export default function PricingPage() {
         </div>
 
         {/* Section 1: Dynamic Photographer Plans Grid (Matching original gold/black theme) */}
-        <section className="max-w-7xl mx-auto px-6 pt-28 pb-20 relative z-10 text-center">
-          <span className="inline-block px-4 py-1.5 bg-[#f5f2eb] text-[#c5a880] border border-[#c5a880]/15 text-[11px] font-black uppercase tracking-widest rounded-full mb-5 shadow-sm">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-20 sm:pt-28 pb-16 sm:pb-20 relative z-10 text-center">
+          <span className="inline-block px-4 py-1.5 bg-[#f5f2eb] text-[#c5a880] border border-[#c5a880]/15 text-[11px] font-black uppercase tracking-widest rounded-full mb-4 sm:mb-5 shadow-sm">
             Membership
           </span>
-          <h1 className="font-serif-luxury text-4xl sm:text-5xl lg:text-6xl font-light text-[#09090b] leading-[1.15] mb-6">
+          <h1 className="font-serif-luxury text-3xl sm:text-5xl lg:text-6xl font-light text-[#09090b] leading-[1.15] mb-4 sm:mb-6">
             Simple, transparent pricing
           </h1>
-          <p className="text-gray-500 max-w-sm mx-auto text-sm md:text-base font-medium">
+          <p className="text-gray-500 max-w-sm mx-auto text-xs sm:text-base font-medium">
             Start delivering photos dynamically. Upgrade as your studio demands grow.
           </p>
 
           {/* Pricing cards grid wrapper */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mt-16 max-w-6xl mx-auto items-stretch">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-10 sm:mt-16 max-w-6xl mx-auto items-stretch">
             {staticPlans.map((plan) => (
               <div 
                 key={plan.name}
-                className={`relative rounded-3xl p-8 flex flex-col justify-between transition-all duration-300 ${plan.popular ? 'bg-[#09090b] border border-[#c5a880]/30 text-white shadow-2xl scale-[1.03] lg:scale-[1.05] z-10' : 'bg-white border border-[#e3d8c8]/40 hover:border-[#c5a880]/30 text-[#09090b]'}`}
+                className={`relative rounded-3xl p-5 sm:p-8 flex flex-col justify-between transition-all duration-300 ${plan.popular ? 'bg-[#09090b] border border-[#c5a880]/30 text-white shadow-2xl scale-100 lg:scale-[1.05] z-10' : 'bg-white border border-[#e3d8c8]/40 hover:border-[#c5a880]/30 text-[#09090b]'}`}
               >
                 {/* Popular badge */}
                 {plan.popular && (
@@ -125,7 +125,7 @@ export default function PricingPage() {
                 <div className="mt-8">
                   <Link 
                     href="/dashboard/plans-billing"
-                    className={`w-full py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center justify-center cursor-pointer ${plan.popular ? 'bg-[#c5a880] hover:bg-white text-[#09090b] font-black' : 'border border-[#09090b]/15 text-[#09090b] bg-transparent hover:bg-slate-50'}`}
+                    className={`w-full py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center justify-center cursor-pointer min-h-[44px] ${plan.popular ? 'bg-[#c5a880] hover:bg-white text-[#09090b] font-black' : 'border border-[#09090b]/15 text-[#09090b] bg-transparent hover:bg-slate-50'}`}
                   >
                     Choose {plan.name}
                   </Link>

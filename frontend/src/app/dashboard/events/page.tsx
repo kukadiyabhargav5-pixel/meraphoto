@@ -52,7 +52,7 @@ export default function EventsManagementPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8 font-poppins">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-3 xs:p-4 md:p-8 font-poppins">
       <style dangerouslySetInnerHTML={{__html: `
         .event-card {
           background: #ffffff;
@@ -70,7 +70,7 @@ export default function EventsManagementPage() {
           background: #f8fafc;
           border: 1px dashed #cbd5e1;
           border-radius: 12px;
-          padding: 20px;
+          padding: 16px;
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -78,7 +78,6 @@ export default function EventsManagementPage() {
           text-align: center;
           cursor: pointer;
           transition: all 0.2s;
-          aspect-ratio: 16 / 9;
         }
         .create-block:hover {
           background: #f1f5f9;
@@ -86,17 +85,17 @@ export default function EventsManagementPage() {
         }
       `}} />
       
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-6xl mx-auto space-y-5 sm:space-y-6">
         
         {/* Header Title */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Events Management</h1>
-            <p className="text-slate-500 text-sm font-medium mt-1">Manage all your upcoming and past photography events here.</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Events Management</h1>
+            <p className="text-slate-500 text-xs sm:text-sm font-medium mt-1">Manage all your upcoming and past photography events here.</p>
           </div>
           <Link
             href="/dashboard/plans-billing"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 hover:border-[#c5a880] text-slate-800 text-xs font-bold transition-all shadow-xs self-start sm:self-auto hover:scale-102"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 hover:border-[#c5a880] text-slate-800 text-xs font-bold transition-all shadow-xs self-stretch sm:self-auto min-h-[44px]"
           >
             <Crown className="w-4 h-4 text-[#c5a880]" />
             <span>Manage Plan & Storage</span>
@@ -106,13 +105,13 @@ export default function EventsManagementPage() {
         {/* Create Event Block */}
         <div>
           <Link href="/dashboard/create-event">
-            <div className="create-block group w-full !h-[100px] !flex-row gap-4 p-4 justify-center items-center">
-              <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center group-hover:bg-[#c5a880] group-hover:border-transparent transition-colors shrink-0">
-                <Plus className="h-6 w-6 text-slate-400 group-hover:text-black transition-colors" />
+            <div className="create-block group w-full !h-[90px] sm:!h-[100px] !flex-row gap-3 sm:gap-4 p-3 sm:p-4 justify-center items-center">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center group-hover:bg-[#c5a880] group-hover:border-transparent transition-colors shrink-0">
+                <Plus className="h-5 w-5 sm:h-6 sm:w-6 text-slate-400 group-hover:text-black transition-colors" />
               </div>
               <div className="text-left flex flex-col justify-center">
-                <h3 className="text-lg font-bold text-slate-800 mb-0.5">Create New Event</h3>
-                <p className="text-sm text-slate-500">Setup a new photo gallery</p>
+                <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-0.5">Create New Event</h3>
+                <p className="text-xs sm:text-sm text-slate-500">Setup a new photo gallery</p>
               </div>
             </div>
           </Link>
@@ -128,11 +127,11 @@ export default function EventsManagementPage() {
             placeholder="Search events by name or code..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#c5a880]/50 focus:border-[#c5a880] transition-all text-slate-700 shadow-sm"
+            className="w-full pl-11 pr-4 py-3 sm:py-3.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#c5a880]/50 focus:border-[#c5a880] transition-all text-base sm:text-sm text-slate-700 shadow-sm min-h-[44px]"
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
 
           {loading ? (
             <div className="col-span-full py-12 flex justify-center items-center">
