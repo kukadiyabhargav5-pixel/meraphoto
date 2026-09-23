@@ -62,14 +62,14 @@ app.add_middleware(
 )
 
 async def get_engine() -> FaceEngine:
-    """Returns the engine when ready, or waits briefly if warming up."""
+    """Returns the engine when ready, or waits patiently if warming up."""
     global engine, is_engine_loading
     if engine and engine.ready:
         return engine
 
     if is_engine_loading:
         print("[AI Service] Request received while engine is warming up, waiting...")
-        for _ in range(30):  # Wait up to 15 seconds
+        for _ in range(90):  # Wait up to 45 seconds (90 × 0.5s)
             await asyncio.sleep(0.5)
             if engine and engine.ready:
                 return engine
@@ -80,6 +80,11 @@ async def get_engine() -> FaceEngine:
             detail="AI engine is still warming up. Please retry in a few seconds."
         )
     return engine
+
+@app.get("/ping")
+def ping():
+    """Ultra-lightweight keep-alive endpoint. No model check needed."""
+    return {"pong": True}
 
 @app.get("/health")
 def health():

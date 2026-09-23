@@ -62,27 +62,73 @@ export const searchBySelfie = async (req: Request, res: Response) => {
       let lastAiErr: any = null;
       const candidateUrls = getCandidateAiUrls();
 
+      // Pre-flight: quick health check to wake up sleeping AI service
+      let preferredUrl: string | null = null;
       for (const baseUrl of candidateUrls) {
-      try {
-        const formData = new FormData();
-        const fileBlob = new Blob([new Uint8Array(file.buffer)], { type: file.mimetype });
-        formData.append('file', fileBlob, 'selfie.jpg');
-
-        const aiResponse = await axios.post(`${baseUrl}/detect-faces`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data', 'bypass-tunnel-reminder': 'true' },
-          timeout: 45000,
-        });
-
-        if (aiResponse.data && Array.isArray(aiResponse.data.faces)) {
-          faces = aiResponse.data.faces;
-          lastAiErr = null;
-          break;
-        }
-      } catch (err: any) {
-        lastAiErr = err;
-        console.warn(`[AI Search] Attempt on ${baseUrl} failed:`, err.message);
+        try {
+          const healthRes = await axios.get(`${baseUrl}/health`, { timeout: 5000 });
+          if (healthRes.data?.engine_ready === true) {
+            preferredUrl = baseUrl;
+            break;
+          }
+        } catch { /* continue */ }
       }
-    }
+
+      // If no URL was ready, wait for cold start
+      if (!preferredUrl) {
+        console.log('[AI Search] AI service cold-start detected. Waiting for wake-up...');
+        for (let i = 0; i < 6; i++) {
+          await new Promise(r => setTimeout(r, 5000));
+          for (const baseUrl of candidateUrls) {
+            try {
+              const healthRes = await axios.get(`${baseUrl}/health`, { timeout: 8000 });
+              if (healthRes.data?.engine_ready === true) {
+                preferredUrl = baseUrl;
+                break;
+              }
+            } catch { /* continue */ }
+          }
+          if (preferredUrl) break;
+        }
+      }
+
+      // Reorder URLs to try preferred first
+      const orderedUrls = preferredUrl
+        ? [preferredUrl, ...candidateUrls.filter(u => u !== preferredUrl)]
+        : candidateUrls;
+
+      for (const baseUrl of orderedUrls) {
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const formData = new FormData();
+            const fileBlob = new Blob([new Uint8Array(file.buffer)], { type: file.mimetype });
+            formData.append('file', fileBlob, 'selfie.jpg');
+
+            const aiResponse = await axios.post(`${baseUrl}/detect-faces`, formData, {
+              headers: { 'Content-Type': 'multipart/form-data', 'bypass-tunnel-reminder': 'true' },
+              timeout: 60000,
+            });
+
+            if (aiResponse.data && Array.isArray(aiResponse.data.faces)) {
+              faces = aiResponse.data.faces;
+              lastAiErr = null;
+              break;
+            }
+          } catch (err: any) {
+            lastAiErr = err;
+            console.warn(`[AI Search] Attempt ${attempt}/3 on ${baseUrl} failed:`, err.message);
+            if (err.response?.status === 503 || err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT' || err.code === 'ECONNABORTED') {
+              if (attempt < 3) {
+                const delay = attempt * 3000;
+                await new Promise(r => setTimeout(r, delay));
+              }
+            } else {
+              break; // Non-retryable, try next URL
+            }
+          }
+        }
+        if (faces.length > 0) break;
+      }
 
     if (lastAiErr && faces.length === 0) {
       throw lastAiErr;
@@ -101,7 +147,7 @@ export const searchBySelfie = async (req: Request, res: Response) => {
 
       if (isOffline) {
         return res.status(503).json({ 
-          error: 'AI Face Detection service is currently offline or unreachable. Please start the AI service.' 
+          error: 'AI Face Detection service is currently starting up. Please wait 10-15 seconds and try again.' 
         });
       }
       return res.status(500).json({ 

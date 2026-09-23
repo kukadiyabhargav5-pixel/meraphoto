@@ -33,22 +33,80 @@ const cosineSimilarity = (a: number[], b: number[]): number => {
 };
 
 /**
+ * Pre-flight AI service wake-up: pings /health to trigger Render cold-start
+ * before attempting the actual face detection request.
+ * Waits up to 30s for the service to become ready.
+ */
+const wakeUpAiService = async (): Promise<string | null> => {
+  const urls = getCandidateAiUrls();
+  
+  // Quick check: try to find an already-awake URL
+  for (const baseUrl of urls) {
+    try {
+      const res = await axios.get(`${baseUrl}/health`, { timeout: 5000 });
+      if (res.data?.engine_ready === true) {
+        return baseUrl; // Already warm and ready
+      }
+    } catch {
+      // Not available, continue
+    }
+  }
+
+  // Cold start detected: ping all URLs and wait for one to wake up
+  console.log('[Face Search] AI service appears cold. Sending wake-up pings...');
+  
+  for (let attempt = 0; attempt < 6; attempt++) { // 6 attempts × 5s = 30s max wait
+    for (const baseUrl of urls) {
+      try {
+        const res = await axios.get(`${baseUrl}/health`, { timeout: 8000 });
+        if (res.data?.engine_ready === true) {
+          console.log(`[Face Search] AI service awake at ${baseUrl} after ${(attempt + 1) * 5}s`);
+          return baseUrl;
+        }
+        if (res.data?.status === 'healthy') {
+          // Service is up but engine still loading - wait
+          console.log(`[Face Search] AI service responding but engine loading (attempt ${attempt + 1}/6)...`);
+        }
+      } catch {
+        // Still waking up
+      }
+    }
+    await new Promise(r => setTimeout(r, 5000));
+  }
+
+  return null; // Could not wake up
+};
+
+/**
  * Extract face embeddings from an uploaded file via AI service.
  * Supports multiple candidate URLs and retries to handle Render free-tier cold starts.
+ * Includes pre-flight wake-up and 3 retry attempts per URL with exponential backoff.
  */
 const extractEmbeddingsFromFile = async (file: Express.Multer.File): Promise<any[]> => {
+  // Pre-flight: wake up the AI service if it's sleeping
+  const preferredUrl = await wakeUpAiService();
+  
   const urls = getCandidateAiUrls();
+  // If we found a preferred (warm) URL, try it first
+  if (preferredUrl) {
+    const idx = urls.indexOf(preferredUrl);
+    if (idx > 0) {
+      urls.splice(idx, 1);
+      urls.unshift(preferredUrl);
+    }
+  }
+
   let lastError: any = null;
 
   for (const baseUrl of urls) {
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         const formData = new FormData();
         formData.append('file', file.buffer, file.originalname || 'selfie.jpg');
 
         const aiResponse = await axios.post(`${baseUrl}/detect-faces`, formData, {
           headers: { ...formData.getHeaders(), 'bypass-tunnel-reminder': 'true' },
-          timeout: 45000,
+          timeout: 60000, // 60s timeout for cold starts
         });
 
         if (aiResponse.data && Array.isArray(aiResponse.data.faces)) {
@@ -56,11 +114,16 @@ const extractEmbeddingsFromFile = async (file: Express.Multer.File): Promise<any
         }
       } catch (err: any) {
         lastError = err;
-        console.warn(`[Face Search] AI service attempt ${attempt} on ${baseUrl} failed:`, err.message);
-        if (err.response?.status === 503 || err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
-          if (attempt < 2) {
-            await new Promise(r => setTimeout(r, 2500));
+        console.warn(`[Face Search] AI service attempt ${attempt}/3 on ${baseUrl} failed:`, err.message);
+        if (err.response?.status === 503 || err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT' || err.code === 'ECONNABORTED') {
+          if (attempt < 3) {
+            // Exponential backoff: 3s, 6s
+            const delay = attempt * 3000;
+            console.log(`[Face Search] Retrying in ${delay / 1000}s...`);
+            await new Promise(r => setTimeout(r, delay));
           }
+        } else {
+          break; // Non-retryable error, try next URL
         }
       }
     }
@@ -68,6 +131,7 @@ const extractEmbeddingsFromFile = async (file: Express.Multer.File): Promise<any
 
   throw lastError || new Error('No AI service endpoints reachable');
 };
+
 
 // Map to avoid duplicate concurrent indexing per event
 const activeEventIndexing: Record<string, boolean> = {};

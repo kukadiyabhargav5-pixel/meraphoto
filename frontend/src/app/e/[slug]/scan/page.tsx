@@ -340,12 +340,26 @@ export default function DedicatedFaceScanPage() {
     setSearchLoading(true);
     setIsMatchedSuccess(false);
     setSearchError('');
-    setSearchProgress(retryAttempt > 0 ? 30 : 12);
+    setSearchProgress(retryAttempt > 0 ? 30 : 5);
     setSearchStage(
       retryAttempt > 0
-        ? `Waking up AI engine (attempt ${retryAttempt + 1})...`
-        : 'Initializing 68-point neural landmark detector...'
+        ? `Reconnecting to AI engine (attempt ${retryAttempt + 1}/3)...`
+        : 'Preparing AI neural face engine...'
     );
+
+    // Pre-flight: ping the backend to wake up the AI service before sending the selfie
+    if (retryAttempt === 0) {
+      try {
+        setSearchProgress(8);
+        setSearchStage('Connecting to AI Face Recognition server...');
+        // This is a lightweight call - the backend's wakeUpAiService handles the heavy lifting
+        await apiClient.get('/health', { timeout: 5000 }).catch(() => {});
+        setSearchProgress(12);
+        setSearchStage('Initializing 68-point neural landmark detector...');
+      } catch {
+        // Continue anyway - the main request will handle retries
+      }
+    }
 
     const formData = new FormData();
     files.forEach(f => formData.append('file', f));
@@ -369,7 +383,7 @@ export default function DedicatedFaceScanPage() {
     try {
       const res = await apiClient.post(`/event/${eventData._id}/face-search`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 60000,
+        timeout: 120000, // 2 min timeout to handle cold starts gracefully
       });
 
       clearInterval(progressTimer);
@@ -408,14 +422,22 @@ export default function DedicatedFaceScanPage() {
       clearInterval(progressTimer);
       const status = err.response?.status;
 
-      // Handle 503 Render Cold-start: Auto-retry up to 2 times
-      if (status === 503 && retryAttempt < 2) {
+      // Handle 503 Render Cold-start: Auto-retry up to 3 times with progressive delays
+      if (status === 503 && retryAttempt < 3) {
         setSearchLoading(true);
-        setSearchProgress(45);
-        setSearchStage(`AI engine is warming up on the server. Auto-retrying in 5 seconds (attempt ${retryAttempt + 1}/2)...`);
+        const delays = [6000, 10000, 15000]; // 6s, 10s, 15s
+        const delay = delays[retryAttempt] || 10000;
+        setSearchProgress(20 + retryAttempt * 15);
+        setSearchStage(
+          retryAttempt === 0
+            ? `AI engine is waking up from sleep mode. Please wait ${Math.round(delay / 1000)} seconds...`
+            : retryAttempt === 1
+              ? `AI engine is loading face recognition models. Almost ready (${Math.round(delay / 1000)}s)...`
+              : `Final attempt — AI engine should be ready shortly...`
+        );
         setTimeout(() => {
           performSearchWithEvent(files, eventData, retryAttempt + 1);
-        }, 5000);
+        }, delay);
         return;
       }
 
@@ -425,9 +447,11 @@ export default function DedicatedFaceScanPage() {
       setSearchStage('');
       let msg = err.response?.data?.error || 'AI Face Matching failed. Please try again.';
       if (status === 503) {
-        msg = 'AI Face Recognition service is still warming up. Please wait 10-15 seconds and try again.';
+        msg = 'AI Face Recognition service is still starting up. Please wait 15-20 seconds and try again.';
       } else if (!err.response && err.message?.includes('Network Error')) {
         msg = 'Network error: Could not reach the server. Please check your internet connection.';
+      } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        msg = 'The request took too long. The AI service may be loading. Please try again in a few seconds.';
       }
       setSearchError(msg);
     }

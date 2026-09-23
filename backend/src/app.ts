@@ -4,6 +4,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
+import axios from 'axios';
 import apiRouter from './routes';
 
 dotenv.config();
@@ -99,6 +100,47 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 import { initializeQdrant } from './services/qdrantService';
 import { startEventRetentionScheduler } from './services/eventRetentionService';
 
+// ── AI Service Keep-Alive Pinger ──────────────────────────────────
+// Prevents Render free-tier from sleeping the AI service after 5 min inactivity.
+// Pings /health every 4 minutes — lightweight, no model inference triggered.
+const AI_KEEPALIVE_INTERVAL_MS = 4 * 60 * 1000; // 4 minutes
+
+const getAiKeepAliveUrls = (): string[] => {
+  const envUrl = process.env.AI_SERVICE_URL;
+  const list = [
+    envUrl,
+    'https://maraphotoes-ai.onrender.com',
+    'https://meraphoto-ai.onrender.com',
+  ].filter(Boolean) as string[];
+  return Array.from(new Set(list));
+};
+
+let aiKeepAliveTimer: ReturnType<typeof setInterval> | null = null;
+
+const startAiKeepAlive = () => {
+  if (aiKeepAliveTimer) return;
+  console.log('[AI KeepAlive] Starting AI service keep-alive pinger (every 4 min)...');
+
+  const ping = async () => {
+    const urls = getAiKeepAliveUrls();
+    for (const baseUrl of urls) {
+      try {
+        const res = await axios.get(`${baseUrl}/health`, { timeout: 10000 });
+        if (res.data?.status === 'healthy') {
+          // Successfully pinged – AI service is awake
+          return;
+        }
+      } catch (err: any) {
+        // Silent – just keep trying next URL
+      }
+    }
+  };
+
+  // Ping immediately on startup, then every 4 minutes
+  ping();
+  aiKeepAliveTimer = setInterval(ping, AI_KEEPALIVE_INTERVAL_MS);
+};
+
 // Connect to MongoDB & Start Server
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/maraphoto';
 console.log('Connecting to database...');
@@ -110,6 +152,8 @@ mongoose
     startEventRetentionScheduler();
     app.listen(PORT, () => {
       console.log(`Backend server running on port ${PORT}`);
+      // Start AI service keep-alive after server is ready
+      startAiKeepAlive();
     });
   })
   .catch((err) => {
