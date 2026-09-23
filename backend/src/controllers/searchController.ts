@@ -273,7 +273,7 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
     if (queryEmbeddings.length === 0) {
       if (lastAiError) {
         res.status(503).json({
-          error: 'AI Face Recognition service is currently warming up or temporarily busy. Please wait a few seconds and try again.',
+          error: 'AI Face Recognition service could not be reached after multiple attempts. Please ensure the AI service is running and try again.',
         });
         return;
       }
