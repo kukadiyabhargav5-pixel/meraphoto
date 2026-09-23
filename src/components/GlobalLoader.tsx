@@ -185,14 +185,14 @@ export default function GlobalLoader() {
     }
   }, []);
 
-  // Smooth progress animation from 1% to 100% fast & responsive (2-3s cadence)
+  // Smooth progress animation from 1% to 100% fast & responsive (~250ms cadence)
   useEffect(() => {
     if (!isHome || isDismissed) return;
     const animate = () => {
       const target = Math.max(1, Math.min(100, progress));
       if (currentValRef.current < target) {
         const diff = target - currentValRef.current;
-        const step = diff < 1.5 ? diff : Math.max(1.8, diff * 0.28);
+        const step = diff < 2 ? diff : Math.max(6, diff * 0.45);
         currentValRef.current = Math.min(target, currentValRef.current + step);
         setDisplayProgress(Math.min(100, Math.round(currentValRef.current)));
       } else if (currentValRef.current >= 100) {
@@ -204,7 +204,7 @@ export default function GlobalLoader() {
     return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
   }, [progress, isDismissed, isHome]);
 
-  // Flash + dismiss right after displayProgress reaches 100% AND isReady is true
+  // Flash + dismiss immediately after displayProgress reaches 100% AND isReady is true
   useEffect(() => {
     if (!isHome || isDismissed) return;
 
@@ -213,19 +213,19 @@ export default function GlobalLoader() {
         setIsFlashing(true);
         const dismissTimer = setTimeout(() => {
           setIsDismissed(true);
-        }, 300);
+        }, 150);
         return () => clearTimeout(dismissTimer);
-      }, 100);
+      }, 50);
       return () => clearTimeout(holdTimer);
     }
   }, [isReady, displayProgress, isDismissed, isHome]);
 
-  // Safety fallback: if isReady is true for 600ms, force dismiss so it can NEVER get stuck
+  // Safety fallback: if isReady is true for 350ms, force dismiss so it can NEVER block the user
   useEffect(() => {
     if (!isHome || isDismissed || !isReady) return;
     const forceTimer = setTimeout(() => {
       setIsDismissed(true);
-    }, 600);
+    }, 350);
     return () => clearTimeout(forceTimer);
   }, [isReady, isDismissed, isHome]);
 
@@ -249,6 +249,15 @@ export default function GlobalLoader() {
       >
         {/* ── Inline CSS ── */}
         <style dangerouslySetInnerHTML={{ __html: PRELOADER_CSS }} />
+
+        {/* Instant Skip Button */}
+        <button
+          onClick={() => setIsDismissed(true)}
+          className="absolute top-4 right-4 z-50 text-xs font-mono font-bold text-white/70 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 transition-all cursor-pointer shadow-lg"
+          title="Skip intro"
+        >
+          Skip ✕
+        </button>
 
         {/* Full-screen camera flash overlay */}
         <AnimatePresence>

@@ -3,6 +3,7 @@ import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 const getApiBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
+    // Local development: use same host with port 5000
     if (
       host === 'localhost' ||
       host === '127.0.0.1' ||
@@ -13,7 +14,8 @@ const getApiBaseUrl = (): string => {
       return `http://${host}:5000/api`;
     }
   }
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  // Production: use env var or hardcoded Render backend URL
+  return process.env.NEXT_PUBLIC_API_URL || 'https://meraphotoes.onrender.com/api';
 };
 
 const API_BASE_URL = getApiBaseUrl();

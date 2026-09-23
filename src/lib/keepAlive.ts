@@ -9,7 +9,7 @@ let keepAliveTimer: any = null;
 
 export async function pingBackendAndDatabase(): Promise<boolean> {
   try {
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://meraphotoes.onrender.com/api';
     const res = await fetch(`${API_URL}/health`, {
       method: 'GET',
       headers: { 'Cache-Control': 'no-cache' },
