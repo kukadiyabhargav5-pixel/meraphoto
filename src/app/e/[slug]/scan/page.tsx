@@ -298,13 +298,17 @@ export default function DedicatedFaceScanPage() {
 
   // ── Perform AI Face Matching ──────────────────
   // Internal search function that accepts event directly to avoid stale closures
-  const performSearchWithEvent = async (files: File[], eventData: any) => {
+  const performSearchWithEvent = async (files: File[], eventData: any, retryAttempt: number = 0) => {
     if (!eventData || files.length === 0) return;
     setSearchLoading(true);
     setIsMatchedSuccess(false);
     setSearchError('');
-    setSearchProgress(12);
-    setSearchStage('Initializing 68-point neural landmark detector...');
+    setSearchProgress(retryAttempt > 0 ? 30 : 12);
+    setSearchStage(
+      retryAttempt > 0
+        ? `Waking up AI engine (attempt ${retryAttempt + 1})...`
+        : 'Initializing 68-point neural landmark detector...'
+    );
 
     const formData = new FormData();
     files.forEach(f => formData.append('file', f));
@@ -365,14 +369,26 @@ export default function DedicatedFaceScanPage() {
       }
     } catch (err: any) {
       clearInterval(progressTimer);
+      const status = err.response?.status;
+
+      // Handle 503 Render Cold-start: Auto-retry up to 2 times
+      if (status === 503 && retryAttempt < 2) {
+        setSearchLoading(true);
+        setSearchProgress(45);
+        setSearchStage(`AI engine is warming up on the server. Auto-retrying in 5 seconds (attempt ${retryAttempt + 1}/2)...`);
+        setTimeout(() => {
+          performSearchWithEvent(files, eventData, retryAttempt + 1);
+        }, 5000);
+        return;
+      }
+
       setSearchLoading(false);
       setIsMatchedSuccess(false);
       setSearchProgress(0);
       setSearchStage('');
-      const status = err.response?.status;
       let msg = err.response?.data?.error || 'AI Face Matching failed. Please try again.';
       if (status === 503) {
-        msg = 'AI Face Recognition service is warming up. Please wait 10 seconds and try again.';
+        msg = 'AI Face Recognition service is still warming up. Please wait 10-15 seconds and try again.';
       } else if (!err.response && err.message?.includes('Network Error')) {
         msg = 'Network error: Could not reach the server. Please check your internet connection.';
       }
