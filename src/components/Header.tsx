@@ -79,6 +79,18 @@ export default function Header() {
     };
   }, []);
 
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileOpen]);
+
   const handleSignOut = () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
@@ -236,7 +248,7 @@ export default function Header() {
             <img
               src="/logo.png"
               alt="Mara Photo Logo"
-              className="max-h-10 h-10 w-auto max-w-[180px] lg:max-w-[220px] object-contain shrink-0"
+              className="max-h-9 sm:max-h-10 h-9 sm:h-10 w-auto max-w-[130px] xs:max-w-[160px] sm:max-w-[180px] lg:max-w-[220px] object-contain shrink-0"
             />
           </Link>
 
@@ -302,10 +314,18 @@ export default function Header() {
         </div>
       </div>
 
+      {/* Mobile Backdrop Overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 top-16 bg-black/50 z-40 lg:hidden backdrop-blur-xs transition-opacity duration-300"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
       {/* Mobile Menu */}
       {mobileOpen && (
-        <div className="lg:hidden bg-white border-t border-gray-100 shadow-xl">
-          <div className="max-w-7xl mx-auto px-4 py-4 space-y-1">
+        <div className="fixed top-16 left-0 right-0 max-h-[calc(100dvh-4rem)] overflow-y-auto z-50 lg:hidden bg-white border-t border-gray-100 shadow-2xl safe-bottom">
+          <div className="max-w-7xl mx-auto px-4 py-4 space-y-1 pb-10">
             {/* Features accordion */}
             <div>
               <button

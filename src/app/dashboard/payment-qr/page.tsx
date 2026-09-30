@@ -222,10 +222,10 @@ export default function PaymentQRPage() {
               <button
                 onClick={handleSave}
                 disabled={!previewUrl || loading}
-                className="w-full bg-slate-900 hover:bg-slate-800 text-slate-900 font-bold py-4 rounded-xl text-xs uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black py-4 rounded-xl text-xs uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95"
               >
                 {loading ? (
-                  <><RefreshCw className="w-4 h-4 animate-spin" /> Saving...</>
+                  <><RefreshCw className="w-4 h-4 animate-spin text-white" /> Saving...</>
                 ) : (
                   'Save QR Code'
                 )}

@@ -6,10 +6,13 @@ import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User,
 import { apiClient } from '@/lib/api';
 import toast from 'react-hot-toast';
 import CustomDatePicker from '../../../../components/CustomDatePicker';
+import { useAuth } from '../../../../lib/AuthContext';
 
 export default function EventUploadPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const eventId = resolvedParams.id;
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.email === 'maraphoto303@gmail.com';
 
   const [event, setEvent] = useState<any>(null);
   const [credits, setCredits] = useState<any>(null);
@@ -47,9 +50,19 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
   const projectedVideoRemaining = credits?.videos?.projectedRemaining !== undefined ? credits.videos.projectedRemaining : Math.max(0, currentVideoRemaining - pendingVideosCount);
 
   // Credit limit flags
-  const isPhotoLimitReached = projectedPhotoRemaining <= 0 && credits?.photos?.remaining !== undefined;
-  const isVideoLimitReached = projectedVideoRemaining <= 0 && credits?.videos?.remaining !== undefined;
-  const isAllCreditsExhausted = isPhotoLimitReached && isVideoLimitReached;
+  const isPhotoLimitReached = !isSuperAdmin && projectedPhotoRemaining <= 0 && credits?.photos?.remaining !== undefined;
+  const isVideoLimitReached = !isSuperAdmin && projectedVideoRemaining <= 0 && credits?.videos?.remaining !== undefined;
+  const isAllCreditsExhausted = !isSuperAdmin && isPhotoLimitReached && isVideoLimitReached;
+
+  // Top Tier Plan Detection (Premium / Enterprise / 31999 / 4,00,000 photos limit)
+  const isTopTierPlan = isSuperAdmin || Boolean(
+    ['PREMIUM', 'ENTERPRISE'].includes((credits?.plan || '').toUpperCase()) ||
+    ['PREMIUM', 'ENTERPRISE'].includes((credits?.planName || '').toUpperCase()) ||
+    ['PREMIUM', 'ENTERPRISE'].includes((event?.studioId?.subscriptionPlan || '').toUpperCase()) ||
+    (credits?.photos?.totalLimit && credits.photos.totalLimit >= 400000) ||
+    (credits?.planName && /31999|enterprise|premium|vip|max/i.test(credits.planName)) ||
+    (credits?.plan && /31999|enterprise|premium|vip|max/i.test(credits.plan))
+  );
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<any>(null);
 
@@ -138,87 +151,101 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
     setUploadProgress({ current: 0, total: files.length });
     
     try {
-      // 1. Get ImageKit Auth parameters for all files
-      const authRes = await apiClient.get(`/media/imagekit-auth?count=${files.length}`);
-      const signatures = authRes.data.signatures || [authRes.data];
-      const IMAGEKIT_PUBLIC_KEY = "public_2AYAbqW1EUFL0ejxVPrCgx06Es0=";
-
-      const imageCompression = (await import('browser-image-compression')).default;
       const fileArray = Array.from(files);
-      const mediaList: any[] = [];
+      const mediaListToCreate: any[] = [];
       let successful = 0;
       let failed = 0;
       let currentFileIndex = 0;
-      const concurrency = 6; // 6 parallel uploads for max speed without rate limiting
+      const concurrency = 8; // 8 parallel ultra-fast upload streams
+
+      // Pre-fetch presigned upload URLs from Cloudflare R2 in chunks of 50
+      const presignedMap: Record<number, any> = {};
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < fileArray.length; i += BATCH_SIZE) {
+        const batch = fileArray.slice(i, i + BATCH_SIZE);
+        try {
+          const res = await apiClient.post(`/media/event/${event._id}/presigned-urls`, {
+            files: batch.map(f => ({
+              name: f.name,
+              type: f.type,
+              size: f.size,
+              folderPath: f.webkitRelativePath || ''
+            }))
+          });
+          if (res.data?.urls) {
+            res.data.urls.forEach((item: any, idx: number) => {
+              presignedMap[i + idx] = item;
+            });
+          }
+        } catch (presignErr: any) {
+          console.warn('[R2 Upload] Presigned URL generation error, will use backend upload fallback:', presignErr);
+        }
+      }
+
+      let imageCompression: any = null;
 
       const worker = async () => {
         while (currentFileIndex < fileArray.length) {
           const idx = currentFileIndex++;
           const file = fileArray[idx];
-          const authParams = signatures[idx] || signatures[0];
+          const presignedItem = presignedMap[idx];
 
           let fileToUpload: File | Blob = file;
           const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|avi|mkv|webm|m4v|3gp)$/i.test(file.name);
           const isPhoto = !isVideo && (file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic|heif|bmp|tiff)$/i.test(file.name));
 
-          // ── Strict Maximum 2MB compression for photos ──
-          if (isPhoto) {
-            const TWO_MB = 2 * 1024 * 1024;
-            if (file.size > TWO_MB) {
-              try {
-                // Pass 1: Target 1.9MB (max 2560px, quality 0.85)
-                let compressedBlob = await imageCompression(file, {
-                  maxSizeMB: 1.9,
-                  maxWidthOrHeight: 2560,
-                  useWebWorker: true,
-                  fileType: 'image/jpeg',
-                  initialQuality: 0.85
-                });
-                // Pass 2: If still > 2MB, target 1.75MB (max 2048px, quality 0.75)
-                if (compressedBlob.size > TWO_MB) {
-                  compressedBlob = await imageCompression(new File([compressedBlob], file.name, { type: 'image/jpeg' }), {
-                    maxSizeMB: 1.75,
-                    maxWidthOrHeight: 2048,
-                    useWebWorker: true,
-                    fileType: 'image/jpeg',
-                    initialQuality: 0.75
-                  });
-                }
-                // Pass 3: Strict guarantee <= 1.6MB if still over
-                if (compressedBlob.size > TWO_MB) {
-                  compressedBlob = await imageCompression(new File([compressedBlob], file.name, { type: 'image/jpeg' }), {
-                    maxSizeMB: 1.6,
-                    maxWidthOrHeight: 1920,
-                    useWebWorker: true,
-                    fileType: 'image/jpeg',
-                    initialQuality: 0.65
-                  });
-                }
-                fileToUpload = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' });
-              } catch (compErr) {
-                console.warn('Photo compression fallback:', compErr);
+          // ── Fast Image Optimization: Only optimize massive photos (> 6MB) to keep speed ultra-fast ──
+          if (isPhoto && file.size > 6 * 1024 * 1024) {
+            try {
+              if (!imageCompression) {
+                imageCompression = (await import('browser-image-compression')).default;
               }
+              const compressedBlob = await imageCompression(file, {
+                maxSizeMB: 5,
+                maxWidthOrHeight: 3200,
+                useWebWorker: true,
+                fileType: 'image/jpeg',
+                initialQuality: 0.85
+              });
+              fileToUpload = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' });
+            } catch (compErr) {
+              console.warn('Photo fast optimization fallback:', compErr);
             }
           }
 
-          const formData = new FormData();
-          formData.append('file', fileToUpload);
-          formData.append('publicKey', IMAGEKIT_PUBLIC_KEY);
-          formData.append('signature', authParams.signature);
-          formData.append('expire', authParams.expire.toString());
-          formData.append('token', authParams.token);
-          formData.append('fileName', file.name);
-          formData.append('folder', `mara-photo/events/${event._id}/${isVideo ? 'videos' : 'photos'}`);
-          formData.append('useUniqueFileName', 'true');
+          let uploadedSuccessfully = false;
 
-          try {
-            const response = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
-              method: 'POST',
-              body: formData,
-            });
+          // Attempt 1: Direct High-Speed Cloudflare R2 Upload
+          if (presignedItem && presignedItem.uploadUrl) {
+            try {
+              const response = await fetch(presignedItem.uploadUrl, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': fileToUpload.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+                },
+                body: fileToUpload,
+              });
 
-            if (!response.ok) {
-              // Resilient fallback to backend endpoint if direct ImageKit upload fails
+              if (response.ok) {
+                mediaListToCreate.push({
+                  url: presignedItem.url,
+                  publicId: presignedItem.publicId,
+                  type: isVideo ? 'VIDEO' : 'PHOTO',
+                  size: fileToUpload.size,
+                  folderPath: file.webkitRelativePath || ''
+                });
+                successful++;
+                uploadedSuccessfully = true;
+              }
+            } catch (directUploadErr) {
+              // Direct upload might fail if R2 bucket CORS isn't set up yet for this origin
+              console.warn('[Direct R2 PUT] Not available or CORS blocked, falling back to backend upload:', directUploadErr);
+            }
+          }
+
+          // Attempt 2: Resilient High-Speed Backend Upload Fallback (streams straight to R2)
+          if (!uploadedSuccessfully) {
+            try {
               const backendForm = new FormData();
               backendForm.append('file', fileToUpload, file.name);
               if (file.webkitRelativePath) {
@@ -228,53 +255,59 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 headers: { 'Content-Type': 'multipart/form-data' }
               });
               if (backendRes.data && backendRes.data.media) {
-                mediaList.push(backendRes.data.media[0]);
                 successful++;
-                continue;
+                uploadedSuccessfully = true;
               } else {
-                throw new Error(`Upload failed with status ${response.status}`);
+                throw new Error('Backend upload failed');
               }
+            } catch (backendErr) {
+              console.error('All upload methods failed for file:', file.name, backendErr);
+              failed++;
             }
-            const data = await response.json();
-            mediaList.push({
-              url: data.url,
-              publicId: data.fileId,
-              type: isVideo ? 'VIDEO' : 'PHOTO',
-              size: fileToUpload.size,
-              folderPath: file.webkitRelativePath || ''
-            });
-            successful++;
-          } catch (uploadErr) {
-            console.error('Upload failed for file:', file.name, uploadErr);
-            failed++;
-          } finally {
-            setUploadProgress(prev => ({ ...prev, current: prev.current + 1 }));
           }
+
+          setUploadProgress(prev => ({ ...prev, current: prev.current + 1 }));
         }
       };
 
-      // Launch parallel workers for maximum speed
+      // Launch 8 parallel workers for maximum speed
       const workerCount = Math.min(concurrency, fileArray.length);
       await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
-      // Send the resulting data to the backend
-      if (mediaList.length > 0) {
-        await apiClient.post(`/media/event/${event._id}/bulk-create`, { mediaList });
+      // ── Upload complete: show 100% briefly then auto-dismiss ──
+      setUploadProgress(prev => ({ ...prev, current: prev.total }));
+
+      setTimeout(() => {
+        setUploadingMedia(false);
+        setUploadProgress({ current: 0, total: 0 });
+      }, 1500);
+
+      // Run post-upload registration in background if direct R2 uploads were used
+      try {
+        if (mediaListToCreate.length > 0) {
+          await apiClient.post(`/media/event/${event._id}/bulk-create`, { mediaList: mediaListToCreate });
+        }
+        
+        if (failed > 0) {
+          toast.error(`Uploaded ${successful}, failed ${failed}`);
+        } else {
+          toast.success(`⚡ Successfully uploaded ${fileArray.length} file${fileArray.length > 1 ? 's' : ''} to Cloudflare R2! Click "Save Event Details" to save & deduct credits.`, { duration: 5000 });
+        }
+        
+        // Refresh event data & credits in background
+        fetchEventDetails();
+        fetchCredits();
+        window.dispatchEvent(new Event('studio_plan_updated'));
+      } catch (postErr: any) {
+        console.error('Post-upload processing error:', postErr);
+        toast.error('Files uploaded to storage, but saving to database may have failed. Please refresh the page.');
       }
-      
-      if (failed > 0) {
-        toast.error(`Uploaded ${successful}, failed ${failed}`);
-      } else {
-        toast.success(`Successfully uploaded ${files.length} file${files.length > 1 ? 's' : ''}! Click "Save Event Details" to save & deduct credits.`, { duration: 5000 });
-      }
-      await fetchEventDetails();
-      await fetchCredits();
-      window.dispatchEvent(new Event('studio_plan_updated'));
     } catch (err: any) {
        console.error('Upload error:', err);
        toast.error(err?.response?.data?.error || err.message || 'Upload failed. Please check console.');
-    } finally {
        setUploadingMedia(false);
+       setUploadProgress({ current: 0, total: 0 });
+    } finally {
        if (e.target) e.target.value = '';
     }
   };
@@ -357,6 +390,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
   const [formData, setFormData] = useState({
     name: '',
+    code: '',
     clientName: '',
     clientMobile: '',
     clientEmail: '',
@@ -389,6 +423,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
       setIsCustomType(isCustom);
       setFormData({
         name: event.name || '',
+        code: event.code || '',
         clientName: event.clientName || '',
         clientMobile: event.clientMobile || '',
         clientEmail: event.clientEmail || '',
@@ -463,39 +498,54 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8 font-poppins">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-3 xs:p-4 md:p-8 font-poppins">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
         
         {/* Top Header Row */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard/events" className="inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-slate-900 hover:text-slate-700 text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center justify-between sm:justify-start gap-2.5 sm:gap-4 w-full sm:w-auto">
+            <Link 
+              href="/dashboard/events" 
+              className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-slate-900 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer shrink-0 min-h-[40px] sm:min-h-[44px]"
+            >
               <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
-              <span>Back to Events</span>
+              <span>Back</span>
+              <span className="hidden xs:inline">to Events</span>
             </Link>
-            <div className="flex flex-wrap items-center gap-3 ml-2 border-l-2 border-slate-200 pl-4">
-              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{event.name}</h1>
-              {(() => {
-                const baseDateStr = event.date || event.createdAt;
-                if (!baseDateStr) return null;
-                const baseDate = new Date(baseDateStr);
-                const now = new Date();
-                const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-                const baseMidnight = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()).getTime();
-                const diffDays = Math.floor((todayMidnight - baseMidnight) / (1000 * 60 * 60 * 24));
-                const days = diffDays <= 0 ? 30 : Math.max(0, 30 - diffDays);
-                const label = days === 0 ? 'Expires today' : `${days} ${days === 1 ? 'day' : 'days'} left`;
-                return (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200/80 shadow-xs">
-                    <Clock className={`w-3.5 h-3.5 ${days <= 5 ? 'text-rose-500 animate-pulse' : 'text-[#c5a880]'}`} />
-                    <span>{label}</span>
-                  </span>
-                );
-              })()}
-            </div>
+
+            <button
+              onClick={() => { fetchEventDetails(); fetchCredits(); }}
+              className="sm:hidden p-2.5 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-[#c5a880] hover:border-[#c5a880]/40 transition-all shadow-xs cursor-pointer shrink-0"
+              title="Refresh Storage Credits & Media"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
           </div>
-          
-          <div className="flex items-center gap-2 self-start sm:self-auto">
+
+          <div className="flex flex-wrap items-center justify-between sm:justify-start gap-2 sm:gap-3 min-w-0 flex-1 sm:border-l-2 sm:border-slate-200 sm:pl-4">
+            <h1 className="text-lg xs:text-xl sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight truncate max-w-full">
+              {event.name}
+            </h1>
+            {(() => {
+              const baseDateStr = event.date || event.createdAt;
+              if (!baseDateStr) return null;
+              const baseDate = new Date(baseDateStr);
+              const now = new Date();
+              const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+              const baseMidnight = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()).getTime();
+              const diffDays = Math.floor((todayMidnight - baseMidnight) / (1000 * 60 * 60 * 24));
+              const days = diffDays <= 0 ? 30 : Math.max(0, 30 - diffDays);
+              const label = days === 0 ? 'Expires today' : `${days} ${days === 1 ? 'day' : 'days'} left`;
+              return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200/80 shadow-xs shrink-0">
+                  <Clock className={`w-3.5 h-3.5 ${days <= 5 ? 'text-rose-500 animate-pulse' : 'text-[#c5a880]'}`} />
+                  <span>{label}</span>
+                </span>
+              );
+            })()}
+          </div>
+
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
             <button
               onClick={() => { fetchEventDetails(); fetchCredits(); }}
               className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-[#c5a880] hover:border-[#c5a880]/40 transition-all shadow-xs cursor-pointer"
@@ -509,7 +559,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
         {/* Sleek, Ultra-Modern Storage Credits Box */}
         <div className="w-full max-w-4xl mx-auto p-[1px] rounded-3xl bg-gradient-to-r from-[#c5a880]/30 via-white/10 to-[#c5a880]/40 shadow-[0_15px_40px_rgba(0,0,0,0.4)] hover:shadow-[0_20px_50px_rgba(197,168,128,0.18)] transition-all duration-500 group relative">
           
-          <div className="w-full bg-[#0b0b0e]/95 backdrop-blur-2xl text-white rounded-[23px] p-4 sm:p-5 relative overflow-hidden">
+          <div className="w-full bg-[#0b0b0e]/95 backdrop-blur-2xl text-white rounded-[23px] p-3.5 xs:p-4 sm:p-5 relative overflow-hidden">
             {/* Ambient Animated Aura Lighting */}
             <div className="absolute -top-24 -right-24 w-60 h-60 bg-gradient-to-br from-[#c5a880]/20 via-[#f3d9a2]/10 to-transparent rounded-full blur-[65px] pointer-events-none animate-aura-breathe" />
             <div className="absolute -bottom-24 -left-24 w-60 h-60 bg-gradient-to-tr from-[#9c7c56]/20 via-[#c5a880]/10 to-transparent rounded-full blur-[65px] pointer-events-none animate-aura-breathe [animation-delay:2.5s]" />
@@ -521,55 +571,61 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
             <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#c5a880] to-transparent animate-beam-scan pointer-events-none" />
 
             {/* Header Row */}
-            <div className="flex flex-row items-center justify-between gap-3 pb-3 border-b border-white/[0.08] relative z-10">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between gap-2.5 pb-3 border-b border-white/[0.08] relative z-10">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                 <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-[#2a241d] to-[#141312] text-[#e6d0a7] border border-[#c5a880]/40 flex items-center justify-center shadow-[0_0_15px_rgba(197,168,128,0.25)] shrink-0 relative group/icon">
                   <div className="absolute inset-0 rounded-xl bg-[#c5a880]/20 blur-sm opacity-0 group-hover/icon:opacity-100 transition-opacity duration-300" />
                   <Sparkles className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-[#f3d9a2] animate-pulse-soft relative z-10" />
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-xs sm:text-sm font-black uppercase tracking-[0.16em] bg-gradient-to-r from-amber-100 via-[#f5deb3] to-[#c5a880] bg-clip-text text-transparent drop-shadow-sm leading-none">
+                    <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider sm:tracking-[0.16em] bg-gradient-to-r from-amber-100 via-[#f5deb3] to-[#c5a880] bg-clip-text text-transparent drop-shadow-sm whitespace-nowrap overflow-hidden text-ellipsis">
                       {credits?.planName || 'Standard'} Plan Storage
                     </h3>
                   </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="relative flex h-2 w-2">
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="relative flex h-2 w-2 shrink-0">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
                     </span>
-                    <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium tracking-wide">
+                    <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium tracking-wide whitespace-nowrap overflow-hidden text-ellipsis">
                       Live Balance • Deducts on event save
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* White Luxe Upgrade Button */}
-              <Link
-                href="/dashboard/plans-billing"
-                className="relative overflow-hidden group/btn inline-flex items-center gap-2 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-950 text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all duration-300 shadow-[0_4px_16px_rgba(255,255,255,0.25)] hover:shadow-[0_6px_25px_rgba(255,255,255,0.45)] hover:-translate-y-0.5 active:translate-y-0 border border-white shrink-0 cursor-pointer"
-              >
-                {/* Gloss sweep effect */}
-                <div className="absolute inset-0 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-black/10 to-transparent pointer-events-none" />
-                <Crown className="w-3.5 h-3.5 text-amber-500 fill-amber-500 drop-shadow-xs" />
-                <span className="font-extrabold tracking-wide">Upgrade</span>
-                <ArrowRight className="w-3.5 h-3.5 stroke-[2.5] text-slate-950 group-hover/btn:translate-x-0.5 transition-transform" />
-              </Link>
+              {/* White Luxe Upgrade Button OR Top Tier Badge */}
+              {isTopTierPlan ? (
+                <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl bg-gradient-to-r from-amber-400/20 via-yellow-400/15 to-amber-500/20 border border-amber-400/40 text-amber-300 text-[10px] sm:text-[11px] font-black uppercase tracking-wider shrink-0 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                  <Crown className="w-3.5 h-3.5 text-amber-400 fill-amber-400 drop-shadow-xs" />
+                  <span className="font-extrabold tracking-wider">Top Tier Plan</span>
+                </div>
+              ) : (
+                <Link
+                  href="/dashboard/plans-billing"
+                  className="relative overflow-hidden group/btn inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-950 text-[10px] xs:text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all duration-300 shadow-[0_4px_16px_rgba(255,255,255,0.25)] hover:shadow-[0_6px_25px_rgba(255,255,255,0.45)] hover:-translate-y-0.5 active:translate-y-0 border border-white shrink-0 cursor-pointer"
+                >
+                  <div className="absolute inset-0 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-black/10 to-transparent pointer-events-none" />
+                  <Crown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500 fill-amber-500 drop-shadow-xs" />
+                  <span className="font-extrabold tracking-wide">Upgrade</span>
+                  <ArrowRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.5] text-slate-950 group-hover/btn:translate-x-0.5 transition-transform" />
+                </Link>
+              )}
             </div>
 
             {/* 2 Credit Metric Cards: Photos & Videos */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-3.5 relative z-10">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 relative z-10">
               
               {/* Photo Credits Card */}
-              <div className={`relative rounded-2xl p-3.5 sm:p-4 bg-gradient-to-b from-white/[0.06] via-white/[0.02] to-transparent border transition-all duration-300 group/card shadow-md hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col justify-between space-y-3 ${pendingPhotosCount > 0 ? 'border-amber-500/50 ring-1 ring-amber-500/30' : 'border-white/10 hover:border-[#c5a880]/50'}`}>
+              <div className={`relative rounded-2xl p-3 xs:p-3.5 sm:p-4 bg-gradient-to-b from-white/[0.06] via-white/[0.02] to-transparent border transition-all duration-300 group/card shadow-md hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col justify-between space-y-2.5 sm:space-y-3 ${pendingPhotosCount > 0 ? 'border-amber-500/50 ring-1 ring-amber-500/30' : 'border-white/10 hover:border-[#c5a880]/50'}`}>
                 {/* Glowing top line highlight */}
                 <div className={`absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent ${pendingPhotosCount > 0 ? 'via-amber-400 opacity-100' : 'via-[#c5a880]/40 group-hover/card:via-[#c5a880] opacity-70 group-hover/card:opacity-100'} transition-all duration-500`} />
                 
                 {/* Card Top Row */}
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#c5a880]/20 to-[#c5a880]/5 border border-[#c5a880]/30 flex items-center justify-center text-[#e6d0a7] shadow-[0_0_10px_rgba(197,168,128,0.15)]">
+                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#c5a880]/20 to-[#c5a880]/5 border border-[#c5a880]/30 flex items-center justify-center text-[#e6d0a7] shadow-[0_0_10px_rgba(197,168,128,0.15)] shrink-0">
                       <ImageIcon className="w-3 h-3" />
                     </div>
                     <span className="text-xs font-bold text-slate-300 group-hover/card:text-white transition-colors tracking-wider uppercase">
@@ -578,11 +634,11 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                   </div>
 
                   {pendingPhotosCount > 0 ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border text-amber-300 bg-amber-500/20 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)] animate-pulse">
+                    <span className="inline-flex items-center gap-1 text-[9px] xs:text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border text-amber-300 bg-amber-500/20 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)] animate-pulse shrink-0">
                       ⏳ {pendingPhotosCount} Pending Save
                     </span>
                   ) : (
-                    <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border transition-all duration-300 ${isPhotoLimitReached ? 'text-red-400 bg-red-500/15 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'text-[#f5deb3] bg-[#c5a880]/15 border-[#c5a880]/30 shadow-[0_0_10px_rgba(197,168,128,0.12)] group-hover/card:border-[#c5a880]/60'}`}>
+                    <span className={`inline-flex items-center gap-1.5 text-[9px] xs:text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border transition-all duration-300 shrink-0 ${isPhotoLimitReached ? 'text-red-400 bg-red-500/15 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'text-[#f5deb3] bg-[#c5a880]/15 border-[#c5a880]/30 shadow-[0_0_10px_rgba(197,168,128,0.12)] group-hover/card:border-[#c5a880]/60'}`}>
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
                       {credits?.photos ? `${Number(currentPhotoRemaining).toLocaleString('en-IN')} Left` : 'Active'}
                     </span>
@@ -591,7 +647,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
                 {/* Primary Numbers */}
                 <div className="space-y-1">
-                  <div className="flex items-baseline gap-2">
+                  <div className="flex items-baseline gap-2 flex-wrap">
                     <span className="text-2xl sm:text-3xl font-black text-white tracking-tight font-mono group-hover/card:text-[#fef3c7] transition-colors leading-none" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {Number(currentPhotoRemaining).toLocaleString('en-IN')}
                     </span>
@@ -601,12 +657,12 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                   </div>
 
                   {pendingPhotosCount > 0 && (
-                    <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono font-bold text-amber-300/90 pt-0.5">
-                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono font-bold text-amber-300/90 pt-0.5">
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                         ⚡ -{pendingPhotosCount} on Save
                       </span>
                       <span className="text-slate-300 flex items-center gap-1">
-                        → <strong className="text-white font-black bg-white/10 px-1.5 py-0.5 rounded">{Number(projectedPhotoRemaining).toLocaleString('en-IN')}</strong> Remaining
+                        → <strong className="text-white font-black bg-white/10 px-1 py-0.5 rounded">{Number(projectedPhotoRemaining).toLocaleString('en-IN')}</strong> Remaining
                       </span>
                     </div>
                   )}
@@ -628,17 +684,17 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                     </div>
                   </div>
                   
-                  <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-mono tracking-wide text-slate-400">
+                  <div className="flex justify-between items-center text-[9px] xs:text-[10px] font-mono tracking-wide text-slate-400">
                     <span className="flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#c5a880]" />
-                      {(credits?.photos?.used || 0) > 0 ? `${credits.photos.used} Used (${(credits.photos.percentUsed || 0) < 0.01 ? '0.01%' : `${credits.photos.percentUsed}%`})` : '0 Used'}
+                      {(credits?.photos?.used || 0) > 0 ? `${Number(credits.photos.used).toLocaleString('en-IN')} Used (${(credits.photos.percentUsed || 0) < 0.01 ? '0.01%' : `${credits.photos.percentUsed}%`})` : '0 Used'}
                     </span>
                     {pendingPhotosCount > 0 ? (
                       <span className="text-amber-400 font-bold flex items-center gap-1 animate-pulse">
                         +{pendingPhotosCount} queued
                       </span>
                     ) : (
-                      <span className="text-slate-500 group-hover/card:text-slate-400 transition-colors">
+                      <span className="text-slate-400 group-hover/card:text-slate-300 transition-colors">
                         {100 - Math.min(100, Math.round(credits?.photos?.percentUsed || 0))}% Available
                       </span>
                     )}
@@ -647,14 +703,14 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
               </div>
 
               {/* Video Credits Card */}
-              <div className={`relative rounded-2xl p-3.5 sm:p-4 bg-gradient-to-b from-white/[0.06] via-white/[0.02] to-transparent border transition-all duration-300 group/card shadow-md hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col justify-between space-y-3 ${pendingVideosCount > 0 ? 'border-amber-500/50 ring-1 ring-amber-500/30' : 'border-white/10 hover:border-[#c5a880]/50'}`}>
+              <div className={`relative rounded-2xl p-3 xs:p-3.5 sm:p-4 bg-gradient-to-b from-white/[0.06] via-white/[0.02] to-transparent border transition-all duration-300 group/card shadow-md hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col justify-between space-y-2.5 sm:space-y-3 ${pendingVideosCount > 0 ? 'border-amber-500/50 ring-1 ring-amber-500/30' : 'border-white/10 hover:border-[#c5a880]/50'}`}>
                 {/* Glowing top line highlight */}
                 <div className={`absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent ${pendingVideosCount > 0 ? 'via-amber-400 opacity-100' : 'via-[#c5a880]/40 group-hover/card:via-[#c5a880] opacity-70 group-hover/card:opacity-100'} transition-all duration-500`} />
                 
                 {/* Card Top Row */}
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#c5a880]/20 to-[#c5a880]/5 border border-[#c5a880]/30 flex items-center justify-center text-[#e6d0a7] shadow-[0_0_10px_rgba(197,168,128,0.15)]">
+                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#c5a880]/20 to-[#c5a880]/5 border border-[#c5a880]/30 flex items-center justify-center text-[#e6d0a7] shadow-[0_0_10px_rgba(197,168,128,0.15)] shrink-0">
                       <Video className="w-3 h-3" />
                     </div>
                     <span className="text-xs font-bold text-slate-300 group-hover/card:text-white transition-colors tracking-wider uppercase">
@@ -663,11 +719,11 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                   </div>
 
                   {pendingVideosCount > 0 ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border text-amber-300 bg-amber-500/20 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)] animate-pulse">
+                    <span className="inline-flex items-center gap-1 text-[9px] xs:text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border text-amber-300 bg-amber-500/20 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)] animate-pulse shrink-0">
                       ⏳ {pendingVideosCount} Pending Save
                     </span>
                   ) : (
-                    <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border transition-all duration-300 ${isVideoLimitReached ? 'text-red-400 bg-red-500/15 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'text-[#f5deb3] bg-[#c5a880]/15 border-[#c5a880]/30 shadow-[0_0_10px_rgba(197,168,128,0.12)] group-hover/card:border-[#c5a880]/60'}`}>
+                    <span className={`inline-flex items-center gap-1.5 text-[9px] xs:text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border transition-all duration-300 shrink-0 ${isVideoLimitReached ? 'text-red-400 bg-red-500/15 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'text-[#f5deb3] bg-[#c5a880]/15 border-[#c5a880]/30 shadow-[0_0_10px_rgba(197,168,128,0.12)] group-hover/card:border-[#c5a880]/60'}`}>
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
                       {credits?.videos ? `${Number(currentVideoRemaining)} Left` : 'Active'}
                     </span>
@@ -676,7 +732,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
                 {/* Primary Numbers */}
                 <div className="space-y-1">
-                  <div className="flex items-baseline gap-2">
+                  <div className="flex items-baseline gap-2 flex-wrap">
                     <span className="text-2xl sm:text-3xl font-black text-white tracking-tight font-mono group-hover/card:text-[#fef3c7] transition-colors leading-none" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {Number(currentVideoRemaining)}
                     </span>
@@ -686,12 +742,12 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                   </div>
 
                   {pendingVideosCount > 0 && (
-                    <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono font-bold text-amber-300/90 pt-0.5">
-                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono font-bold text-amber-300/90 pt-0.5">
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                         ⚡ -{pendingVideosCount} on Save
                       </span>
                       <span className="text-slate-300 flex items-center gap-1">
-                        → <strong className="text-white font-black bg-white/10 px-1.5 py-0.5 rounded">{Number(projectedVideoRemaining)}</strong> Remaining
+                        → <strong className="text-white font-black bg-white/10 px-1 py-0.5 rounded">{Number(projectedVideoRemaining)}</strong> Remaining
                       </span>
                     </div>
                   )}
@@ -713,7 +769,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                     </div>
                   </div>
                   
-                  <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-mono tracking-wide text-slate-400">
+                  <div className="flex justify-between items-center text-[9px] xs:text-[10px] font-mono tracking-wide text-slate-400">
                     <span className="flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#c5a880]" />
                       {(credits?.videos?.used || 0) > 0 ? `${credits.videos.used} Used (${(credits.videos.percentUsed || 0) < 0.01 ? '0.01%' : `${credits.videos.percentUsed}%`})` : '0 Used'}
@@ -723,7 +779,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                         +{pendingVideosCount} queued
                       </span>
                     ) : (
-                      <span className="text-slate-500 group-hover/card:text-slate-400 transition-colors">
+                      <span className="text-slate-400 group-hover/card:text-slate-300 transition-colors">
                         {100 - Math.min(100, Math.round(credits?.videos?.percentUsed || 0))}% Available
                       </span>
                     )}
@@ -740,66 +796,74 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
           
           {/* Left Column: Upload Media & Media Files */}
           <div className="flex-1 flex flex-col min-w-0 w-full">
-            <div className="bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-2xl p-8 shadow-sm mb-8">
-            <div className="flex flex-col items-center justify-center mb-8">
-              <Upload className="h-10 w-10 text-[#c5a880] mb-4" />
-              <h2 className="text-xl font-bold text-slate-900 mb-2">Upload Media</h2>
-              <p className="text-sm text-slate-500">Select a category below or drag and drop files.</p>
+            <div className="bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-2xl p-4 sm:p-6 md:p-8 shadow-sm mb-6 sm:mb-8">
+            <div className="flex flex-col items-center justify-center mb-4 sm:mb-6 text-center">
+              <Upload className="h-8 w-8 sm:h-10 sm:w-10 text-[#c5a880] mb-2 sm:mb-3" />
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900 mb-1">Upload Media</h2>
+              <p className="text-xs sm:text-sm text-slate-500">Select a category below or drag and drop files.</p>
             </div>
 
             {/* Credit Exhausted Warning Banner */}
             {isAllCreditsExhausted && (
-              <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-5 h-5 text-red-500" />
+              <div className="mb-5 sm:mb-6 p-3.5 sm:p-4 rounded-xl bg-red-50 border border-red-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                    <ShieldCheck className="w-5 h-5 text-red-500" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-red-700">All Storage Credits Exhausted</p>
+                    <p className="text-xs text-red-500 mt-0.5">Your photo and video upload limits have been reached.</p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-red-700">All Storage Credits Exhausted</p>
-                  <p className="text-xs text-red-500 mt-0.5">Your photo and video upload limits have been reached. Upgrade your plan to continue uploading.</p>
-                </div>
-                <Link href="/dashboard/plans-billing" className="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-bold uppercase tracking-wider transition-colors shrink-0">
-                  Upgrade
-                </Link>
+                {!isTopTierPlan && (
+                  <Link href="/dashboard/plans-billing" className="w-full sm:w-auto text-center px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-bold uppercase tracking-wider transition-colors shrink-0">
+                    Upgrade
+                  </Link>
+                )}
               </div>
             )}
             {!isAllCreditsExhausted && (isPhotoLimitReached || isVideoLimitReached) && (
-              <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                  <Flame className="w-5 h-5 text-amber-500" />
+              <div className="mb-5 sm:mb-6 p-3.5 sm:p-4 rounded-xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                    <Flame className="w-5 h-5 text-amber-500" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-amber-700">
+                      {isPhotoLimitReached ? 'Photo' : 'Video'} Credits Exhausted
+                    </p>
+                    <p className="text-xs text-amber-600 mt-0.5">
+                      Your {isPhotoLimitReached ? 'photo' : 'video'} upload limit has been reached. You can still upload {isPhotoLimitReached ? 'videos' : 'photos'}.
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-amber-700">
-                    {isPhotoLimitReached ? 'Photo' : 'Video'} Credits Exhausted
-                  </p>
-                  <p className="text-xs text-amber-600 mt-0.5">
-                    Your {isPhotoLimitReached ? 'photo' : 'video'} upload limit has been reached. You can still upload {isPhotoLimitReached ? 'videos' : 'photos'}. Upgrade your plan for more credits.
-                  </p>
-                </div>
-                <Link href="/dashboard/plans-billing" className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold uppercase tracking-wider transition-colors shrink-0">
-                  Upgrade
-                </Link>
+                {!isTopTierPlan && (
+                  <Link href="/dashboard/plans-billing" className="w-full sm:w-auto text-center px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold uppercase tracking-wider transition-colors shrink-0">
+                    Upgrade
+                  </Link>
+                )}
               </div>
             )}
 
             {/* Pending Save Alert Banner */}
             {(pendingPhotosCount > 0 || pendingVideosCount > 0) && (
-              <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-transparent border border-amber-400/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm backdrop-blur-xs">
+              <div className="mb-5 sm:mb-6 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-transparent border border-amber-400/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 shadow-sm backdrop-blur-xs">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center shrink-0 text-amber-600 shadow-inner">
-                    <Sparkles className="w-5 h-5 animate-pulse text-amber-600" />
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center shrink-0 text-amber-600 shadow-inner">
+                    <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse text-amber-600" />
                   </div>
-                  <div>
-                    <p className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 flex-wrap">
                       <span>
                         {pendingPhotosCount > 0 && `${pendingPhotosCount} Photo${pendingPhotosCount > 1 ? 's' : ''}`}
                         {pendingPhotosCount > 0 && pendingVideosCount > 0 && ' & '}
                         {pendingVideosCount > 0 && `${pendingVideosCount} Video${pendingVideosCount > 1 ? 's' : ''}`} Uploaded
                       </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 font-mono font-bold">
+                      <span className="text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 font-mono font-bold shrink-0">
                         Pending Save
                       </span>
                     </p>
-                    <p className="text-[11px] text-slate-600 font-medium mt-0.5">
+                    <p className="text-[10px] sm:text-[11px] text-slate-600 font-medium mt-0.5 leading-snug">
                       Your credit balance will deduct <strong className="text-slate-900 font-bold">{pendingPhotosCount > 0 ? `-${pendingPhotosCount} photo credit${pendingPhotosCount > 1 ? 's' : ''}` : ''}</strong> once you click <strong>Save Event Details</strong>.
                     </p>
                   </div>
@@ -811,7 +875,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                     btn?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     btn?.focus();
                   }}
-                  className="px-4 py-2.5 rounded-xl bg-[#c5a880] hover:bg-[#b69970] text-[#09090b] text-[11px] font-black uppercase tracking-wider transition-all shadow-md hover:shadow-lg shrink-0 self-end sm:self-auto cursor-pointer"
+                  className="w-full sm:w-auto text-center px-4 py-2.5 rounded-xl bg-[#c5a880] hover:bg-[#b69970] text-[#09090b] text-[11px] font-black uppercase tracking-wider transition-all shadow-md hover:shadow-lg shrink-0 cursor-pointer"
                 >
                   Save Event Details →
                 </button>
@@ -820,34 +884,63 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
             {/* Real-time Upload Progress Banner */}
             {uploadingMedia && (
-              <div className="mb-6 p-5 rounded-2xl bg-white border-2 border-[#c5a880] shadow-xl animate-in fade-in zoom-in-95 duration-300">
+              <div className={`mb-6 p-4 sm:p-5 rounded-2xl bg-white border-2 shadow-xl animate-in fade-in zoom-in-95 duration-300 ${
+                uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                  ? 'border-emerald-400'
+                  : 'border-[#c5a880]'
+              }`}>
                 <div className="flex items-center justify-between mb-2.5">
                   <div className="flex items-center gap-2.5">
-                    <Loader2 className="w-5 h-5 text-[#c5a880] animate-spin" />
-                    <span className="text-sm font-black text-slate-900">
-                      Uploading Media...
+                    {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total ? (
+                      <Check className="w-5 h-5 text-emerald-500 stroke-[3]" />
+                    ) : (
+                      <Loader2 className="w-5 h-5 text-[#c5a880] animate-spin" />
+                    )}
+                    <span className={`text-sm font-black ${
+                      uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                        ? 'text-emerald-600'
+                        : 'text-slate-900'
+                    }`}>
+                      {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                        ? 'Upload Complete!'
+                        : 'Uploading Media...'}
                     </span>
                   </div>
-                  <span className="text-xs font-mono font-bold bg-[#c5a880]/10 text-[#c5a880] border border-[#c5a880]/25 px-2.5 py-1 rounded-lg">
+                  <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded-lg border ${
+                    uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                      ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                      : 'bg-[#c5a880]/10 text-[#c5a880] border-[#c5a880]/25'
+                  }`}>
                     {uploadProgress.total > 0 ? Math.round((uploadProgress.current / uploadProgress.total) * 100) : 0}%
                   </span>
                 </div>
                 {/* Progress bar */}
                 <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mb-2.5 border border-slate-200">
                   <div 
-                    className="h-full bg-gradient-to-r from-[#c5a880] to-[#b09672] transition-all duration-300 rounded-full relative"
+                    className={`h-full transition-all duration-300 rounded-full relative ${
+                      uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                        ? 'bg-gradient-to-r from-emerald-400 to-emerald-500'
+                        : 'bg-gradient-to-r from-[#c5a880] to-[#b09672]'
+                    }`}
                     style={{ width: `${uploadProgress.total > 0 ? Math.round((uploadProgress.current / uploadProgress.total) * 100) : 0}%` }}
                   >
-                    <div className="absolute inset-0 bg-white/30 animate-pulse" />
+                    {!(uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total) && (
+                      <div className="absolute inset-0 bg-white/30 animate-pulse" />
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center justify-between text-xs font-bold text-slate-500">
-                  <span>File {uploadProgress.current} of {uploadProgress.total}</span>
+                  <span>
+                    {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                      ? `All ${uploadProgress.total} files uploaded ✓`
+                      : `File ${uploadProgress.current} of ${uploadProgress.total}`}
+                  </span>
                 </div>
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative">
+            {/* 3 Upload Action Buttons (Responsive Grid) */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 relative">
               <input type="file" {...{ webkitdirectory: "true", directory: "true" }} multiple ref={folderInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'FOLDER')} />
               <input type="file" accept="image/*" multiple ref={photoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'PHOTO')} />
               <input type="file" accept="video/*" multiple ref={videoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'VIDEO')} />
@@ -860,16 +953,17 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                   }
                   folderInputRef.current?.click();
                 }}
-                className={`border rounded-xl p-6 flex flex-col items-center justify-center transition-all group ${
+                className={`border rounded-xl p-3 sm:p-6 flex flex-col items-center justify-center text-center transition-all group ${
                   isAllCreditsExhausted 
                     ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-50' 
-                    : 'bg-white border-slate-200 cursor-pointer hover:border-[#c5a880] hover:shadow-md'
+                    : 'bg-white border-slate-200 cursor-pointer hover:border-[#c5a880] hover:shadow-md active:scale-95'
                 }`}
               >
-                <FolderUp className={`h-8 w-8 mb-3 transition-colors ${isAllCreditsExhausted ? 'text-slate-300' : 'text-slate-400 group-hover:text-[#c5a880]'}`} />
-                <span className={`font-bold text-sm ${isAllCreditsExhausted ? 'text-slate-400' : 'text-slate-700'}`}>Entire Folder</span>
-                {isAllCreditsExhausted && <span className="text-[10px] font-bold text-red-400 mt-1 uppercase">Credits Exhausted</span>}
+                <FolderUp className={`h-6 w-6 sm:h-8 sm:w-8 mb-1.5 sm:mb-3 transition-colors shrink-0 ${isAllCreditsExhausted ? 'text-slate-300' : 'text-slate-400 group-hover:text-[#c5a880]'}`} />
+                <span className={`font-bold text-xs sm:text-sm leading-tight ${isAllCreditsExhausted ? 'text-slate-400' : 'text-slate-700'}`}>Entire Folder</span>
+                {isAllCreditsExhausted && <span className="text-[9px] sm:text-[10px] font-bold text-red-400 mt-1 uppercase">Exhausted</span>}
               </div>
+
               <div 
                 onClick={() => {
                   if (isPhotoLimitReached) {
@@ -878,16 +972,17 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                   }
                   photoInputRef.current?.click();
                 }}
-                className={`border rounded-xl p-6 flex flex-col items-center justify-center transition-all group ${
+                className={`border rounded-xl p-3 sm:p-6 flex flex-col items-center justify-center text-center transition-all group ${
                   isPhotoLimitReached 
                     ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-50' 
-                    : 'bg-white border-slate-200 cursor-pointer hover:border-[#c5a880] hover:shadow-md'
+                    : 'bg-white border-slate-200 cursor-pointer hover:border-[#c5a880] hover:shadow-md active:scale-95'
                 }`}
               >
-                <ImageIcon className={`h-8 w-8 mb-3 transition-colors ${isPhotoLimitReached ? 'text-slate-300' : 'text-slate-400 group-hover:text-[#c5a880]'}`} />
-                <span className={`font-bold text-sm ${isPhotoLimitReached ? 'text-slate-400' : 'text-slate-700'}`}>Photos</span>
-                {isPhotoLimitReached && <span className="text-[10px] font-bold text-red-400 mt-1 uppercase">Credits Exhausted</span>}
+                <ImageIcon className={`h-6 w-6 sm:h-8 sm:w-8 mb-1.5 sm:mb-3 transition-colors shrink-0 ${isPhotoLimitReached ? 'text-slate-300' : 'text-slate-400 group-hover:text-[#c5a880]'}`} />
+                <span className={`font-bold text-xs sm:text-sm leading-tight ${isPhotoLimitReached ? 'text-slate-400' : 'text-slate-700'}`}>Photos</span>
+                {isPhotoLimitReached && <span className="text-[9px] sm:text-[10px] font-bold text-red-400 mt-1 uppercase">Exhausted</span>}
               </div>
+
               <div 
                 onClick={() => {
                   if (isVideoLimitReached) {
@@ -896,30 +991,30 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                   }
                   videoInputRef.current?.click();
                 }}
-                className={`border rounded-xl p-6 flex flex-col items-center justify-center transition-all group ${
+                className={`border rounded-xl p-3 sm:p-6 flex flex-col items-center justify-center text-center transition-all group ${
                   isVideoLimitReached 
                     ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-50' 
-                    : 'bg-white border-slate-200 cursor-pointer hover:border-[#c5a880] hover:shadow-md'
+                    : 'bg-white border-slate-200 cursor-pointer hover:border-[#c5a880] hover:shadow-md active:scale-95'
                 }`}
               >
-                <Video className={`h-8 w-8 mb-3 transition-colors ${isVideoLimitReached ? 'text-slate-300' : 'text-slate-400 group-hover:text-[#c5a880]'}`} />
-                <span className={`font-bold text-sm ${isVideoLimitReached ? 'text-slate-400' : 'text-slate-700'}`}>Videos</span>
-                {isVideoLimitReached && <span className="text-[10px] font-bold text-red-400 mt-1 uppercase">Credits Exhausted</span>}
+                <Video className={`h-6 w-6 sm:h-8 sm:w-8 mb-1.5 sm:mb-3 transition-colors shrink-0 ${isVideoLimitReached ? 'text-slate-300' : 'text-slate-400 group-hover:text-[#c5a880]'}`} />
+                <span className={`font-bold text-xs sm:text-sm leading-tight ${isVideoLimitReached ? 'text-slate-400' : 'text-slate-700'}`}>Videos</span>
+                {isVideoLimitReached && <span className="text-[9px] sm:text-[10px] font-bold text-red-400 mt-1 uppercase">Exhausted</span>}
               </div>
             </div>
           </div>
 
           <div className="mt-8">
-             <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-4">
-                  <h3 className="text-lg font-bold text-slate-900">Media Files ({mediaItems.filter(item => mediaFilter === 'ALL' || item.type === mediaFilter).length})</h3>
+             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div className="flex flex-wrap items-center gap-2.5 sm:gap-4">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900">Media Files ({mediaItems.filter(item => mediaFilter === 'ALL' || item.type === mediaFilter).length})</h3>
                   {mediaItems.length > 0 && (
                     <button 
                       onClick={() => {
                         setIsSelectionMode(!isSelectionMode);
                         setSelectedMediaIds([]);
                       }}
-                      className={`text-[10px] font-bold px-3 py-1.5 rounded-full transition-colors uppercase tracking-wider ${isSelectionMode ? 'bg-[#c5a880] text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+                      className={`text-[10px] font-bold px-3 py-1.5 rounded-full transition-colors uppercase tracking-wider min-h-[36px] flex items-center cursor-pointer ${isSelectionMode ? 'bg-[#c5a880] text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
                     >
                       {isSelectionMode ? 'Cancel Selection' : 'Select'}
                     </button>
@@ -928,14 +1023,14 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                     <button 
                       onClick={() => handleDeleteMedia(selectedMediaIds)}
                       disabled={isDeleting}
-                      className="text-[10px] font-bold px-3 py-1.5 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors flex items-center gap-1 uppercase tracking-wider"
+                      className="text-[10px] font-bold px-3 py-1.5 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors flex items-center gap-1 uppercase tracking-wider min-h-[36px] cursor-pointer"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       {isDeleting ? 'Deleting...' : `Delete (${selectedMediaIds.length})`}
                     </button>
                   )}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
                    <div className="relative">
                      <button 
                        onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
@@ -992,29 +1087,51 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
             {uploadingMedia && (
                <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
                   <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center border border-white/20">
-                     <div className="w-16 h-16 bg-[#f8f5f0] border border-[#e6d5c0] text-[#c5a880] rounded-full flex items-center justify-center mb-6 shadow-sm">
-                        <Upload className="h-7 w-7 animate-bounce" />
-                     </div>
-                     <h3 className="text-xl font-black text-slate-900 mb-2">Uploading Media</h3>
-                     <p className="text-[11px] font-bold text-slate-500 text-center mb-8 px-2 uppercase tracking-wide">
-                        Optimizing & storing securely.<br/>Please keep this window open.
-                     </p>
-                     
-                     <div className="w-full relative">
-                        <div className="flex w-full justify-between items-end mb-2">
-                           <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Progress</span>
-                           <span className="text-xl font-black text-[#c5a880] leading-none">{Math.round((uploadProgress.current / uploadProgress.total) * 100) || 0}%</span>
-                        </div>
-                        <div className="w-full bg-[#f1f5f9] rounded-full h-3.5 mb-3 overflow-hidden shadow-inner border border-slate-200">
-                           <div 
-                              className="bg-gradient-to-r from-[#b69970] to-[#c5a880] h-full transition-all duration-300 ease-out" 
-                              style={{ width: `${Math.max(2, (uploadProgress.current / uploadProgress.total) * 100)}%` }}
-                           />
-                        </div>
-                        <div className="text-center text-xs font-bold text-slate-700">
-                           {uploadProgress.current} <span className="text-slate-400 mx-1">/</span> {uploadProgress.total} Files Completed
-                        </div>
-                     </div>
+                     {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total ? (
+                       <>
+                         <div className="w-16 h-16 bg-emerald-50 border border-emerald-200 text-emerald-500 rounded-full flex items-center justify-center mb-6 shadow-sm animate-in zoom-in-50 duration-300">
+                            <Check className="h-8 w-8 stroke-[3]" />
+                         </div>
+                         <h3 className="text-xl font-black text-emerald-600 mb-2">Upload Complete!</h3>
+                         <p className="text-[11px] font-bold text-slate-500 text-center mb-6 px-2 uppercase tracking-wide">
+                            All files uploaded successfully.<br/>Saving to your gallery...
+                         </p>
+                         <div className="w-full relative">
+                           <div className="w-full bg-emerald-100 rounded-full h-3.5 mb-3 overflow-hidden shadow-inner border border-emerald-200">
+                              <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-full w-full rounded-full transition-all duration-500" />
+                           </div>
+                           <div className="text-center text-xs font-bold text-emerald-600">
+                              {uploadProgress.total} <span className="text-emerald-400 mx-1">/</span> {uploadProgress.total} Files Completed ✓
+                           </div>
+                         </div>
+                       </>
+                     ) : (
+                       <>
+                         <div className="w-16 h-16 bg-[#f8f5f0] border border-[#e6d5c0] text-[#c5a880] rounded-full flex items-center justify-center mb-6 shadow-sm">
+                            <Upload className="h-7 w-7 animate-bounce" />
+                         </div>
+                         <h3 className="text-xl font-black text-slate-900 mb-2">Uploading Media</h3>
+                         <p className="text-[11px] font-bold text-slate-500 text-center mb-8 px-2 uppercase tracking-wide">
+                            Optimizing & storing securely.<br/>Please keep this window open.
+                         </p>
+                         
+                         <div className="w-full relative">
+                            <div className="flex w-full justify-between items-end mb-2">
+                               <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Progress</span>
+                               <span className="text-xl font-black text-[#c5a880] leading-none">{Math.round((uploadProgress.current / uploadProgress.total) * 100) || 0}%</span>
+                            </div>
+                            <div className="w-full bg-[#f1f5f9] rounded-full h-3.5 mb-3 overflow-hidden shadow-inner border border-slate-200">
+                               <div 
+                                  className="bg-gradient-to-r from-[#b69970] to-[#c5a880] h-full transition-all duration-300 ease-out" 
+                                  style={{ width: `${Math.max(2, (uploadProgress.current / uploadProgress.total) * 100)}%` }}
+                               />
+                            </div>
+                            <div className="text-center text-xs font-bold text-slate-700">
+                               {uploadProgress.current} <span className="text-slate-400 mx-1">/</span> {uploadProgress.total} Files Completed
+                            </div>
+                         </div>
+                       </>
+                     )}
                   </div>
                </div>
             )}
@@ -1024,7 +1141,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                  No media files uploaded yet. Select files to start.
                </div>
             ) : (
-               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-12">
+               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-4 pb-12">
                  {mediaItems.filter(item => mediaFilter === 'ALL' || item.type === mediaFilter).map((item, idx) => (
                    <div 
                      key={idx} 
@@ -1112,7 +1229,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
           {/* Right Column: Edit Event Details Form (aligned at top with Upload Media!) */}
           <div className="w-full lg:w-[420px] shrink-0">
-            <div className="bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-2xl p-6 shadow-sm sticky top-8">
+            <div className="bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm sticky top-8">
                 <div className="flex items-center gap-2 mb-6 border-b border-slate-200 pb-4">
                   <Settings className="h-5 w-5 text-[#c5a880]" />
                   <h3 className="text-lg font-bold text-slate-900">Edit Event Details</h3>
@@ -1192,8 +1309,17 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
               try {
                 setSaving(true);
                 
+                const cleanSlug = (formData.code || formData.name)
+                  .toLowerCase()
+                  .trim()
+                  .replace(/[^a-z0-9]/g, '-')
+                  .replace(/-+/g, '-')
+                  .replace(/^-|-$/g, '');
+
                 const payload = {
                   ...formData,
+                  name: formData.name.trim(),
+                  code: cleanSlug,
                   watermark: {
                     ...(event?.watermark || {}),
                     isActive: formData.customWatermark,
@@ -1209,6 +1335,11 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 const res = await apiClient.put(`/event/${eventId}`, payload);
                 if (res.data.event) {
                   setEvent(res.data.event);
+                  setFormData(prev => ({
+                    ...prev,
+                    name: res.data.event.name,
+                    code: res.data.event.code
+                  }));
                   setHasSavedDetails(true);
                   if (res.data.credits) {
                     setCredits(res.data.credits);
@@ -1238,8 +1369,41 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                   type="text" 
                   className="edit-input" 
                   value={formData.name}
-                  onChange={e => setFormData({...formData, name: e.target.value})}
+                  onChange={e => {
+                    const newName = e.target.value;
+                    const autoSlug = newName.toLowerCase().trim().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+                    setFormData({
+                      ...formData, 
+                      name: newName,
+                      code: autoSlug
+                    });
+                  }}
                 />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="edit-label mb-0">Public Gallery Link / Slug</label>
+                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    Auto-synced with name
+                  </span>
+                </div>
+                <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-600 focus-within:border-[#c5a880] focus-within:bg-white transition-all">
+                  <span className="font-semibold text-slate-400 select-none">/e/</span>
+                  <input 
+                    type="text" 
+                    className="bg-transparent flex-1 font-bold text-slate-900 outline-none px-1 min-w-0"
+                    placeholder="event-slug"
+                    value={formData.code}
+                    onChange={e => {
+                      const clean = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+                      setFormData({ ...formData, code: clean });
+                    }}
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1 truncate">
+                  Share link: <span className="font-mono text-slate-700 font-semibold">{typeof window !== 'undefined' ? window.location.origin : ''}/e/{formData.code || 'event-slug'}</span>
+                </p>
               </div>
 
               <div>
@@ -1334,8 +1498,8 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
               <div>
                 <label className="edit-label">Cover Image</label>
-                <div className="flex items-center gap-3">
-                  <div className="w-40 aspect-video rounded-lg border border-slate-300 bg-slate-100 flex items-center justify-center overflow-hidden shrink-0 relative">
+                <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-3">
+                  <div className="w-full xs:w-40 aspect-video rounded-lg border border-slate-300 bg-slate-100 flex items-center justify-center overflow-hidden shrink-0 relative">
                     {formData.coverImageUrl ? (
                       <img src={formData.coverImageUrl} alt="Cover" className="w-full h-full object-cover" />
                     ) : (
@@ -1657,12 +1821,12 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 </div>
               )}
 
-              <div className="flex items-center gap-3 pt-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 pt-2">
                 <button 
                   id="save-event-button"
                   type="submit" 
                   disabled={saving} 
-                  className="flex-1 flex justify-center items-center gap-2 bg-[#c5a880] hover:bg-[#b59a72] text-[#09090b] font-black py-3 rounded-xl text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 cursor-pointer"
+                  className="flex-1 flex justify-center items-center gap-2 bg-[#c5a880] hover:bg-[#b59a72] text-[#09090b] font-black py-3 rounded-xl text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 cursor-pointer min-h-[44px]"
                 >
                   {saving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -1692,7 +1856,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                       }
                     }
                   }}
-                  className="flex items-center gap-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold px-4 py-3 rounded-xl text-sm transition-colors"
+                  className="flex justify-center items-center gap-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold px-4 py-3 rounded-xl text-sm transition-colors cursor-pointer min-h-[44px]"
                 >
                   <Trash2 className="h-4 w-4" />
                   Delete Event

@@ -33,8 +33,18 @@ export default function CreateEventPage() {
   const [password, setPassword] = useState('');
 
   // Step 3: Schedule
-  const [eventDate, setEventDate] = useState('');
-  const [eventTime, setEventTime] = useState('');
+  const [eventDate, setEventDate] = useState(() => {
+    try {
+      const today = new Date();
+      const y = today.getFullYear();
+      const m = (today.getMonth() + 1).toString().padStart(2, '0');
+      const d = today.getDate().toString().padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    } catch {
+      return '';
+    }
+  });
+  const [eventTime, setEventTime] = useState('09:00');
   const [eventLocation, setEventLocation] = useState('');
   const [totalDays, setTotalDays] = useState(1);
   const [eventDays, setEventDays] = useState<{date: string, time: string, location: string}[]>([]);
@@ -58,6 +68,19 @@ export default function CreateEventPage() {
 
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  // Restore active step from sessionStorage to prevent accidental resets back to step 1
+  React.useEffect(() => {
+    try {
+      const savedStep = sessionStorage.getItem('mara_create_event_step');
+      if (savedStep) {
+        const parsed = parseInt(savedStep, 10);
+        if (parsed >= 1 && parsed <= 5) {
+          setCurrentStep(parsed);
+        }
+      }
+    } catch {}
+  }, []);
   
   const EVENT_TYPES = [
     'WEDDING', 'PRE WEDDING', 'RECEPTION', 'BIRTHDAY', 'CORPORATE', 
@@ -80,29 +103,120 @@ export default function CreateEventPage() {
   const goToStep = (step: number) => {
     setDirection(step > currentStep ? 'next' : 'prev');
     setCurrentStep(step);
+    try {
+      sessionStorage.setItem('mara_create_event_step', step.toString());
+    } catch {}
   };
 
-  const canProceedStep1 = () => eventName.trim().length > 0 && clientName.trim().length > 0 && clientMobile.trim().length > 0 && clientEmail.trim().length > 0;
-  const canProceedStep2 = () => {
-    const selectedType = showCustomType ? customEventType.trim() : eventType;
-    if (!selectedType) return false;
-    if (accessType === 'PASSWORD' && !password) return false;
-    if (accessType === 'OTP' && password.length !== 4) return false;
+  const canProceedStep1 = (showToast = true) => {
+    if (!eventName.trim()) {
+      if (showToast) toast.error('Please enter the Event Title / Name');
+      return false;
+    }
+    if (!clientName.trim()) {
+      if (showToast) toast.error('Please enter Client Full Name');
+      return false;
+    }
+    if (!clientMobile.trim()) {
+      if (showToast) toast.error('Please enter Client Mobile Number');
+      return false;
+    }
+    if (clientEmail.trim() && !/^\S+@\S+\.\S+$/.test(clientEmail.trim())) {
+      if (showToast) toast.error('Please enter a valid Client Email Address or leave it empty');
+      return false;
+    }
     return true;
   };
-  const canProceedStep3 = () => eventDate && eventTime && eventLocation.trim().length > 0;
-  const canProceedStep4 = () => !!coverImage;
+
+  const canProceedStep2 = (showToast = true) => {
+    const selectedType = showCustomType ? customEventType.trim() : eventType;
+    if (!selectedType) {
+      if (showToast) toast.error('Please select an event type or enter custom category');
+      return false;
+    }
+    if (accessType === 'PASSWORD' && !password.trim()) {
+      if (showToast) toast.error('Please set a secret password for event privacy');
+      return false;
+    }
+    if (accessType === 'OTP' && password.trim().length !== 4) {
+      if (showToast) toast.error('Please enter a 4-digit PIN for access');
+      return false;
+    }
+    return true;
+  };
+
+  const canProceedStep3 = (showToast = true) => {
+    if (!eventDate) {
+      if (showToast) toast.error('Please select the Event Date');
+      return false;
+    }
+    if (!eventTime) {
+      if (showToast) toast.error('Please select the Event Time');
+      return false;
+    }
+    if (!eventLocation.trim()) {
+      if (showToast) toast.error('Please enter the Venue Location');
+      return false;
+    }
+    return true;
+  };
+
+  const canProceedStep4 = (showToast = true) => {
+    if (!coverImage) {
+      if (showToast) toast.error('Please upload a Cover Photo for the event gallery');
+      return false;
+    }
+    return true;
+  };
 
   const handleNext = () => {
-    if (currentStep === 1 && !canProceedStep1()) { toast.error('Please fill all required client fields'); return; }
-    if (currentStep === 2 && !canProceedStep2()) { toast.error('Please select an event type and complete access settings'); return; }
-    if (currentStep === 3 && !canProceedStep3()) { toast.error('Please fill date, time and venue location'); return; }
-    if (currentStep === 4 && !canProceedStep4()) { toast.error('Cover image is required'); return; }
-    if (currentStep < 5) goToStep(currentStep + 1);
+    if (currentStep === 1) {
+      if (!canProceedStep1(true)) return;
+      goToStep(2);
+      return;
+    }
+    if (currentStep === 2) {
+      if (!canProceedStep2(true)) return;
+      goToStep(3);
+      return;
+    }
+    if (currentStep === 3) {
+      if (!canProceedStep3(true)) return;
+      goToStep(4);
+      return;
+    }
+    if (currentStep === 4) {
+      if (!canProceedStep4(true)) return;
+      goToStep(5);
+      return;
+    }
   };
 
   const handleBack = () => {
     if (currentStep > 1) goToStep(currentStep - 1);
+  };
+
+  const handleStepClick = (targetStep: number) => {
+    if (targetStep === currentStep) return;
+    if (targetStep < currentStep) {
+      goToStep(targetStep);
+      return;
+    }
+    // Forward validation
+    if (currentStep === 1 && !canProceedStep1(true)) return;
+    if (targetStep > 2 && !canProceedStep2(true)) {
+      if (currentStep < 2) goToStep(2);
+      return;
+    }
+    if (targetStep > 3 && !canProceedStep3(true)) {
+      if (currentStep < 3) goToStep(3);
+      return;
+    }
+    if (targetStep > 4 && !canProceedStep4(true)) {
+      if (currentStep < 4) goToStep(4);
+      return;
+    }
+    goToStep(targetStep);
   };
 
   const getEffectiveEventType = () => showCustomType ? (customEventType.trim() || 'CUSTOM') : eventType;
@@ -220,8 +334,16 @@ export default function CreateEventPage() {
         }
       }
 
+      try {
+        sessionStorage.removeItem('mara_create_event_step');
+      } catch {}
+
       toast.success('Event created successfully!');
-      router.push('/dashboard/events');
+      const isSuperAdmin = context?.sessionUser?.role === 'SUPER_ADMIN' || context?.sessionUser?.email === 'maraphoto303@gmail.com';
+      const baseEventsUrl = (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin-dashboard')) || isSuperAdmin
+        ? '/admin-dashboard/events'
+        : '/dashboard/events';
+      router.push(baseEventsUrl);
     } catch (error: any) {
       console.error('Failed to create event', error);
       toast.error(error.response?.data?.error || 'Failed to create event.');
@@ -245,70 +367,138 @@ export default function CreateEventPage() {
         <div className="absolute bottom-[-15%] left-[-10%] w-[600px] h-[600px] bg-[#e3d8c8]/25 rounded-full blur-[150px] pointer-events-none animate-aura-breathe [animation-delay:2.5s]" />
       </div>
 
-      <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-8 sm:py-12 relative z-10 space-y-8">
+      <div className="max-w-4xl mx-auto w-full px-3 xs:px-4 sm:px-6 py-4 sm:py-10 relative z-10 space-y-4 sm:space-y-8">
         
         {/* Page Header */}
-        <div className="text-center space-y-3">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/90 border border-[#c5a880]/40 text-[#9c7c56] text-[11px] font-black uppercase tracking-widest shadow-sm">
-            <Sparkles className="w-3.5 h-3.5 text-[#c5a880] animate-pulse-soft" /> 
+        <div className="text-center space-y-2 sm:space-y-3">
+          <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-white/90 border border-[#c5a880]/40 text-[#9c7c56] text-[10px] sm:text-[11px] font-black uppercase tracking-widest shadow-xs">
+            <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#c5a880] animate-pulse-soft" /> 
             <span>Studio Event Creator</span>
           </div>
-          <h1 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight font-serif-luxury">
+          <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-slate-900 tracking-tight font-serif-luxury">
             Create New Event
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-lg mx-auto leading-relaxed">
+          <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-lg mx-auto leading-relaxed px-2">
             Design an extraordinary digital experience with facial recognition, instant media delivery, and personalized watermark branding.
           </p>
         </div>
 
         {/* Wizard Main Card */}
-        <div className="bg-white/95 backdrop-blur-2xl border border-white/80 shadow-[0_20px_50px_rgba(0,0,0,0.08)] rounded-3xl overflow-hidden ring-1 ring-slate-900/5 transition-all">
+        <div className="bg-white/95 backdrop-blur-2xl border border-white/80 shadow-[0_20px_50px_rgba(0,0,0,0.08)] rounded-2xl sm:rounded-3xl overflow-hidden ring-1 ring-slate-900/5 transition-all">
           
           {/* Stepper Navigation Bar */}
-          <div className="bg-gradient-to-r from-white via-slate-50 to-white border-b border-slate-200/80 px-4 sm:px-8 py-5 overflow-x-auto hide-scrollbar relative">
-            <div className="flex items-center justify-between min-w-[560px] relative">
-              {stepLabels.map((item, i) => {
-                const step = i + 1;
-                const isActive = currentStep === step;
-                const isPast = currentStep > step;
-                const Icon = item.icon;
+          <div className="bg-gradient-to-r from-white via-slate-50 to-white border-b border-slate-200/80 px-3 sm:px-8 py-3.5 sm:py-5">
+            {/* Mobile Stepper (< sm) - 100% responsive, zero overlapping text */}
+            <div className="sm:hidden space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#a07c4c] bg-[#c5a880]/15 px-2.5 py-0.5 rounded-full border border-[#c5a880]/30">
+                  Step {currentStep} of {stepLabels.length}
+                </span>
+                <span className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                  {React.createElement(stepLabels[currentStep - 1].icon, { className: "w-3.5 h-3.5 text-[#c5a880]" })}
+                  {stepLabels[currentStep - 1].label}
+                </span>
+              </div>
 
-                return (
-                  <div 
-                    key={step} 
-                    onClick={() => {
-                      if (step < currentStep) goToStep(step);
-                    }}
-                    className={`flex flex-col items-center gap-2 relative z-10 select-none ${step < currentStep ? 'cursor-pointer group' : 'cursor-default'}`}
-                  >
-                    <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center text-sm font-black transition-all duration-300 ${
-                      isActive ? 'bg-[#c5a880] text-slate-900 shadow-lg shadow-[#c5a880]/40 scale-110 ring-4 ring-[#c5a880]/20' :
-                      isPast ? 'bg-slate-900 text-[#c5a880] group-hover:scale-105 shadow-md' : 'bg-slate-100 text-slate-400 border border-slate-200/70'
-                    }`}>
-                      {isPast ? <Check className="w-5 h-5 stroke-[2.5]" /> : <Icon className="w-4 h-4 sm:w-5 sm:h-5" />}
+              {/* 5 Circular Badges with Connecting Progress Line */}
+              <div className="flex items-center justify-between relative px-2">
+                <div className="absolute top-1/2 -translate-y-1/2 left-5 right-5 h-[2px] bg-slate-200 -z-0">
+                  <div
+                    className="h-full bg-gradient-to-r from-slate-900 via-[#c5a880] to-[#c5a880] transition-all duration-300"
+                    style={{ width: `${((currentStep - 1) / (stepLabels.length - 1)) * 100}%` }}
+                  />
+                </div>
+
+                {stepLabels.map((item, i) => {
+                  const step = i + 1;
+                  const isActive = currentStep === step;
+                  const isPast = currentStep > step;
+                  const Icon = item.icon;
+
+                  return (
+                    <button
+                      type="button"
+                      key={step}
+                      onClick={() => handleStepClick(step)}
+                      className={`relative z-10 w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-200 ${
+                        isActive
+                          ? 'bg-[#c5a880] text-slate-950 font-black shadow-md ring-2 ring-[#c5a880]/40 scale-110'
+                          : isPast
+                          ? 'bg-slate-900 text-[#c5a880] cursor-pointer active:scale-95'
+                          : 'bg-white text-slate-400 border border-slate-200 cursor-pointer hover:border-[#c5a880]'
+                      }`}
+                      title={item.label}
+                    >
+                      {isPast ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <Icon className="w-3.5 h-3.5" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Desktop Stepper (>= sm) */}
+            <div className="hidden sm:block relative">
+              <div className="flex items-center justify-between relative max-w-2xl mx-auto">
+                {stepLabels.map((item, i) => {
+                  const step = i + 1;
+                  const isActive = currentStep === step;
+                  const isPast = currentStep > step;
+                  const Icon = item.icon;
+
+                  return (
+                    <div 
+                      key={step} 
+                      onClick={() => handleStepClick(step)}
+                      className="flex flex-col items-center gap-2 relative z-10 select-none cursor-pointer group"
+                    >
+                      <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-sm font-black transition-all duration-300 ${
+                        isActive ? 'bg-[#c5a880] text-slate-900 shadow-lg shadow-[#c5a880]/40 scale-110 ring-4 ring-[#c5a880]/20' :
+                        isPast ? 'bg-slate-900 text-[#c5a880] group-hover:scale-105 shadow-md' : 'bg-slate-100 text-slate-400 border border-slate-200/70 group-hover:border-[#c5a880]'
+                      }`}>
+                        {isPast ? <Check className="w-5 h-5 stroke-[2.5]" /> : <Icon className="w-5 h-5" />}
+                      </div>
+                      <span className={`text-[11px] font-black uppercase tracking-wider transition-colors ${
+                        isActive ? 'text-[#a07c4c]' : isPast ? 'text-slate-900' : 'text-slate-400 group-hover:text-slate-600'
+                      }`}>
+                        {item.label}
+                      </span>
                     </div>
-                    <span className={`text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-colors ${
-                      isActive ? 'text-[#a07c4c]' : isPast ? 'text-slate-900' : 'text-slate-400'
-                    }`}>
-                      {item.label}
-                    </span>
-                  </div>
-                );
-              })}
+                  );
+                })}
 
-              {/* Connecting Progress Line */}
-              <div className="absolute top-[21px] left-12 right-12 h-[2.5px] bg-slate-200 -z-0 hidden sm:block">
-                <div 
-                  className="h-full bg-gradient-to-r from-slate-900 via-[#c5a880] to-[#c5a880] transition-all duration-500 ease-out shadow-xs" 
-                  style={{ width: `${((currentStep - 1) / (stepLabels.length - 1)) * 100}%` }} 
-                />
+                {/* Connecting Progress Line */}
+                <div className="absolute top-[22px] left-10 right-10 h-[2.5px] bg-slate-200 -z-0">
+                  <div 
+                    className="h-full bg-gradient-to-r from-slate-900 via-[#c5a880] to-[#c5a880] transition-all duration-500 ease-out shadow-xs" 
+                    style={{ width: `${((currentStep - 1) / (stepLabels.length - 1)) * 100}%` }} 
+                  />
+                </div>
               </div>
             </div>
           </div>
 
           {/* Wizard Content Body */}
-          <div className="p-6 sm:p-10 min-h-[420px]">
-            <form onSubmit={handleSubmit}>
+          <div className="p-4 xs:p-6 sm:p-10 min-h-[380px]">
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (currentStep === 5) {
+                  handleSubmit(e);
+                } else {
+                  handleNext();
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+                  e.preventDefault();
+                  if (currentStep === 5) {
+                    handleSubmit(e);
+                  } else {
+                    handleNext();
+                  }
+                }
+              }}
+            >
               <AnimatePresence mode="wait" custom={direction}>
                 
                 {/* ======================================================== */}
@@ -321,7 +511,7 @@ export default function CreateEventPage() {
                       <p className="text-xs text-slate-500 mt-0.5">Please provide primary contact information for your client gallery.</p>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                       
                       {/* Event Name */}
                       <div className="sm:col-span-2 space-y-1.5">
@@ -332,7 +522,6 @@ export default function CreateEventPage() {
                           <input 
                             type="text" 
                             id="eventName" 
-                            required 
                             className="edit-input font-bold text-slate-900" 
                             value={eventName} 
                             onChange={(e) => setEventName(e.target.value)} 
@@ -352,7 +541,6 @@ export default function CreateEventPage() {
                           <input 
                             type="text" 
                             id="clientName" 
-                            required 
                             className="edit-input edit-input-with-icon font-bold text-slate-900" 
                             style={{ paddingLeft: '44px' }}
                             value={clientName} 
@@ -373,7 +561,6 @@ export default function CreateEventPage() {
                           <input 
                             type="tel" 
                             id="clientMobile" 
-                            required 
                             className="edit-input edit-input-with-icon font-bold text-slate-900" 
                             style={{ paddingLeft: '44px' }}
                             value={clientMobile} 
@@ -385,7 +572,7 @@ export default function CreateEventPage() {
                       {/* Email Address */}
                       <div className="sm:col-span-2 space-y-1.5">
                         <label htmlFor="clientEmail" className="edit-label">
-                          Client Email Address <span className="text-rose-500">*</span>
+                          Client Email Address <span className="text-xs text-slate-400 font-normal ml-1">(Optional)</span>
                         </label>
                         <div className="relative">
                           <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center w-5 h-5 pointer-events-none text-slate-400">
@@ -394,7 +581,6 @@ export default function CreateEventPage() {
                           <input 
                             type="email" 
                             id="clientEmail" 
-                            required 
                             className="edit-input edit-input-with-icon font-bold text-slate-900" 
                             style={{ paddingLeft: '44px' }}
                             value={clientEmail} 
@@ -411,7 +597,7 @@ export default function CreateEventPage() {
                 {/* STEP 2: Event Details (Custom & Preset Type Selector) */}
                 {/* ======================================================== */}
                 {currentStep === 2 && (
-                  <motion.div key="step2" custom={direction} variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition} className="space-y-8">
+                  <motion.div key="step2" custom={direction} variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition} className="space-y-6 sm:space-y-8">
                     
                     <div className="border-b border-slate-100 pb-4">
                       <h3 className="text-base sm:text-lg font-black text-slate-900">Step 2: Event Type & Access Privacy</h3>
@@ -422,19 +608,19 @@ export default function CreateEventPage() {
                     <div className="space-y-4">
                       
                       {/* Live Selected Banner */}
-                      <div className="flex items-center justify-between p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-[#c5a880]/15 to-transparent border border-[#c5a880]/40 shadow-sm">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-xl bg-[#c5a880] text-slate-900 flex items-center justify-center font-black text-sm shadow-sm">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-[#c5a880]/15 to-transparent border border-[#c5a880]/40 shadow-xs gap-2.5">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-xl bg-[#c5a880] text-slate-900 flex items-center justify-center font-black text-sm shadow-sm shrink-0">
                             <Sparkles className="w-4 h-4" />
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Currently Selected Event Type</p>
-                            <p className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-wide">
+                            <p className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-wide truncate">
                               {showCustomType ? (customEventType.trim() || 'Custom Category (Type Below)') : eventType}
                             </p>
                           </div>
                         </div>
-                        <span className="px-3 py-1 rounded-full bg-white text-[#9c7c56] font-black text-[10px] border border-[#c5a880]/30 shadow-xs uppercase tracking-wider">
+                        <span className="self-start sm:self-center px-3 py-1 rounded-full bg-white text-[#9c7c56] font-black text-[10px] border border-[#c5a880]/30 shadow-xs uppercase tracking-wider shrink-0">
                           {showCustomType ? '✨ Custom' : '🏷️ Preset'}
                         </span>
                       </div>
@@ -469,7 +655,7 @@ export default function CreateEventPage() {
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">
                           Popular Categories (1-Click Selection)
                         </label>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-1.5 sm:gap-2">
                           {POPULAR_TYPES.map(type => {
                             const isSelected = !showCustomType && eventType === type;
                             return (
@@ -477,7 +663,7 @@ export default function CreateEventPage() {
                                 type="button" 
                                 key={type}
                                 onClick={() => { setEventType(type); setShowCustomType(false); }}
-                                className={`px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border cursor-pointer ${
+                                className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold uppercase tracking-wider transition-all border cursor-pointer ${
                                   isSelected 
                                     ? 'bg-slate-900 text-[#c5a880] border-slate-900 shadow-md scale-105 ring-2 ring-[#c5a880]/30' 
                                     : 'bg-white text-slate-600 border-slate-200 hover:border-[#c5a880] hover:text-slate-900 shadow-xs'
@@ -491,7 +677,7 @@ export default function CreateEventPage() {
                           <button
                             type="button"
                             onClick={() => { setShowCustomType(true); setEventType(''); }}
-                            className={`px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border border-dashed cursor-pointer ${
+                            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold uppercase tracking-wider transition-all border border-dashed cursor-pointer ${
                               showCustomType 
                                 ? 'bg-[#c5a880] text-slate-900 border-[#c5a880] shadow-md scale-105 ring-2 ring-[#c5a880]/30' 
                                 : 'bg-white text-slate-600 border-slate-300 hover:border-[#c5a880] hover:text-slate-900'
@@ -518,8 +704,8 @@ export default function CreateEventPage() {
                               <input 
                                 type="text" 
                                 id="customEventType" 
-                                required 
                                 autoFocus
+                                placeholder="e.g. Sangeet, Haldi, Baby Shower..."
                                 className="edit-input font-bold border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/30" 
                                 value={customEventType} 
                                 onChange={(e) => setCustomEventType(e.target.value)} 
@@ -540,7 +726,7 @@ export default function CreateEventPage() {
                         Gallery Privacy & Access <span className="text-rose-500">*</span>
                       </label>
                       
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         {[
                           { value: 'PUBLIC', label: 'Public Access', desc: 'Direct link access for all guests', icon: UserIcon },
                           { value: 'PASSWORD', label: 'Password Protected', desc: 'Requires secret password', icon: Lock },
@@ -552,22 +738,22 @@ export default function CreateEventPage() {
                             <div
                               key={opt.value}
                               onClick={() => { setAccessType(opt.value); setPassword(''); }}
-                              className={`cursor-pointer p-4 rounded-2xl border transition-all flex flex-col items-center gap-2.5 text-center group ${
+                              className={`cursor-pointer p-3.5 sm:p-4 rounded-2xl border transition-all flex sm:flex-col items-center gap-3 sm:gap-2.5 text-left sm:text-center group ${
                                 isSelected 
-                                  ? 'bg-[#c5a880]/10 border-[#c5a880] ring-2 ring-[#c5a880]/40 shadow-sm scale-[1.02]' 
+                                  ? 'bg-[#c5a880]/10 border-[#c5a880] ring-2 ring-[#c5a880]/40 shadow-sm' 
                                   : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
                               }`}
                             >
-                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all ${
                                 isSelected ? 'bg-[#c5a880] text-slate-900 shadow-md' : 'bg-slate-100 text-slate-500 group-hover:bg-slate-200'
                               }`}>
                                 <Icon className="w-5 h-5" />
                               </div>
-                              <div>
+                              <div className="min-w-0 flex-1 sm:flex-none">
                                 <span className={`text-xs font-black uppercase tracking-wider block ${isSelected ? 'text-slate-900' : 'text-slate-700'}`}>
                                   {opt.label}
                                 </span>
-                                <span className="text-[10px] text-slate-500 block mt-0.5 font-medium">
+                                <span className="text-[10px] text-slate-500 block mt-0.5 font-medium leading-tight">
                                   {opt.desc}
                                 </span>
                               </div>
@@ -575,7 +761,7 @@ export default function CreateEventPage() {
                           );
                         })}
                       </div>
-                      
+
                       {/* Password Input Reveal */}
                       <AnimatePresence>
                         {accessType === 'PASSWORD' && (
@@ -586,7 +772,7 @@ export default function CreateEventPage() {
                             <input 
                               type="text" 
                               id="passwordAccess" 
-                              required 
+                              placeholder="Enter password for gallery"
                               className="edit-input font-bold" 
                               value={password} 
                               onChange={(e) => setPassword(e.target.value)} 
@@ -601,7 +787,7 @@ export default function CreateEventPage() {
                             <input 
                               type="text" 
                               id="pinAccess" 
-                              required 
+                              placeholder="1234"
                               maxLength={4}
                               className="edit-input w-44 mx-auto text-center tracking-[0.6em] font-black text-xl border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/30" 
                               value={password} 
@@ -635,7 +821,7 @@ export default function CreateEventPage() {
                         </label>
                         <p className="text-[10px] text-slate-500 font-medium">For multi-day weddings or festivals (e.g. Haldi, Sangeet, Wedding)</p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                         <button
                           type="button"
                           onClick={() => {
@@ -645,11 +831,11 @@ export default function CreateEventPage() {
                               setEventDays(prev => prev.slice(0, nd - 1));
                             }
                           }}
-                          className="w-8 h-8 rounded-lg bg-white border border-slate-300 text-slate-700 font-bold hover:bg-slate-100 flex items-center justify-center cursor-pointer shadow-xs"
+                          className="w-9 h-9 rounded-xl bg-white border border-slate-300 text-slate-800 font-bold hover:bg-slate-100 flex items-center justify-center cursor-pointer shadow-xs active:scale-95 transition-all text-base"
                         >
                           -
                         </button>
-                        <span className="w-8 text-center text-sm font-black font-mono text-slate-900">
+                        <span className="w-7 text-center text-sm font-black font-mono text-slate-900">
                           {totalDays}
                         </span>
                         <button
@@ -663,7 +849,7 @@ export default function CreateEventPage() {
                               setEventDays(arr);
                             }
                           }}
-                          className="w-8 h-8 rounded-lg bg-white border border-slate-300 text-slate-700 font-bold hover:bg-slate-100 flex items-center justify-center cursor-pointer shadow-xs"
+                          className="w-9 h-9 rounded-xl bg-white border border-slate-300 text-slate-800 font-bold hover:bg-slate-100 flex items-center justify-center cursor-pointer shadow-xs active:scale-95 transition-all text-base"
                         >
                           +
                         </button>
@@ -671,7 +857,7 @@ export default function CreateEventPage() {
                     </div>
 
                     {/* Day 1 Schedule */}
-                    <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4 hover:border-[#c5a880]/50 transition-colors">
+                    <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4 hover:border-[#c5a880]/50 transition-colors">
                       <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
                         <span className="w-6 h-6 rounded-full bg-slate-900 text-[#c5a880] flex items-center justify-center text-xs font-black">1</span>
                         <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider">
@@ -679,14 +865,14 @@ export default function CreateEventPage() {
                         </h4>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                         <div>
                           <label className="edit-label">Event Date <span className="text-rose-500">*</span></label>
-                          <CustomDatePicker type="date" className="edit-input font-bold" value={eventDate} onChange={(v) => setEventDate(v)} required />
+                          <CustomDatePicker type="date" className="edit-input font-bold" value={eventDate} onChange={(v) => setEventDate(v)} />
                         </div>
                         <div>
                           <label className="edit-label">Event Time <span className="text-rose-500">*</span></label>
-                          <CustomDatePicker type="time" className="edit-input font-bold" value={eventTime} onChange={(v) => setEventTime(v)} required />
+                          <CustomDatePicker type="time" className="edit-input font-bold" value={eventTime} onChange={(v) => setEventTime(v)} />
                         </div>
                       </div>
 
@@ -699,7 +885,7 @@ export default function CreateEventPage() {
                           <input 
                             type="text" 
                             id="eventLocation" 
-                            required 
+                            placeholder="e.g. Grand Heritage Hall, Ahmedabad"
                             className="edit-input edit-input-with-icon font-bold text-slate-900" 
                             style={{ paddingLeft: '44px' }}
                             value={eventLocation} 
@@ -711,7 +897,7 @@ export default function CreateEventPage() {
 
                     {/* Additional Multi-Days */}
                     {totalDays > 1 && eventDays.map((day, idx) => (
-                      <div key={idx} className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4 hover:border-[#c5a880]/50 transition-colors animate-fade-in">
+                      <div key={idx} className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4 hover:border-[#c5a880]/50 transition-colors animate-fade-in">
                         <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
                           <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center text-xs font-black">{idx + 2}</span>
                           <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider">
@@ -719,7 +905,7 @@ export default function CreateEventPage() {
                           </h4>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                           <div>
                             <label className="edit-label">Date <span className="text-rose-500">*</span></label>
                             <CustomDatePicker 
@@ -727,7 +913,6 @@ export default function CreateEventPage() {
                               className="edit-input font-bold" 
                               value={day.date} 
                               onChange={(v) => { const d = [...eventDays]; d[idx].date = v; setEventDays(d); }} 
-                              required 
                             />
                           </div>
                           <div>
@@ -737,7 +922,6 @@ export default function CreateEventPage() {
                               className="edit-input font-bold" 
                               value={day.time} 
                               onChange={(v) => { const d = [...eventDays]; d[idx].time = v; setEventDays(d); }} 
-                              required 
                             />
                           </div>
                         </div>
@@ -750,7 +934,7 @@ export default function CreateEventPage() {
                             </div>
                             <input 
                               type="text" 
-                              required 
+                              placeholder="e.g. Resort Lawn, Surat"
                               className="edit-input edit-input-with-icon font-bold text-slate-900" 
                               style={{ paddingLeft: '44px' }}
                               value={day.location} 
@@ -776,7 +960,7 @@ export default function CreateEventPage() {
                     </div>
 
                     {coverImage ? (
-                      <div className="relative w-full rounded-3xl overflow-hidden border-2 border-[#c5a880] bg-slate-950 shadow-md group transition-all duration-300">
+                      <div className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-[#c5a880] bg-slate-950 shadow-md group transition-all duration-300">
                         {/* Full Image in normal flow: box expands dynamically to image height with 0% cropping! */}
                         <img 
                           src={coverImage} 
@@ -784,8 +968,8 @@ export default function CreateEventPage() {
                           className="w-full h-auto max-h-[750px] object-contain block mx-auto select-none" 
                         />
                         
-                        {/* Hover Overlay */}
-                        <label className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3 backdrop-blur-xs cursor-pointer">
+                        {/* Hover Overlay for Desktop */}
+                        <label className="hidden sm:flex absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex-col items-center justify-center gap-3 backdrop-blur-xs cursor-pointer">
                           {uploadingImage ? (
                             <div className="flex flex-col items-center gap-3">
                               <Loader2 className="w-10 h-10 text-[#c5a880] animate-spin" />
@@ -809,29 +993,38 @@ export default function CreateEventPage() {
                           />
                         </label>
 
+                        {/* Touch-Friendly Action Bar for Mobile Screens */}
+                        <div className="sm:hidden absolute bottom-3 left-3 right-3 z-10">
+                          <label className="w-full flex items-center justify-center gap-2 bg-slate-950/85 backdrop-blur-md text-white border border-[#c5a880]/50 py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg active:scale-95 transition-all cursor-pointer">
+                            <Camera className="w-4 h-4 text-[#c5a880]" />
+                            <span>{uploadingImage ? 'Uploading...' : 'Change Cover Photo'}</span>
+                            <input type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
+                          </label>
+                        </div>
+
                         {/* Top corner status badge */}
                         <div className="absolute top-3.5 right-3.5 z-10 pointer-events-none">
-                          <span className="px-3 py-1 rounded-full bg-black/60 text-[#f5deb3] border border-[#c5a880]/50 text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-md flex items-center gap-1.5">
+                          <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-black/60 text-[#f5deb3] border border-[#c5a880]/50 text-[9px] sm:text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-md flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                             Full View
                           </span>
                         </div>
                       </div>
                     ) : (
-                      <label className="relative flex flex-col items-center justify-center w-full min-h-[260px] border-2 border-dashed rounded-3xl overflow-hidden cursor-pointer transition-all duration-300 border-slate-300 bg-slate-50 hover:bg-[#faf9f6] hover:border-[#c5a880] group">
-                        <div className="flex flex-col items-center justify-center p-8 text-center">
+                      <label className="relative flex flex-col items-center justify-center w-full min-h-[200px] sm:min-h-[260px] border-2 border-dashed rounded-2xl sm:rounded-3xl overflow-hidden cursor-pointer transition-all duration-300 border-slate-300 bg-slate-50 hover:bg-[#faf9f6] hover:border-[#c5a880] group">
+                        <div className="flex flex-col items-center justify-center p-5 sm:p-8 text-center">
                           {uploadingImage ? (
                             <div className="flex flex-col items-center gap-3">
-                              <Loader2 className="w-12 h-12 text-[#c5a880] animate-spin" />
+                              <Loader2 className="w-10 sm:w-12 h-10 sm:h-12 text-[#c5a880] animate-spin" />
                               <span className="text-xs font-bold text-slate-500">Uploading photo...</span>
                             </div>
                           ) : (
                             <>
-                              <div className="w-16 h-16 rounded-2xl bg-[#c5a880]/15 flex items-center justify-center mb-4 text-[#9c7c56] border border-[#c5a880]/30 shadow-sm group-hover:scale-110 transition-transform">
-                                <ImageIcon className="w-8 h-8" />
+                              <div className="w-13 sm:w-16 h-13 sm:h-16 rounded-2xl bg-[#c5a880]/15 flex items-center justify-center mb-3 sm:mb-4 text-[#9c7c56] border border-[#c5a880]/30 shadow-xs group-hover:scale-110 transition-transform">
+                                <ImageIcon className="w-7 sm:w-8 h-7 sm:h-8" />
                               </div>
-                              <span className="text-sm font-black text-slate-900">Click or drag an image to upload</span>
-                              <span className="text-[11px] text-slate-500 mt-1 font-medium">Recommended: High-resolution JPG or PNG (up to 2MB)</span>
+                              <span className="text-xs sm:text-sm font-black text-slate-900">Click or tap to upload cover photo</span>
+                              <span className="text-[10px] sm:text-[11px] text-slate-500 mt-1 font-medium">Recommended: High-resolution JPG or PNG (up to 2MB)</span>
                             </>
                           )}
                         </div>
@@ -858,27 +1051,27 @@ export default function CreateEventPage() {
                       <p className="text-xs text-slate-500 mt-0.5">Protect your photography with custom watermark branding.</p>
                     </div>
 
-                    {/* Watermark Section (Exact Event Manage CSS) */}
-                    <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <span className="w-8 h-8 rounded-xl bg-[#c5a880]/15 border border-[#c5a880]/30 flex items-center justify-center text-xs font-black text-[#9c7c56]">
+                    {/* Watermark Section */}
+                    <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                          <span className="w-8 h-8 rounded-xl bg-[#c5a880]/15 border border-[#c5a880]/30 flex items-center justify-center text-xs font-black text-[#9c7c56] shrink-0">
                             W
                           </span>
-                          <div>
-                            <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider">Custom Event Watermark</h4>
-                            <p className="text-[11px] text-slate-500 font-medium">Stamp your logo or studio name onto gallery photos</p>
+                          <div className="min-w-0">
+                            <h4 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider truncate">Custom Event Watermark</h4>
+                            <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium">Stamp your logo or studio name onto gallery photos</p>
                           </div>
                         </div>
                         <div 
-                          className="toggle-switch cursor-pointer" 
+                          className="toggle-switch cursor-pointer shrink-0" 
                           data-active={customWatermark}
                           onClick={() => setCustomWatermark(!customWatermark)}
                         />
                       </div>
 
                       {customWatermark && (
-                        <div className="mt-6 space-y-6 border-t border-slate-100 pt-5 animate-fade-in">
+                        <div className="mt-5 space-y-5 border-t border-slate-100 pt-5 animate-fade-in">
                           
                           {/* Watermark Type Selector */}
                           <div>
@@ -907,8 +1100,8 @@ export default function CreateEventPage() {
                           ) : (
                             <div>
                               <label className="edit-label">Watermark Logo Image</label>
-                              <div className="flex gap-4 items-center mt-1">
-                                <div className="w-[60px] h-[60px] rounded-xl border border-dashed border-slate-300 flex items-center justify-center shrink-0 bg-[#f8f7f4] text-slate-900 overflow-hidden shadow-xs">
+                              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center mt-1">
+                                <div className="w-[60px] h-[60px] rounded-xl border border-dashed border-slate-300 flex items-center justify-center shrink-0 bg-[#f8f7f4] text-slate-900 overflow-hidden shadow-xs mx-auto sm:mx-0">
                                   {uploadingWatermark ? (
                                     <Loader2 className="h-5 w-5 animate-spin text-[#c5a880]" />
                                   ) : (watermarkLogoUrl ? (
@@ -918,18 +1111,18 @@ export default function CreateEventPage() {
                                   ))}
                                 </div>
                                 <div className="flex-1 flex flex-col">
-                                  <label className="w-full text-center border border-slate-200 text-[#b69970] font-black text-[13px] py-2.5 rounded-xl bg-white cursor-pointer hover:bg-[#f8f7f4] transition-colors shadow-xs">
-                                    {uploadingWatermark ? 'Uploading...' : 'Choose File'}
+                                  <label className="w-full text-center border border-slate-200 text-[#b69970] font-black text-[13px] py-2.5 rounded-xl bg-white cursor-pointer hover:bg-[#f8f7f4] transition-colors shadow-xs active:scale-95">
+                                    {uploadingWatermark ? 'Uploading...' : 'Choose Logo File'}
                                     <input type="file" accept="image/*" className="hidden" onChange={handleWatermarkLogoUpload} />
                                   </label>
-                                  <p className="text-[10px] text-slate-500 font-bold mt-1.5">PNG with transparent background recommended.</p>
+                                  <p className="text-[10px] text-slate-500 font-bold mt-1 text-center sm:text-left">PNG with transparent background recommended.</p>
                                 </div>
                               </div>
                             </div>
                           )}
 
                           {/* Watermark Position Dropdown */}
-                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 sm:p-4">
+                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4">
                             <label className="edit-label text-slate-700 font-bold mb-1.5 block">Watermark Position</label>
                             <select 
                               className="edit-input font-bold tracking-wide text-xs py-2 px-3 w-full bg-white border border-slate-200 rounded-lg cursor-pointer"
@@ -947,8 +1140,8 @@ export default function CreateEventPage() {
                           </div>
 
                           {/* Size and Opacity Controls */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-3">
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-3.5">
                               <div className="flex items-center justify-between mb-1.5">
                                 <label className="edit-label mb-0">Size ({watermarkWidth}%)</label>
                                 <span className="text-xs font-mono font-black text-[#c5a880] bg-white px-2 py-0.5 rounded border border-slate-200">
@@ -965,7 +1158,7 @@ export default function CreateEventPage() {
                               />
                             </div>
 
-                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-3.5">
                               <div className="flex items-center justify-between mb-1.5">
                                 <label className="edit-label mb-0">Opacity ({watermarkOpacity}%)</label>
                                 <span className="text-xs font-mono font-black text-[#c5a880] bg-white px-2 py-0.5 rounded border border-slate-200">
@@ -984,7 +1177,7 @@ export default function CreateEventPage() {
                           </div>
 
                           {/* EXACT LIVE PREVIEW BOX WITH FIXED PHOTO */}
-                          <div className="mt-8 border border-slate-200 rounded-2xl overflow-hidden bg-slate-900 shadow-sm relative w-full aspect-[3/2] flex items-center justify-center select-none">
+                          <div className="mt-6 border border-slate-200 rounded-2xl overflow-hidden bg-slate-900 shadow-sm relative w-full aspect-[3/2] flex items-center justify-center select-none">
                             <img src="/wedding.jpg" className="absolute inset-0 w-full h-full object-cover" alt="Preview Background" />
                             
                             {watermarkType === 'LOGO' && watermarkLogoUrl && (
@@ -1022,18 +1215,18 @@ export default function CreateEventPage() {
                     </div>
 
                     {/* Portfolio Toggle (Exact Event Manage Style) */}
-                    <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-black text-slate-600">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                        <span className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-black text-slate-600 shrink-0">
                           P
                         </span>
-                        <div>
-                          <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider">Add to Public Portfolio</h4>
-                          <p className="text-[11px] text-slate-500 font-medium">Showcase this event on your studio public portfolio</p>
+                        <div className="min-w-0">
+                          <h4 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider truncate">Add to Public Portfolio</h4>
+                          <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium">Showcase this event on your studio public portfolio</p>
                         </div>
                       </div>
                       <div 
-                        className="toggle-switch cursor-pointer" 
+                        className="toggle-switch cursor-pointer shrink-0" 
                         data-active={addToPortfolio}
                         onClick={() => setAddToPortfolio(!addToPortfolio)}
                       />
@@ -1047,22 +1240,23 @@ export default function CreateEventPage() {
           </div>
 
           {/* Footer Wizard Controls */}
-          <div className="bg-slate-50/90 border-t border-slate-200/80 p-4 sm:p-6 flex items-center justify-between gap-4">
+          <div className="bg-slate-50/95 backdrop-blur-md border-t border-slate-200/80 p-3 sm:p-5 flex items-center justify-between gap-2.5 sm:gap-4 sticky bottom-0 z-20">
             <button 
               type="button" 
               onClick={handleBack} 
-              className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
-                currentStep === 1 ? 'opacity-0 pointer-events-none' : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+              className={`px-3.5 sm:px-5 py-2.5 min-h-[44px] rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer ${
+                currentStep === 1 ? 'invisible pointer-events-none' : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900 active:scale-95'
               }`}
             >
-              <ArrowLeft className="w-4 h-4" /> Back
+              <ArrowLeft className="w-4 h-4" /> 
+              <span>Back</span>
             </button>
             
             {currentStep < 5 ? (
               <button 
                 type="button" 
                 onClick={handleNext}
-                className="px-7 py-3 rounded-xl bg-slate-900 text-white hover:bg-[#c5a880] hover:text-slate-950 text-xs font-black uppercase tracking-wider shadow-lg shadow-slate-900/15 hover:shadow-xl transition-all duration-300 flex items-center gap-2 cursor-pointer"
+                className="flex-1 sm:flex-none justify-center px-5 sm:px-7 py-3 min-h-[44px] rounded-xl bg-slate-900 text-white hover:bg-[#c5a880] hover:text-slate-950 text-xs font-black uppercase tracking-wider shadow-lg shadow-slate-900/15 active:scale-95 transition-all duration-200 flex items-center gap-2 cursor-pointer"
               >
                 <span>Continue</span> 
                 <ArrowRight className="w-4 h-4 stroke-[2.5]" />
@@ -1072,7 +1266,7 @@ export default function CreateEventPage() {
                 type="button" 
                 onClick={handleSubmit}
                 disabled={loading}
-                className="px-8 py-3 rounded-xl bg-[#c5a880] text-slate-950 text-xs font-black uppercase tracking-wider shadow-lg shadow-[#c5a880]/30 hover:bg-slate-900 hover:text-[#c5a880] transition-all duration-300 flex items-center gap-2 cursor-pointer"
+                className="flex-1 sm:flex-none justify-center px-6 sm:px-8 py-3 min-h-[44px] rounded-xl bg-[#c5a880] text-slate-950 text-xs font-black uppercase tracking-wider shadow-lg shadow-[#c5a880]/30 hover:bg-slate-900 hover:text-[#c5a880] active:scale-95 transition-all duration-200 flex items-center gap-2 cursor-pointer disabled:opacity-70"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Sparkles className="w-4 h-4" /> <span>Launch Event</span></>}
               </button>

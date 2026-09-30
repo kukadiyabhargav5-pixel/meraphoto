@@ -48,6 +48,13 @@ function CustomTimePicker({ value, onChange, className }: { value: string; onCha
   const incMin = () => setMin(m >= 55 ? 0 : m + 5);
   const decMin = () => setMin(m <= 0 ? 55 : m - 5);
 
+  // Ensure initial value is propagated so form validation passes
+  useEffect(() => {
+    if (!value) {
+      onChange('09:00');
+    }
+  }, [value, onChange]);
+
   // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -170,11 +177,30 @@ export default function CustomDatePicker({
     return <CustomTimePicker value={value} onChange={onChange} className={className} />;
   }
 
-  // Date mode — use react-datepicker
-  const parsedDate = value ? new Date(`${value}T00:00:00`) : null;
+  // Safe date parsing to avoid react-datepicker RangeError
+  const getSafeDate = (val: string) => {
+    if (!val) return null;
+    try {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+        const d = new Date(`${val}T00:00:00`);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) {
+        const [day, month, year] = val.split('/');
+        const d = new Date(`${year}-${month}-${day}T00:00:00`);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      const d = new Date(val);
+      return isNaN(d.getTime()) ? null : d;
+    } catch {
+      return null;
+    }
+  };
+
+  const parsedDate = getSafeDate(value);
 
   const handleChange = (date: Date | null) => {
-    if (!date) { onChange(''); return; }
+    if (!date || isNaN(date.getTime())) { onChange(''); return; }
     const year = date.getFullYear();
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');

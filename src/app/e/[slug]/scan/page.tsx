@@ -59,6 +59,7 @@ export default function DedicatedFaceScanPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nativeCameraInputRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const eventRef = useRef<any>(null);
 
   // States
   const [loading, setLoading] = useState(true);
@@ -103,6 +104,7 @@ export default function DedicatedFaceScanPage() {
       try {
         const res = await apiClient.get(`/event/code/${slug}`);
         setEvent(res.data.event);
+        eventRef.current = res.data.event;
       } catch (err) {
         console.error('Failed to load event:', err);
       } finally {
@@ -111,6 +113,40 @@ export default function DedicatedFaceScanPage() {
     };
     fetchEvent();
   }, [slug]);
+
+  // Touch swipe refs for mobile lightbox navigation
+  const touchStartXRef = useRef<number | null>(null);
+  const touchEndXRef = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0].clientX;
+    touchEndXRef.current = null;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndXRef.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartXRef.current === null || touchEndXRef.current === null) return;
+    const diff = touchStartXRef.current - touchEndXRef.current;
+    if (Math.abs(diff) > 40 && selectedPhoto) {
+      const idx = matchedPhotos.findIndex(p => p._id === selectedPhoto._id);
+      if (diff > 0) {
+        // Swiped Left -> Next
+        if (idx < matchedPhotos.length - 1) {
+          setSelectedPhoto(matchedPhotos[idx + 1]);
+        }
+      } else {
+        // Swiped Right -> Prev
+        if (idx > 0) {
+          setSelectedPhoto(matchedPhotos[idx - 1]);
+        }
+      }
+    }
+    touchStartXRef.current = null;
+    touchEndXRef.current = null;
+  };
 
   // Resolve media URLs
   const resolveMediaUrl = useCallback((m: any, isThumbnail = false) => {
@@ -121,7 +157,10 @@ export default function DedicatedFaceScanPage() {
       if (base.includes('imagekit.io')) return `${base}/ik-thumbnail.jpg`;
       return m.thumbnailUrl || base;
     }
-    const url = m.compressedUrl || m.url || m.r2Url || '';
+    if (isThumbnail && m.thumbnailUrl && !m.thumbnailUrl.endsWith('.mp4')) {
+      return m.thumbnailUrl;
+    }
+    const url = (isThumbnail && m.thumbnailUrl ? m.thumbnailUrl : null) || m.compressedUrl || m.thumbnailUrl || m.url || m.r2Url || '';
     if (url.startsWith('localdb://')) {
       const id = url.replace('localdb://', '');
       if (localUrls[id]) return localUrls[id];
@@ -184,7 +223,11 @@ export default function DedicatedFaceScanPage() {
       }
       setCameraActive(false);
       setCameraReady(false);
-      performSearch([file]);
+      // Use eventRef.current to avoid stale closure
+      const currentEvent = eventRef.current;
+      if (currentEvent) {
+        performSearchWithEvent([file], currentEvent);
+      }
     }
   }, []);
 
@@ -210,29 +253,39 @@ export default function DedicatedFaceScanPage() {
 
       let stream: MediaStream | null = null;
 
-      // Prioritize front selfie camera
+      // Prioritize high-quality camera with portrait and fallback options
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: targetFacing,
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: 1080 },
+            height: { ideal: 1440 },
           },
           audio: false,
         });
       } catch (e1) {
-        console.warn('Constrained getUserMedia failed, trying basic facingMode:', e1);
         try {
           stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: targetFacing },
+            video: {
+              facingMode: targetFacing,
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
             audio: false,
           });
         } catch (e2) {
-          console.warn('FacingMode failed, trying generic video:', e2);
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false,
-          });
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: targetFacing },
+              audio: false,
+            });
+          } catch (e3) {
+            console.warn('FacingMode failed, trying generic video:', e3);
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false,
+            });
+          }
         }
       }
 
@@ -291,13 +344,32 @@ export default function DedicatedFaceScanPage() {
   }, [selfiePreview]);
 
   // ── Perform AI Face Matching ──────────────────
-  const performSearch = async (files: File[]) => {
-    if (!event || files.length === 0) return;
+  // Internal search function that accepts event directly to avoid stale closures
+  const performSearchWithEvent = async (files: File[], eventData: any, retryAttempt: number = 0) => {
+    if (!eventData || files.length === 0) return;
     setSearchLoading(true);
     setIsMatchedSuccess(false);
     setSearchError('');
-    setSearchProgress(12);
-    setSearchStage('Initializing 68-point neural landmark detector...');
+    setSearchProgress(retryAttempt > 0 ? 30 : 5);
+    setSearchStage(
+      retryAttempt > 0
+        ? `Reconnecting to AI engine (attempt ${retryAttempt + 1}/3)...`
+        : 'Preparing AI neural face engine...'
+    );
+
+    // Pre-flight: ping the backend to wake up the AI service before sending the selfie
+    if (retryAttempt === 0) {
+      try {
+        setSearchProgress(8);
+        setSearchStage('Connecting to AI Face Recognition server...');
+        // This is a lightweight call - the backend's wakeUpAiService handles the heavy lifting
+        await apiClient.get('/health', { timeout: 5000 }).catch(() => {});
+        setSearchProgress(12);
+        setSearchStage('Initializing 68-point neural landmark detector...');
+      } catch {
+        // Continue anyway - the main request will handle retries
+      }
+    }
 
     const formData = new FormData();
     files.forEach(f => formData.append('file', f));
@@ -319,8 +391,9 @@ export default function DedicatedFaceScanPage() {
     }, 160);
 
     try {
-      const res = await apiClient.post(`/event/${event._id}/face-search`, formData, {
+      const res = await apiClient.post(`/event/${eventData._id}/face-search`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 120000, // 2 min timeout to handle cold starts gracefully
       });
 
       clearInterval(progressTimer);
@@ -357,13 +430,47 @@ export default function DedicatedFaceScanPage() {
       }
     } catch (err: any) {
       clearInterval(progressTimer);
+      const status = err.response?.status;
+
+      // Handle 503 Render Cold-start: Auto-retry up to 3 times with progressive delays
+      if (status === 503 && retryAttempt < 3) {
+        setSearchLoading(true);
+        const delays = [6000, 10000, 15000]; // 6s, 10s, 15s
+        const delay = delays[retryAttempt] || 10000;
+        setSearchProgress(20 + retryAttempt * 15);
+        setSearchStage(
+          retryAttempt === 0
+            ? `AI engine is waking up from sleep mode. Please wait ${Math.round(delay / 1000)} seconds...`
+            : retryAttempt === 1
+              ? `AI engine is loading face recognition models. Almost ready (${Math.round(delay / 1000)}s)...`
+              : `Final attempt — AI engine should be ready shortly...`
+        );
+        setTimeout(() => {
+          performSearchWithEvent(files, eventData, retryAttempt + 1);
+        }, delay);
+        return;
+      }
+
       setSearchLoading(false);
       setIsMatchedSuccess(false);
       setSearchProgress(0);
       setSearchStage('');
-      const msg = err.response?.data?.error || 'AI Face Matching failed. Please try again.';
+      let msg = err.response?.data?.error || 'AI Face Matching failed. Please try again.';
+      if (status === 503) {
+        msg = 'AI Face Recognition service is still starting up. Please wait 15-20 seconds and try again.';
+      } else if (!err.response && err.message?.includes('Network Error')) {
+        msg = 'Network error: Could not reach the server. Please check your internet connection.';
+      } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        msg = 'The request took too long. The AI service may be loading. Please try again in a few seconds.';
+      }
       setSearchError(msg);
     }
+  };
+
+  // Wrapper that uses current event state
+  const performSearch = async (files: File[]) => {
+    const currentEvent = event || eventRef.current;
+    await performSearchWithEvent(files, currentEvent);
   };
 
   // ── Capture from Live Camera ──────────────────
@@ -808,7 +915,23 @@ export default function DedicatedFaceScanPage() {
                           const v = e.currentTarget;
                           if (v.videoWidth > 0) setCameraReady(true);
                         }}
-                        className={`absolute inset-0 w-full h-full object-cover ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
+                        className={`scanner-live-video ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          minWidth: '100%',
+                          minHeight: '100%',
+                          maxWidth: '100%',
+                          maxHeight: '100%',
+                          objectFit: 'cover',
+                          objectPosition: 'center',
+                          transform: cameraFacing === 'user' ? 'scaleX(-1)' : 'none',
+                          WebkitTransform: cameraFacing === 'user' ? 'scaleX(-1)' : 'none',
+                          zIndex: 1,
+                        }}
                       />
 
                       {/* Viewfinder States: Selfie Preview vs Starting vs Inactive */}
@@ -857,8 +980,8 @@ export default function DedicatedFaceScanPage() {
                       <div className="absolute bottom-3 right-3 w-4 h-4 sm:w-5 sm:h-5 border-b-2 border-r-2 border-[#c5a880] rounded-br pointer-events-none z-10 opacity-80" />
 
                       {/* Oval Face Guide with Animated Laser */}
-                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        <div className="w-36 sm:w-52 h-48 sm:h-64 rounded-[48%] border-2 border-[#c5a880] border-dashed shadow-[0_0_0_9999px_rgba(0,0,0,0.55)] group-hover:scale-105 transition-transform duration-500" />
+                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
+                        <div className="w-36 sm:w-52 h-48 sm:h-64 rounded-[48%] border-2 border-[#c5a880] border-dashed shadow-[0_0_0_9999px_rgba(0,0,0,0.30)] group-hover:scale-105 transition-transform duration-500" />
                         <div className="absolute w-36 sm:w-52 h-0.5 bg-gradient-to-r from-transparent via-[#c5a880] to-transparent animate-scan-laser shadow-[0_0_12px_rgba(197,168,128,0.7)]" />
                       </div>
 
@@ -887,32 +1010,43 @@ export default function DedicatedFaceScanPage() {
                     {/* Touch-Friendly Capture Action Buttons */}
                     <div className="w-full flex flex-col gap-2.5">
                       {cameraActive ? (
-                        <div className="flex gap-2 w-full">
-                          <button
-                            type="button"
-                            onClick={handleCapture}
-                            disabled={isCapturing}
-                            className="flex-1 bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-105 active:scale-[0.98] text-slate-950 font-black py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition-all shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer min-h-[48px]"
-                          >
-                            {isCapturing ? (
-                              <>
-                                <Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-slate-950" />
-                                <span>Scanning Face & Matching...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
-                                <span>Capture Selfie & Scan Face</span>
-                              </>
-                            )}
-                          </button>
+                        <div className="flex flex-col gap-2 w-full">
+                          <div className="flex gap-2 w-full">
+                            <button
+                              type="button"
+                              onClick={handleCapture}
+                              disabled={isCapturing}
+                              className="flex-1 bg-gradient-to-r from-[#c5a880] via-[#dfcdb5] to-[#c5a880] hover:brightness-105 active:scale-[0.98] text-slate-950 font-black py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition-all shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer min-h-[48px]"
+                            >
+                              {isCapturing ? (
+                                <>
+                                  <Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-slate-950" />
+                                  <span>Scanning Face & Matching...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
+                                  <span>Capture Selfie & Scan Face</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={openNativeCamera}
+                              title="Open phone camera app"
+                              className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 px-4 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer min-h-[48px]"
+                            >
+                              <Camera className="w-5 h-5 text-slate-700" />
+                            </button>
+                          </div>
+                          {/* Dedicated 1-tap mobile phone camera button */}
                           <button
                             type="button"
                             onClick={openNativeCamera}
-                            title="Open phone camera app"
-                            className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 px-4 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer min-h-[48px]"
+                            className="sm:hidden w-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[42px]"
                           >
-                            <Camera className="w-5 h-5 text-slate-700" />
+                            <Camera className="w-4 h-4 text-[#c5a880]" />
+                            <span>Or Open Phone Camera Directly</span>
                           </button>
                         </div>
                       ) : selfiePreview ? (
@@ -1043,24 +1177,6 @@ export default function DedicatedFaceScanPage() {
                         </div>
                       </div>
                     )}
-
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      className="hidden"
-                      accept="image/*"
-                    />
-
-                    {/* Native Camera input fallback with direct capture */}
-                    <input
-                      type="file"
-                      ref={nativeCameraInputRef}
-                      accept="image/*"
-                      capture="user"
-                      onChange={handleNativeCameraCapture}
-                      className="hidden"
-                    />
                   </div>
                 )}
 
@@ -1177,24 +1293,30 @@ export default function DedicatedFaceScanPage() {
                 </div>
 
                 {/* Big Spacious Responsive Grid */}
-                <div className={`w-full grid gap-6 sm:gap-8 lg:gap-10 transition-all duration-300 ${
+                <div className={`w-full grid gap-2.5 sm:gap-6 lg:gap-8 transition-all duration-300 ${
                   photoSize === 'huge'
                     ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3'
-                    : 'grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4'
+                    : 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4'
                 }`}>
                   {matchedPhotos.map((photo, index) => {
-                    const imgSrc = resolveMediaUrl(photo);
+                    const imgSrc = resolveMediaUrl(photo, true);
                     return (
                       <div
                         key={photo._id}
                         onClick={() => setSelectedPhoto(photo)}
-                        className="smooth-photo-zoom-card group aspect-[3/4] shadow-md hover:shadow-2xl"
+                        className="smooth-photo-zoom-card group aspect-[3/4] rounded-xl sm:rounded-2xl overflow-hidden shadow-xs hover:shadow-xl border border-slate-200 cursor-pointer active:scale-[0.98] transition-all bg-slate-100"
                       >
                         <img
                           src={imgSrc}
                           alt={`Matched Memory ${index + 1}`}
-                          className="smooth-zoom-img"
+                          className="w-full h-full object-cover smooth-zoom-img"
                           loading="lazy"
+                          onError={(e) => {
+                            const fallback = photo.r2Url || photo.thumbnailUrl || photo.url;
+                            if (fallback && e.currentTarget.src !== fallback) {
+                              e.currentTarget.src = fallback;
+                            }
+                          }}
                         />
 
                         {/* Smooth Luxury Hover Overlay */}
@@ -1248,16 +1370,21 @@ export default function DedicatedFaceScanPage() {
 
       {/* ── Fullscreen Lightbox Modal ── */}
       {selectedPhoto && (
-        <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col justify-between p-3 sm:p-6 animate-in fade-in duration-200 safe-bottom">
+        <div 
+          className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col justify-between p-3 sm:p-6 animate-in fade-in duration-200 safe-bottom select-none touch-pan-y"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
           <div className="flex items-center justify-between w-full relative z-10">
             <span className="text-[10px] sm:text-xs font-mono font-bold text-[#c5a880] tracking-wider uppercase">
-              AI Matched Photo
+              AI Matched Photo ({matchedPhotos.findIndex(p => p._id === selectedPhoto._id) + 1} / {matchedPhotos.length})
             </span>
             <div className="flex items-center gap-2 sm:gap-3">
               <a
                 href={resolveMediaUrl(selectedPhoto)}
                 download
-                className="bg-white/10 hover:bg-white/20 border border-white/15 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+                className="bg-white/10 hover:bg-white/20 border border-white/15 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors min-h-[40px]"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Download</span>
@@ -1265,26 +1392,76 @@ export default function DedicatedFaceScanPage() {
               <button
                 type="button"
                 onClick={() => setSelectedPhoto(null)}
-                className="bg-white/10 hover:bg-rose-500/80 text-white p-2 rounded-xl transition-colors border border-white/10 cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center"
+                className="bg-white/10 hover:bg-rose-500/80 text-white p-2 rounded-xl transition-colors border border-white/10 cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          <div className="flex-1 flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+          <div className="flex-1 flex items-center justify-center p-2 sm:p-4 overflow-hidden relative">
+            {/* Previous Button */}
+            {matchedPhotos.findIndex(p => p._id === selectedPhoto._id) > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const idx = matchedPhotos.findIndex(p => p._id === selectedPhoto._id);
+                  if (idx > 0) setSelectedPhoto(matchedPhotos[idx - 1]);
+                }}
+                className="absolute left-1 sm:left-4 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/80 text-white min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer shadow-lg z-20 backdrop-blur-md border border-white/10"
+                title="Previous photo"
+              >
+                <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
+            )}
+
             <img
               src={resolveMediaUrl(selectedPhoto)}
               alt="Full Size View"
-              className="max-h-[75vh] sm:max-h-[82vh] max-w-full object-contain rounded-xl sm:rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-white/10"
+              className="max-h-[75vh] sm:max-h-[82vh] max-w-[95vw] sm:max-w-full object-contain rounded-xl sm:rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-white/10"
             />
+
+            {/* Next Button */}
+            {matchedPhotos.findIndex(p => p._id === selectedPhoto._id) < matchedPhotos.length - 1 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const idx = matchedPhotos.findIndex(p => p._id === selectedPhoto._id);
+                  if (idx < matchedPhotos.length - 1) setSelectedPhoto(matchedPhotos[idx + 1]);
+                }}
+                className="absolute right-1 sm:right-4 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/80 text-white min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer shadow-lg z-20 backdrop-blur-md border border-white/10"
+                title="Next photo"
+              >
+                <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
+            )}
           </div>
 
           <div className="text-center py-1 text-[11px] text-slate-400 font-medium">
-            Tap outside or click &apos;X&apos; to return
+            Swipe left/right to browse • Tap &apos;X&apos; to return
           </div>
         </div>
       )}
+
+      {/* Always-mounted File & Native Camera Inputs */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        className="hidden"
+        accept="image/*"
+      />
+
+      <input
+        type="file"
+        ref={nativeCameraInputRef}
+        accept="image/*"
+        capture="user"
+        onChange={handleNativeCameraCapture}
+        className="hidden"
+      />
     </div>
   );
 }

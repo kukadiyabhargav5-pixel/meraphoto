@@ -818,7 +818,7 @@ export default function CalendarPage() {
             <div className="p-6 border-t border-slate-100 bg-[#f8f7f4] text-slate-900/50 flex justify-end">
               <button 
                 onClick={() => setViewingShoot(null)} 
-                className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-900 rounded-xl text-sm font-bold shadow-md transition-colors"
+                className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors cursor-pointer"
               >
                 Close Details
               </button>

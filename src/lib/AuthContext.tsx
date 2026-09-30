@@ -33,7 +33,7 @@ interface AuthContextType {
   loading: boolean;
   isLoggingOut: boolean;
   login: (email: string, password: string) => Promise<void>;
-  googleLogin: (credential: string) => Promise<void>;
+  googleLogin: (credential?: string, accessToken?: string) => Promise<void>;
   register: (data: any) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -127,8 +127,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setStudio(data.studio || null);
   };
 
-  const googleLogin = async (credential: string) => {
-    const res = await apiClient.post('/auth/google', { credential });
+  const googleLogin = async (credential?: string, accessToken?: string) => {
+    const res = await apiClient.post('/auth/google', { credential, accessToken });
     const data = res.data;
 
     // Save tokens

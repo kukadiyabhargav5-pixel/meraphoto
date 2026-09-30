@@ -8,58 +8,59 @@ import { Check } from 'lucide-react';
 export default function PricingPage() {
   const staticPlans = [
     {
-      name: 'Basic',
-      price: '3,500',
+      name: 'Startup',
+      price: '3,999',
       period: '/year',
       popular: false,
       desc: 'Store 50,000 photos & 10 videos',
       features: [
         'Store 50,000 photos',
         'Store 10 videos',
-        'Business Branding',
-        'Bulk Download',
-        'Web Mode'
+        'Create & Manage Events',
+        'Quotation Generator',
+        'Profile & Galleries'
       ]
     },
     {
       name: 'Standard',
-      price: '7,900',
+      price: '7,999',
       period: '/year',
       popular: true,
-      desc: 'Store 1,50,000 photos & 100 videos',
+      desc: 'Store 1,00,000 photos & 20 videos',
       features: [
-        'Store 1,50,000 photos',
-        'Store 100 videos',
-        'Watermarks',
-        '+ Basic Plan Feature'
+        'Store 1,00,000 photos',
+        'Store 20 videos',
+        'ALL Dashboard Tools Enabled',
+        'Bill & Invoice Generator',
+        'Lead Capture & Branding'
       ]
     },
     {
       name: 'Essential',
-      price: '15,900',
+      price: '12,999',
       period: '/year',
       popular: false,
-      desc: 'Store 3,00,000 photos & 200 videos',
+      desc: 'Store 1,50,000 photos & 50 videos',
       features: [
-        'Store 3,00,000 photos',
-        'Store 200 videos',
-        'View Client Favourites',
-        'Switch on/off Downloads',
-        'Portfolio Website',
-        '+ Standard Plan Feature'
+        'Store 1,50,000 photos',
+        'Store 50 videos',
+        'ALL Dashboard Tools Enabled',
+        'High-Speed Optimization',
+        'Priority 24/7 Support'
       ]
     },
     {
       name: 'Premium',
-      price: '31,900',
+      price: '19,999',
       period: '/year',
       popular: false,
-      desc: 'Store 7,50,000 photos & 500 videos',
+      desc: 'Store 3,00,000 photos & 100 videos',
       features: [
-        'Store 7,50,000 photos',
-        'Store 500 videos',
-        'Digital Album',
-        '+ Essential Plan Feature'
+        'Store 3,00,000 photos',
+        'Store 100 videos',
+        'ALL Dashboard Tools Enabled',
+        'AI Face Recognition Scanner',
+        'Dedicated VIP Account Manager'
       ]
     }
   ];
@@ -74,23 +75,23 @@ export default function PricingPage() {
         </div>
 
         {/* Section 1: Dynamic Photographer Plans Grid (Matching original gold/black theme) */}
-        <section className="max-w-7xl mx-auto px-6 pt-28 pb-20 relative z-10 text-center">
-          <span className="inline-block px-4 py-1.5 bg-[#f5f2eb] text-[#c5a880] border border-[#c5a880]/15 text-[11px] font-black uppercase tracking-widest rounded-full mb-5 shadow-sm">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-20 sm:pt-28 pb-16 sm:pb-20 relative z-10 text-center">
+          <span className="inline-block px-4 py-1.5 bg-[#f5f2eb] text-[#c5a880] border border-[#c5a880]/15 text-[11px] font-black uppercase tracking-widest rounded-full mb-4 sm:mb-5 shadow-sm">
             Membership
           </span>
-          <h1 className="font-serif-luxury text-4xl sm:text-5xl lg:text-6xl font-light text-[#09090b] leading-[1.15] mb-6">
+          <h1 className="font-serif-luxury text-3xl sm:text-5xl lg:text-6xl font-light text-[#09090b] leading-[1.15] mb-4 sm:mb-6">
             Simple, transparent pricing
           </h1>
-          <p className="text-gray-500 max-w-sm mx-auto text-sm md:text-base font-medium">
+          <p className="text-gray-500 max-w-sm mx-auto text-xs sm:text-base font-medium">
             Start delivering photos dynamically. Upgrade as your studio demands grow.
           </p>
 
           {/* Pricing cards grid wrapper */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mt-16 max-w-6xl mx-auto items-stretch">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-10 sm:mt-16 max-w-6xl mx-auto items-stretch">
             {staticPlans.map((plan) => (
               <div 
                 key={plan.name}
-                className={`relative rounded-3xl p-8 flex flex-col justify-between transition-all duration-300 ${plan.popular ? 'bg-[#09090b] border border-[#c5a880]/30 text-white shadow-2xl scale-[1.03] lg:scale-[1.05] z-10' : 'bg-white border border-[#e3d8c8]/40 hover:border-[#c5a880]/30 text-[#09090b]'}`}
+                className={`relative rounded-3xl p-5 sm:p-8 flex flex-col justify-between transition-all duration-300 ${plan.popular ? 'bg-[#09090b] border border-[#c5a880]/30 text-white shadow-2xl scale-100 lg:scale-[1.05] z-10' : 'bg-white border border-[#e3d8c8]/40 hover:border-[#c5a880]/30 text-[#09090b]'}`}
               >
                 {/* Popular badge */}
                 {plan.popular && (
@@ -104,7 +105,7 @@ export default function PricingPage() {
                   <p className={`text-[11px] mt-1.5 font-medium ${plan.popular ? 'text-slate-400' : 'text-gray-450'}`}>{plan.desc}</p>
                   
                   <div className="flex items-baseline gap-1 mt-6 mb-4">
-                    <span className="text-3xl font-black font-serif-luxury">₹{plan.price}</span>
+                    <span className="text-3xl font-black font-serif-luxury">{plan.price === 'Free' ? 'Free' : `₹${plan.price}`}</span>
                     <span className={`text-[10px] font-bold uppercase tracking-wider ${plan.popular ? 'text-[#c5a880]' : 'text-gray-450'}`}>{plan.period}</span>
                   </div>
 
@@ -125,7 +126,7 @@ export default function PricingPage() {
                 <div className="mt-8">
                   <Link 
                     href="/dashboard/plans-billing"
-                    className={`w-full py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center justify-center cursor-pointer ${plan.popular ? 'bg-[#c5a880] hover:bg-white text-[#09090b] font-black' : 'border border-[#09090b]/15 text-[#09090b] bg-transparent hover:bg-slate-50'}`}
+                    className={`w-full py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center justify-center cursor-pointer min-h-[44px] ${plan.popular ? 'bg-[#c5a880] hover:bg-white text-[#09090b] font-black' : 'border border-[#09090b]/15 text-[#09090b] bg-transparent hover:bg-slate-50'}`}
                   >
                     Choose {plan.name}
                   </Link>

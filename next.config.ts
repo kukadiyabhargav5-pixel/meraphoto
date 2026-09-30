@@ -19,7 +19,24 @@ const nextConfig: NextConfig = {
       {
         source: '/api/:path*',
         destination: `${backendUrl}/api/:path*`
+      },
+      {
+        source: '/admin-dashboard/:path+',
+        destination: '/dashboard/:path*'
       }
+    ];
+  },
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin-allow-popups',
+          },
+        ],
+      },
     ];
   }
 };

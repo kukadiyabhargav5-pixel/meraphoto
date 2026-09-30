@@ -12,9 +12,10 @@ export const DashboardProvider = ({ children }: { children: React.ReactNode }) =
   const [bookings, setBookings] = useState([]);
   const [quotations, setQuotations] = useState([]);
   const [bills, setBills] = useState([]);
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.email === 'maraphoto303@gmail.com';
   const [studio, setStudio] = useState<any>(authStudio || { 
     name: 'Mara Photo', 
-    subscriptionPlan: 'BASIC', 
+    subscriptionPlan: isSuperAdmin ? 'PREMIUM' : 'BASIC', 
     branding: { color: '#c5a880', watermarkEnabled: false } 
   });
   const [credits, setCredits] = useState<any>(null);
@@ -38,10 +39,15 @@ export const DashboardProvider = ({ children }: { children: React.ReactNode }) =
       setStudio((prev: any) => ({
         ...prev,
         ...authStudio,
-        subscriptionPlan: authStudio.subscriptionPlan || prev?.subscriptionPlan || 'BASIC'
+        subscriptionPlan: isSuperAdmin ? 'PREMIUM' : (authStudio.subscriptionPlan || prev?.subscriptionPlan || 'BASIC')
+      }));
+    } else if (isSuperAdmin) {
+      setStudio((prev: any) => ({
+        ...prev,
+        subscriptionPlan: 'PREMIUM'
       }));
     }
-  }, [authStudio]);
+  }, [authStudio, isSuperAdmin]);
 
   const refreshCredits = async () => {
     try {

@@ -93,9 +93,47 @@ export default function EventPhotosPage() {
   const [localUrls, setLocalUrls] = useState<Record<string, string>>({});
   const [mediaTypeFilter, setMediaTypeFilter] = useState<'ALL' | 'PHOTO' | 'VIDEO'>('ALL');
 
-  const resolveMediaUrl = (m: any) => {
+  // Touch swipe refs for mobile lightbox navigation
+  const touchStartXRef = useRef<number | null>(null);
+  const touchEndXRef = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0].clientX;
+    touchEndXRef.current = null;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndXRef.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartXRef.current === null || touchEndXRef.current === null) return;
+    const diff = touchStartXRef.current - touchEndXRef.current;
+    if (Math.abs(diff) > 40) {
+      if (diff > 0) {
+        // Swiped Left -> Next
+        goNext();
+      } else {
+        // Swiped Right -> Prev
+        goPrev();
+      }
+    }
+    touchStartXRef.current = null;
+    touchEndXRef.current = null;
+  };
+
+  const resolveMediaUrl = (m: any, isThumbnail = false) => {
     if (!m) return '';
-    const url = m.compressedUrl || m.thumbnailUrl || m.url || m.r2Url || '';
+    if (m.type === 'VIDEO' && isThumbnail) {
+      if (m.thumbnailUrl && !m.thumbnailUrl.endsWith('.mp4')) return m.thumbnailUrl;
+      const base = m.compressedUrl || m.url || m.r2Url || '';
+      if (base.includes('imagekit.io')) return `${base}/ik-thumbnail.jpg`;
+      return m.thumbnailUrl || base;
+    }
+    if (isThumbnail && m.thumbnailUrl && !m.thumbnailUrl.endsWith('.mp4')) {
+      return m.thumbnailUrl;
+    }
+    const url = (isThumbnail && m.thumbnailUrl ? m.thumbnailUrl : null) || m.compressedUrl || m.thumbnailUrl || m.url || m.r2Url || '';
     if (url.startsWith('localdb://')) {
       const id = url.replace('localdb://', '');
       if (localUrls[id]) return localUrls[id];
@@ -114,9 +152,11 @@ export default function EventPhotosPage() {
   const fetchPhotos = async (eventId: string) => {
     try {
       const res = await apiClient.get(`/media/event/${eventId}`);
-      const completed = res.data.media.filter((m: any) => m.processedStatus === 'COMPLETED');
-      setMedia(completed);
-      setFullMedia(completed);
+      const allMedia = res.data.media || [];
+      const valid = allMedia.filter((m: any) => m.processedStatus !== 'FAILED');
+      const finalMedia = valid.length > 0 ? valid : allMedia;
+      setMedia(finalMedia);
+      setFullMedia(finalMedia);
     } catch (err) {
       console.error(err);
     }
@@ -131,7 +171,15 @@ export default function EventPhotosPage() {
       if (res.data.event.accessType === 'PASSWORD' || res.data.event.accessType === 'OTP') {
         setIsLocked(true);
       } else {
-        fetchPhotos(res.data.event._id);
+        if (res.data.media) {
+          const allMedia = res.data.media || [];
+          const valid = allMedia.filter((m: any) => m.processedStatus !== 'FAILED');
+          const finalMedia = valid.length > 0 ? valid : allMedia;
+          setMedia(finalMedia);
+          setFullMedia(finalMedia);
+        } else {
+          fetchPhotos(res.data.event._id);
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -637,12 +685,12 @@ export default function EventPhotosPage() {
   const currentLightboxMedia = lightboxIndex !== null ? media[lightboxIndex] : null;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 pb-24">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 pb-24 selection:bg-[#c5a880] selection:text-white">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl border-b border-slate-200 shadow-sm">
-        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-            <div className="h-8 max-w-[130px] flex items-center justify-start shrink-0 overflow-hidden">
+      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl border-b border-slate-200 shadow-xs">
+        <div className="max-w-[1800px] mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
+            <div className="h-7 sm:h-8 max-w-[100px] sm:max-w-[130px] flex items-center justify-start shrink-0 overflow-hidden">
               <img 
                 src={event?.studioId?.logoUrl || '/studio-gold-icon.png'} 
                 alt="Logo" 
@@ -650,23 +698,23 @@ export default function EventPhotosPage() {
                   (e.currentTarget as HTMLImageElement).src = '/studio-gold-icon.png';
                 }}
                 style={{
-                  maxHeight: '32px',
-                  maxWidth: '130px',
+                  maxHeight: '30px',
+                  maxWidth: '120px',
                   width: 'auto',
                   height: 'auto',
                   objectFit: 'contain',
                   display: 'block'
                 }}
-                className="max-h-8 w-auto max-w-[130px] object-contain rounded drop-shadow-sm" 
+                className="max-h-7 sm:max-h-8 w-auto max-w-[100px] sm:max-w-[130px] object-contain rounded drop-shadow-xs" 
               />
             </div>
-            <span className="text-xs font-extrabold text-[#c5a880] uppercase tracking-wider truncate max-w-[130px]">
+            <span className="text-[11px] sm:text-xs font-extrabold text-[#c5a880] uppercase tracking-wider whitespace-nowrap">
               {event?.studioId?.name || 'Gallery'}
             </span>
             <span className="hidden sm:block h-4 w-px bg-slate-300" />
-            <h1 className="text-sm font-bold text-slate-800 truncate max-w-[120px] sm:max-w-none">{event?.name}</h1>
+            <h1 className="text-xs sm:text-sm font-bold text-slate-800 truncate max-w-[120px] sm:max-w-none">{event?.name}</h1>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             <select
               value={mediaTypeFilter}
               onChange={(e) => {
@@ -678,13 +726,13 @@ export default function EventPhotosPage() {
                   setMedia(fullMedia.filter(m => m.type === type));
                 }
               }}
-              className="text-xs bg-slate-100 border-none rounded-lg px-2 py-1.5 outline-none cursor-pointer text-slate-700 font-bold hover:bg-slate-200 transition-colors"
+              className="text-xs bg-slate-100 border-none rounded-lg px-2.5 py-1.5 outline-none cursor-pointer text-slate-700 font-bold hover:bg-slate-200 transition-colors"
             >
               <option value="ALL">All Media</option>
               <option value="PHOTO">Photos</option>
               <option value="VIDEO">Videos</option>
             </select>
-            <span className="text-xs text-slate-500 font-bold hidden sm:inline">
+            <span className="text-[11px] sm:text-xs text-slate-500 font-bold hidden sm:inline">
               {media.length} items
             </span>
           </div>
@@ -693,12 +741,12 @@ export default function EventPhotosPage() {
 
       {/* Sticky Bottom Action Bar */}
       {fullMedia.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 p-3 sm:p-4 bg-gradient-to-t from-white via-white/90 to-transparent pointer-events-none">
+        <div className="fixed bottom-0 left-0 right-0 z-30 p-2.5 sm:p-4 bg-gradient-to-t from-white via-white/95 to-transparent pointer-events-none safe-bottom">
           <div className="max-w-md mx-auto flex items-center gap-2 sm:gap-3 pointer-events-auto">
             {isFiltered ? (
               <button
                 onClick={clearSearch}
-                className="flex-1 bg-slate-800 hover:bg-slate-900 text-white shadow-xl shadow-slate-900/20 rounded-2xl py-3.5 px-4 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
+                className="flex-1 bg-slate-800 hover:bg-slate-900 text-white shadow-xl shadow-slate-900/20 rounded-xl sm:rounded-2xl py-3 px-3 sm:px-4 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer min-h-[44px]"
               >
                 <X className="h-4 w-4" />
                 <span>Clear Search</span>
@@ -707,7 +755,7 @@ export default function EventPhotosPage() {
               <>
                 <Link
                   href={`/e/${slug}/scan`}
-                  className="flex-1 bg-gradient-to-r from-[#c5a880] to-[#b09672] text-slate-950 shadow-xl shadow-[#c5a880]/20 rounded-2xl py-3.5 px-3 sm:px-4 font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95"
+                  className="flex-1 bg-gradient-to-r from-[#c5a880] to-[#b09672] text-slate-950 shadow-xl shadow-[#c5a880]/20 rounded-xl sm:rounded-2xl py-3 px-2.5 sm:px-4 font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 transition-all hover:scale-[1.02] active:scale-95 min-h-[44px]"
                 >
                   <ScanFace className="h-4 w-4 text-slate-950 stroke-[2.5]" />
                   <span>Face Scan</span>
@@ -715,18 +763,18 @@ export default function EventPhotosPage() {
 
                 <button
                   onClick={() => setAiModalOpen(true)}
-                  className="bg-slate-900 hover:bg-black text-white shadow-xl rounded-2xl py-3.5 px-3 sm:px-4 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
+                  className="bg-slate-900 hover:bg-black text-white shadow-xl rounded-xl sm:rounded-2xl py-3 px-2.5 sm:px-4 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer min-h-[44px]"
                   title="Quick Modal Search"
                 >
-                  <Sparkles className="h-4 w-4 text-[#c5a880]" />
-                  <span className="hidden xs:inline">Popup</span>
+                  <Sparkles className="h-3.5 w-3.5 text-[#c5a880]" />
+                  <span>Popup</span>
                 </button>
               </>
             )}
 
             <button
               onClick={handleDownloadClick}
-              className="flex-1 bg-[#FF6B00] hover:bg-[#E05E00] text-white shadow-xl shadow-orange-500/20 rounded-2xl py-3.5 px-3 sm:px-4 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
+              className="flex-1 bg-[#FF6B00] hover:bg-[#E05E00] text-white shadow-xl shadow-orange-500/20 rounded-xl sm:rounded-2xl py-3 px-2.5 sm:px-4 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer min-h-[44px]"
             >
               <Download className="h-4 w-4" />
               <span>Download</span>
@@ -735,32 +783,37 @@ export default function EventPhotosPage() {
         </div>
       )}
 
-      {/* Masonry Photo Gallery */}
-      <main className="max-w-[1800px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      {/* Responsive Photo Gallery Grid */}
+      <main className="max-w-[1800px] mx-auto px-2.5 sm:px-6 py-4 sm:py-8">
         {media.length > 0 ? (
-          <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-3 sm:gap-6">
+          <div className="grid grid-cols-2 gap-2 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {media.map((m, index) => {
-              const imgSrc = resolveMediaUrl(m);
+              const imgSrc = resolveMediaUrl(m, true);
 
               return (
                 <div
                   key={m._id}
-                  className="smooth-photo-zoom-card break-inside-avoid mb-3 sm:mb-6 shadow-sm hover:shadow-xl border border-slate-200"
+                  className="smooth-photo-zoom-card relative aspect-[3/4] rounded-xl sm:rounded-2xl overflow-hidden shadow-xs hover:shadow-xl border border-slate-200 cursor-pointer active:scale-[0.98] transition-all bg-slate-100"
                   onClick={() => setLightboxIndex(index)}
                 >
-                  {m.type === 'VIDEO' ? (
-                    <video
-                      src={imgSrc}
-                      className="w-full h-auto object-cover smooth-zoom-img"
-                      controls
-                    />
-                  ) : (
-                    <img
-                      src={imgSrc}
-                      alt={`Media ${index + 1}`}
-                      className="w-full h-auto object-cover smooth-zoom-img"
-                      loading="lazy"
-                    />
+                  <img
+                    src={imgSrc}
+                    alt={`Photo ${index + 1}`}
+                    className="w-full h-full object-cover smooth-zoom-img"
+                    loading="lazy"
+                    onError={(e) => {
+                      const fallback = m.r2Url || m.thumbnailUrl || m.url;
+                      if (fallback && e.currentTarget.src !== fallback) {
+                        e.currentTarget.src = fallback;
+                      }
+                    }}
+                  />
+                  {m.type === 'VIDEO' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/25 pointer-events-none">
+                      <div className="w-10 h-10 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center shadow-lg">
+                        <Play className="h-4.5 w-4.5 text-white fill-white ml-0.5" />
+                      </div>
+                    </div>
                   )}
                   <div className="photo-card-overlay absolute inset-0 bg-black/10 pointer-events-none" />
                 </div>
@@ -793,25 +846,30 @@ export default function EventPhotosPage() {
 
       {/* ====== FULLSCREEN LIGHTBOX ====== */}
       {lightboxIndex !== null && currentLightboxMedia && (
-        <div className="fixed inset-0 z-50 bg-[#0A0A0A] flex items-center justify-center">
-          <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 sm:px-8 py-4 sm:py-5 z-20 pointer-events-none">
+        <div 
+          className="fixed inset-0 z-50 bg-[#0A0A0A] flex items-center justify-center touch-pan-y select-none"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 sm:px-8 py-3 sm:py-5 z-20 pointer-events-none">
             <span className="text-xs sm:text-sm text-white/60 font-mono font-medium tracking-widest pointer-events-auto">
               {lightboxIndex + 1} / {media.length}
             </span>
             <button
               onClick={closeLightbox}
-              className="p-2 sm:p-2.5 rounded-full bg-white/5 hover:bg-white/15 text-white/80 hover:text-white transition-all pointer-events-auto"
+              className="p-2 sm:p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all pointer-events-auto min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
               title="Close (Esc)"
             >
               <X className="h-5 w-5 sm:h-6 sm:w-6" />
             </button>
           </div>
 
-          <div className="w-full h-full p-4 sm:p-16 flex items-center justify-center relative">
+          <div className="w-full h-full p-2 sm:p-16 flex items-center justify-center relative">
             {currentLightboxMedia.type === 'VIDEO' ? (
               <video
                 src={resolveMediaUrl(currentLightboxMedia)}
-                className="max-w-full max-h-full object-contain select-none shadow-2xl"
+                className="max-w-[96vw] max-h-[85dvh] object-contain select-none shadow-2xl"
                 controls
                 autoPlay
               />
@@ -819,7 +877,7 @@ export default function EventPhotosPage() {
               <img
                 src={resolveMediaUrl(currentLightboxMedia)}
                 alt={`Media ${lightboxIndex + 1}`}
-                className="max-w-full max-h-full object-contain select-none shadow-2xl"
+                className="max-w-[96vw] max-h-[85dvh] object-contain select-none shadow-2xl"
                 draggable={false}
               />
             )}
@@ -827,16 +885,18 @@ export default function EventPhotosPage() {
 
           <button
             onClick={(e) => { e.stopPropagation(); goPrev(); }}
-            className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 p-2 sm:p-4 rounded-full bg-black/40 hover:bg-black/80 text-white transition-all hover:scale-110 backdrop-blur-md z-20"
+            className="absolute left-1.5 sm:left-6 top-1/2 -translate-y-1/2 p-2 sm:p-3.5 rounded-full bg-black/50 hover:bg-black/80 text-white transition-all hover:scale-105 backdrop-blur-md z-20 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer shadow-lg"
+            title="Previous photo"
           >
-            <ChevronLeft className="h-6 w-6 sm:h-8 sm:w-8" />
+            <ChevronLeft className="h-5 w-5 sm:h-8 sm:w-8" />
           </button>
 
           <button
             onClick={(e) => { e.stopPropagation(); goNext(); }}
-            className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 p-2 sm:p-4 rounded-full bg-black/40 hover:bg-black/80 text-white transition-all hover:scale-110 backdrop-blur-md z-20"
+            className="absolute right-1.5 sm:right-6 top-1/2 -translate-y-1/2 p-2 sm:p-3.5 rounded-full bg-black/50 hover:bg-black/80 text-white transition-all hover:scale-105 backdrop-blur-md z-20 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer shadow-lg"
+            title="Next photo"
           >
-            <ChevronRight className="h-6 w-6 sm:h-8 sm:w-8" />
+            <ChevronRight className="h-5 w-5 sm:h-8 sm:w-8" />
           </button>
         </div>
       )}
@@ -1286,30 +1346,31 @@ export default function EventPhotosPage() {
                               {isDragOver ? 'Drop your photo here!' : 'Drag & drop your photo here'}
                             </p>
                             <p className="text-xs text-slate-400 font-medium mt-1.5 tracking-wide">
-                              or click to browse • JPG, PNG, WebP supportedclick to browse • JPG, PNG, WebP supported
+                              or click to browse • JPG, PNG, WebP supported
                             </p>
                           </div>
                         </div>
                       )}
-                      <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        onChange={handleFileChange} 
-                        className="hidden" 
-                        accept="image/*" 
-                      />
-
-                      {/* Native camera fallback input */}
-                      <input 
-                        type="file" 
-                        ref={nativeCameraInputRef} 
-                        accept="image/*" 
-                        capture="user" 
-                        onChange={handleNativeCameraCapture} 
-                        className="hidden" 
-                      />
                     </div>
                   )}
+
+                  {/* Always-mounted File & Native Camera Inputs */}
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleFileChange} 
+                    className="hidden" 
+                    accept="image/*" 
+                  />
+
+                  <input 
+                    type="file" 
+                    ref={nativeCameraInputRef} 
+                    accept="image/*" 
+                    capture="user" 
+                    onChange={handleNativeCameraCapture} 
+                    className="hidden" 
+                  />
                 </>
               )}
 

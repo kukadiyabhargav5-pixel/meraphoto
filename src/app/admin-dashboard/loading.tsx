@@ -2,7 +2,7 @@
 import React from 'react';
 import { Loader2 } from 'lucide-react';
 
-export default function DashboardLoading() {
+export default function AdminDashboardLoading() {
   return (
     <div className="min-h-[75vh] w-full flex flex-col items-center justify-center p-4 overscroll-none select-none">
       <div className="flex flex-col items-center justify-center text-center">

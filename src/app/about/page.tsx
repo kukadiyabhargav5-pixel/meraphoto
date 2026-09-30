@@ -17,27 +17,27 @@ export default function Page() {
             <div className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full bg-[#c5a880]/10 opacity-30 blur-3xl" />
           </div>
 
-          <div className="max-w-7xl mx-auto px-6 lg:px-8 relative z-10 text-center">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
             <span className="inline-block px-4 py-1.5 bg-[#f5f2eb] text-[#c5a880] border border-[#c5a880]/15 text-[11px] font-black uppercase tracking-widest rounded-full mb-6 font-poppins shadow-sm">
               About Mara Photo
             </span>
-            <h1 className="font-serif-luxury text-4xl sm:text-5xl lg:text-6xl font-light text-[#09090b] leading-[1.15] mb-6">
+            <h1 className="font-serif-luxury text-3xl sm:text-5xl lg:text-6xl font-light text-[#09090b] leading-[1.15] mb-6">
               Delivering Experiences, Not Links
             </h1>
-            <p className="font-poppins text-base sm:text-lg text-gray-500 mb-10 leading-relaxed max-w-2xl mx-auto font-medium">
+            <p className="font-poppins text-sm sm:text-lg text-gray-500 mb-8 sm:mb-10 leading-relaxed max-w-2xl mx-auto font-medium">
               Mara Photo is India's leading AI-powered guest gallery platform. We empower professional event photographers to automate delivery, simplify billing, and scale studios.
             </p>
-            <div className="flex flex-wrap justify-center gap-4">
+            <div className="flex flex-col xs:flex-row justify-center items-center gap-3 sm:gap-4 w-full max-w-md mx-auto">
               <Link
                 href="/signup"
-                className="font-poppins inline-flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider text-white bg-[#09090b] hover:bg-[#c5a880] hover:text-[#09090b] px-9 py-4 rounded-full transition-all duration-300 shadow-md hover:-translate-y-0.5"
+                className="font-poppins inline-flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider text-white bg-[#09090b] hover:bg-[#c5a880] hover:text-[#09090b] px-7 sm:px-9 py-3.5 sm:py-4 rounded-full transition-all duration-300 shadow-md hover:-translate-y-0.5 w-full xs:w-auto min-h-[44px]"
               >
                 Start Free Account
                 <ArrowRight className="w-4 h-4" />
               </Link>
               <Link
                 href="/#contact"
-                className="font-poppins inline-flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider text-[#09090b] border border-[#09090b]/20 px-9 py-4 rounded-full hover:bg-slate-100 transition-all duration-300"
+                className="font-poppins inline-flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider text-[#09090b] border border-[#09090b]/20 px-7 sm:px-9 py-3.5 sm:py-4 rounded-full hover:bg-slate-100 transition-all duration-300 w-full xs:w-auto min-h-[44px]"
               >
                 Consult Sales
               </Link>
@@ -46,8 +46,8 @@ export default function Page() {
         </section>
 
         {/* Symmetrical Details Grid */}
-        <section className="py-24 bg-white border-b border-[#e3d8c8]/30">
-          <div className="max-w-7xl mx-auto px-6 lg:px-8">
+        <section className="py-16 sm:py-24 bg-white border-b border-[#e3d8c8]/30">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid lg:grid-cols-12 gap-12 lg:gap-16 items-center">
               
               {/* Left Column: Mockup wrapper */}
@@ -100,22 +100,22 @@ export default function Page() {
         </section>
 
         {/* Call To Action Banner */}
-        <section className="bg-[#09090b] py-24 text-white relative overflow-hidden">
+        <section className="bg-[#09090b] py-16 sm:py-24 text-white relative overflow-hidden">
           <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[250px] rounded-full bg-[#c5a880]/10 opacity-30 blur-3xl" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] max-w-full h-[250px] rounded-full bg-[#c5a880]/10 opacity-30 blur-3xl" />
           </div>
           
-          <div className="max-w-4xl mx-auto px-6 text-center relative z-10 space-y-6">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center relative z-10 space-y-6">
             <h2 className="font-serif-luxury text-3xl sm:text-4xl lg:text-5xl font-light text-white">
               Ready to elevate your <span className="italic text-[#c5a880]">client experience?</span>
             </h2>
-            <p className="text-gray-400 font-poppins text-sm sm:text-base max-w-lg mx-auto font-medium">
+            <p className="text-gray-400 font-poppins text-xs sm:text-base max-w-lg mx-auto font-medium">
               Join elite photography studios delivering live moments instantly. Start free today.
             </p>
             <div className="pt-2">
               <Link
                 href="/signup"
-                className="font-poppins inline-flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider text-[#09090b] bg-[#c5a880] hover:bg-white px-9 py-4 rounded-full transition-all duration-300 shadow-md"
+                className="font-poppins inline-flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider text-[#09090b] bg-[#c5a880] hover:bg-white px-7 sm:px-9 py-3.5 sm:py-4 rounded-full transition-all duration-300 shadow-md min-h-[44px] w-full xs:w-auto"
               >
                 Get Started Now
                 <ArrowRight className="w-4 h-4" />

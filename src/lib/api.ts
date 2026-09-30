@@ -1,28 +1,23 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 
-const getApiBaseUrl = (): string => {
+export const getApiBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
-    const host = window.location.hostname;
-    if (
-      host === 'localhost' ||
-      host === '127.0.0.1' ||
-      host.startsWith('192.168.') ||
-      host.startsWith('10.') ||
-      host.startsWith('172.')
-    ) {
-      return `http://${host}:5000/api`;
-    }
+    // In browser: use same-origin '/api' to leverage Next.js rewrite proxy.
+    // This completely eliminates CORS errors, cross-port blocks, and IPv4/IPv6 mismatches.
+    return '/api';
   }
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  // Server-side (Node runtime): use direct localhost/127.0.0.1 or env variable
+  return process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000/api';
 };
 
-const API_BASE_URL = getApiBaseUrl();
+export const API_BASE_URL = getApiBaseUrl();
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000,
 });
 
 // ─── IN-MEMORY API CACHE (Stale-While-Revalidate) ───
@@ -149,12 +144,41 @@ apiClient.interceptors.response.use(
     decrementActiveRequests();
     const originalRequest = error.config;
 
+    // Handle Network Error with seamless fallback between /api proxy and direct backend port 5000
+    if (
+      (error?.message === 'Network Error' || error?.code === 'ERR_NETWORK') &&
+      originalRequest &&
+      !originalRequest._retriedFallback
+    ) {
+      originalRequest._retriedFallback = true;
+      if (typeof window !== 'undefined') {
+        const host = window.location.hostname || '127.0.0.1';
+        const directBase =
+          host === 'localhost' || host === '127.0.0.1'
+            ? 'http://127.0.0.1:5000/api'
+            : `http://${host}:5000/api`;
+        const currentBase = originalRequest.baseURL || '/api';
+        const targetBase = currentBase === '/api' ? directBase : '/api';
+
+        console.warn(
+          `[API] Network error on ${currentBase}${originalRequest.url || ''}. Retrying with fallback: ${targetBase}...`
+        );
+        originalRequest.baseURL = targetBase;
+        return axios(originalRequest);
+      }
+    }
+
     // If we get a 401 and haven't already tried to refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      
+
       const url = originalRequest.url || '';
-      if (url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/me') || url.includes('/auth/refresh-token')) {
+      if (
+        url.includes('/auth/login') ||
+        url.includes('/auth/register') ||
+        url.includes('/auth/me') ||
+        url.includes('/auth/refresh-token')
+      ) {
         return Promise.reject(error);
       }
 
@@ -164,12 +188,17 @@ apiClient.interceptors.response.use(
           throw new Error('No refresh token available');
         }
 
-        const res = await axios.post(`${API_BASE_URL}/auth/refresh-token`, {
+        const refreshUrl =
+          typeof window !== 'undefined'
+            ? '/api/auth/refresh-token'
+            : `${API_BASE_URL}/auth/refresh-token`;
+
+        const res = await axios.post(refreshUrl, {
           refreshToken: refToken,
         });
 
         const { accessToken, refreshToken: newRefreshToken } = res.data;
-        
+
         localStorage.setItem('accessToken', accessToken);
         localStorage.setItem('refreshToken', newRefreshToken);
 
