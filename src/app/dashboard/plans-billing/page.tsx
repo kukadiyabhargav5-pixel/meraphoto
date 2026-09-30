@@ -236,33 +236,44 @@ export default function PlansBillingPage() {
     };
   }, [setStudio]);
 
+  const isBasicActivePlan = activePlanKey === 'BASIC';
+
   // Date calculations
   const renewalDateString = useMemo(() => {
+    if (isBasicActivePlan) return 'Lifetime';
     if (studio?.subscriptionExpiresAt) {
       return new Date(studio.subscriptionExpiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     }
     const d = new Date();
     d.setFullYear(d.getFullYear() + 1);
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  }, [studio?.subscriptionExpiresAt]);
+  }, [studio?.subscriptionExpiresAt, isBasicActivePlan]);
 
   const purchaseDateString = useMemo(() => {
+    if (isBasicActivePlan) {
+      // For Basic: show current date (or subscriptionStartDate if available)
+      if (studio?.subscriptionStartDate) {
+        return new Date(studio.subscriptionStartDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      }
+      return new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
     let d = new Date();
     if (studio?.subscriptionExpiresAt) {
       d = new Date(studio.subscriptionExpiresAt);
       d.setFullYear(d.getFullYear() - 1);
     }
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  }, [studio?.subscriptionExpiresAt]);
+  }, [studio?.subscriptionExpiresAt, studio?.subscriptionStartDate, isBasicActivePlan]);
 
   const daysLeft = useMemo(() => {
+    if (isBasicActivePlan) return -1; // -1 means Lifetime
     if (studio?.subscriptionExpiresAt) {
       const diffTime = new Date(studio.subscriptionExpiresAt).getTime() - new Date().getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       return diffDays > 0 ? diffDays : 0;
     }
     return 365;
-  }, [studio?.subscriptionExpiresAt]);
+  }, [studio?.subscriptionExpiresAt, isBasicActivePlan]);
 
   // Direct Razorpay API Call & Native Checkout Modal Launch
   const handleSelectPlan = async (plan: PlanTier) => {
@@ -494,9 +505,14 @@ export default function PlansBillingPage() {
     try {
       setLoadingCancel(true);
       const res = await apiClient.post('/payment/verify-cancel-otp', { otp: otpString });
-      setSuccessMsg(res.data.message || 'Subscription cancelled. Downgraded to Basic.');
+      setSuccessMsg(res.data.message || 'Subscription cancelled. Downgraded to Basic Free plan.');
       if (setStudio) {
-        setStudio((prev: any) => ({ ...prev, subscriptionPlan: 'BASIC', subscriptionStatus: 'ACTIVE' }));
+        const updatedStudio = res.data.studio;
+        if (updatedStudio) {
+          setStudio(updatedStudio);
+        } else {
+          setStudio((prev: any) => ({ ...prev, subscriptionPlan: 'BASIC', subscriptionStatus: 'ACTIVE', subscriptionStartDate: new Date().toISOString(), subscriptionExpiresAt: null }));
+        }
       }
       setShowOtpModal(false);
       setCancelOtp(['', '', '', '', '', '']);
@@ -802,6 +818,11 @@ export default function PlansBillingPage() {
                   <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
                   <span>👑 Lifetime Free VIP</span>
                 </div>
+              ) : isBasicActivePlan ? (
+                <div className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500/20 via-teal-500/15 to-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm select-none">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Free Forever</span>
+                </div>
               ) : (
                 <button
                   onClick={() => setShowCancelModal(true)}
@@ -844,7 +865,7 @@ export default function PlansBillingPage() {
               <div className="xl:col-span-6 grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4">
                 
                 <div className="premium-meta-card">
-                  <span className="premium-meta-label">{isSuperAdmin ? 'Plan Validity' : 'Purchase Date'}</span>
+                  <span className="premium-meta-label">{isSuperAdmin ? 'Plan Validity' : 'Start Date'}</span>
                   <div className="premium-meta-value">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                     <span>{isSuperAdmin ? 'Lifetime Access' : purchaseDateString}</span>
@@ -852,7 +873,7 @@ export default function PlansBillingPage() {
                 </div>
 
                 <div className="premium-meta-card">
-                  <span className="premium-meta-label">{isSuperAdmin ? 'Storage & Uploads' : 'Next Renewal'}</span>
+                  <span className="premium-meta-label">{isSuperAdmin ? 'Storage & Uploads' : 'End Date'}</span>
                   <div className="premium-meta-value">
                     <Sparkles className="w-4 h-4 text-[#c5a880] shrink-0" />
                     <span>{isSuperAdmin ? '∞ Unlimited' : renewalDateString}</span>
@@ -863,7 +884,7 @@ export default function PlansBillingPage() {
                   <span className="premium-meta-label">{isSuperAdmin ? 'Access Period' : 'Days Left'}</span>
                   <div className="premium-meta-value highlight-value">
                     <Crown className="w-4 h-4 text-[#FFD700] shrink-0" />
-                    <span>{isSuperAdmin ? '∞ Forever' : `${daysLeft} Days`}</span>
+                    <span>{isSuperAdmin ? '∞ Forever' : (daysLeft === -1 ? '∞ Lifetime' : `${daysLeft} Days`)}</span>
                   </div>
                 </div>
 
