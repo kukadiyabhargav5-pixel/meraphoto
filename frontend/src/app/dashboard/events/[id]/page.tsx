@@ -1,0 +1,1823 @@
+'use client';
+import React, { useState, useEffect, use, useRef } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy, ChevronDown, LayoutGrid, Sparkles, Crown, ArrowRight, ShieldCheck, Flame, RefreshCw, ZoomIn, Play, X, Clock } from 'lucide-react';
+import { apiClient } from '@/lib/api';
+import toast from 'react-hot-toast';
+import CustomDatePicker from '../../../../components/CustomDatePicker';
+
+export default function EventUploadPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
+  const eventId = resolvedParams.id;
+
+  const [event, setEvent] = useState<any>(null);
+  const [credits, setCredits] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [showGalleryLink, setShowGalleryLink] = useState(false);
+  const [hasSavedDetails, setHasSavedDetails] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const router = useRouter();
+
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const watermarkInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+
+  const [mediaItems, setMediaItems] = useState<any[]>([]);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [mediaFilter, setMediaFilter] = useState<'ALL' | 'PHOTO' | 'VIDEO'>('ALL');
+
+  // Uncredited media in this event waiting to be saved & deducted
+  const uncreditedPhotos = mediaItems.filter(item => item.type === 'PHOTO' && item.creditDeducted === false);
+  const uncreditedVideos = mediaItems.filter(item => item.type === 'VIDEO' && item.creditDeducted === false);
+  const pendingPhotosCount = credits?.photos?.pendingSave !== undefined ? credits.photos.pendingSave : uncreditedPhotos.length;
+  const pendingVideosCount = credits?.videos?.pendingSave !== undefined ? credits.videos.pendingSave : uncreditedVideos.length;
+
+  const currentPhotoRemaining = credits?.photos?.remaining !== undefined ? credits.photos.remaining : 0;
+  const projectedPhotoRemaining = credits?.photos?.projectedRemaining !== undefined ? credits.photos.projectedRemaining : Math.max(0, currentPhotoRemaining - pendingPhotosCount);
+
+  const currentVideoRemaining = credits?.videos?.remaining !== undefined ? credits.videos.remaining : 0;
+  const projectedVideoRemaining = credits?.videos?.projectedRemaining !== undefined ? credits.videos.projectedRemaining : Math.max(0, currentVideoRemaining - pendingVideosCount);
+
+  // Credit limit flags
+  const isPhotoLimitReached = projectedPhotoRemaining <= 0 && credits?.photos?.remaining !== undefined;
+  const isVideoLimitReached = projectedVideoRemaining <= 0 && credits?.videos?.remaining !== undefined;
+  const isAllCreditsExhausted = isPhotoLimitReached && isVideoLimitReached;
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+  const [previewMedia, setPreviewMedia] = useState<any>(null);
+
+  const toggleSelection = (id: string) => {
+    setSelectedMediaIds(prev => 
+      prev.includes(id) ? prev.filter(mediaId => mediaId !== id) : [...prev, id]
+    );
+  };
+
+  const fetchCredits = async () => {
+    try {
+      const res = await apiClient.get('/studio/credits');
+      if (res.data && res.data.credits) {
+        setCredits(res.data.credits);
+      }
+    } catch (err) {
+      console.error('Failed to fetch studio credits:', err);
+    }
+  };
+
+  const handleDeleteMedia = async (ids: string[]) => {
+    if (!confirm(`Are you sure you want to delete ${ids.length} media item(s)?`)) return;
+    setIsDeleting(true);
+    try {
+      if (ids.length === 1) {
+        await apiClient.delete(`/media/${ids[0]}`);
+      } else {
+        await apiClient.delete(`/media/event/${event?._id}/media`, { data: { mediaIds: ids } });
+      }
+      toast.success('Media deleted successfully');
+      setSelectedMediaIds([]);
+      setIsSelectionMode(false);
+      fetchEventDetails();
+      fetchCredits();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to delete media');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const fetchEventDetails = async () => {
+    try {
+      const res = await apiClient.get(`/event/code/${eventId}`);
+      if (res.data && res.data.event) {
+        setEvent(res.data.event);
+        try {
+           const mediaRes = await apiClient.get(`/media/event/${res.data.event._id}`);
+           if (mediaRes.data && mediaRes.data.media) setMediaItems(mediaRes.data.media);
+        } catch (me) {
+           console.error("Failed to fetch media", me);
+        }
+      }
+      fetchCredits();
+    } catch (error) {
+      console.error('Failed to fetch event:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !event) return;
+
+    // Block upload if credits are exhausted
+    const hasVideos = Array.from(files).some(f => f.type.startsWith('video/'));
+    const hasPhotos = Array.from(files).some(f => f.type.startsWith('image/'));
+    if (hasPhotos && isPhotoLimitReached) {
+      toast.error('📸 Photo credits exhausted! Please upgrade your plan to upload more photos.', { duration: 5000 });
+      e.target.value = '';
+      return;
+    }
+    if (hasVideos && isVideoLimitReached) {
+      toast.error('🎬 Video credits exhausted! Please upgrade your plan to upload more videos.', { duration: 5000 });
+      e.target.value = '';
+      return;
+    }
+    if (type === 'FOLDER' && isAllCreditsExhausted) {
+      toast.error('⚠️ All storage credits exhausted! Please upgrade your plan to continue uploading.', { duration: 5000 });
+      e.target.value = '';
+      return;
+    }
+    
+    setUploadingMedia(true);
+    setUploadProgress({ current: 0, total: files.length });
+    
+    try {
+      // 1. Get ImageKit Auth parameters for all files
+      const authRes = await apiClient.get(`/media/imagekit-auth?count=${files.length}`);
+      const signatures = authRes.data.signatures || [authRes.data];
+      const IMAGEKIT_PUBLIC_KEY = "public_2AYAbqW1EUFL0ejxVPrCgx06Es0=";
+
+      const imageCompression = (await import('browser-image-compression')).default;
+      const fileArray = Array.from(files);
+      const mediaList: any[] = [];
+      let successful = 0;
+      let failed = 0;
+      let currentFileIndex = 0;
+      const concurrency = 6; // 6 parallel uploads for max speed without rate limiting
+
+      const worker = async () => {
+        while (currentFileIndex < fileArray.length) {
+          const idx = currentFileIndex++;
+          const file = fileArray[idx];
+          const authParams = signatures[idx] || signatures[0];
+
+          let fileToUpload: File | Blob = file;
+          const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|avi|mkv|webm|m4v|3gp)$/i.test(file.name);
+          const isPhoto = !isVideo && (file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic|heif|bmp|tiff)$/i.test(file.name));
+
+          // ── Strict Maximum 2MB compression for photos ──
+          if (isPhoto) {
+            const TWO_MB = 2 * 1024 * 1024;
+            if (file.size > TWO_MB) {
+              try {
+                // Pass 1: Target 1.9MB (max 2560px, quality 0.85)
+                let compressedBlob = await imageCompression(file, {
+                  maxSizeMB: 1.9,
+                  maxWidthOrHeight: 2560,
+                  useWebWorker: true,
+                  fileType: 'image/jpeg',
+                  initialQuality: 0.85
+                });
+                // Pass 2: If still > 2MB, target 1.75MB (max 2048px, quality 0.75)
+                if (compressedBlob.size > TWO_MB) {
+                  compressedBlob = await imageCompression(new File([compressedBlob], file.name, { type: 'image/jpeg' }), {
+                    maxSizeMB: 1.75,
+                    maxWidthOrHeight: 2048,
+                    useWebWorker: true,
+                    fileType: 'image/jpeg',
+                    initialQuality: 0.75
+                  });
+                }
+                // Pass 3: Strict guarantee <= 1.6MB if still over
+                if (compressedBlob.size > TWO_MB) {
+                  compressedBlob = await imageCompression(new File([compressedBlob], file.name, { type: 'image/jpeg' }), {
+                    maxSizeMB: 1.6,
+                    maxWidthOrHeight: 1920,
+                    useWebWorker: true,
+                    fileType: 'image/jpeg',
+                    initialQuality: 0.65
+                  });
+                }
+                fileToUpload = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' });
+              } catch (compErr) {
+                console.warn('Photo compression fallback:', compErr);
+              }
+            }
+          }
+
+          const formData = new FormData();
+          formData.append('file', fileToUpload);
+          formData.append('publicKey', IMAGEKIT_PUBLIC_KEY);
+          formData.append('signature', authParams.signature);
+          formData.append('expire', authParams.expire.toString());
+          formData.append('token', authParams.token);
+          formData.append('fileName', file.name);
+          formData.append('folder', `mara-photo/events/${event._id}/${isVideo ? 'videos' : 'photos'}`);
+          formData.append('useUniqueFileName', 'true');
+
+          try {
+            const response = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+              method: 'POST',
+              body: formData,
+            });
+
+            if (!response.ok) {
+              // Resilient fallback to backend endpoint if direct ImageKit upload fails
+              const backendForm = new FormData();
+              backendForm.append('file', fileToUpload, file.name);
+              if (file.webkitRelativePath) {
+                backendForm.append('folderPaths', file.webkitRelativePath);
+              }
+              const backendRes = await apiClient.post(`/media/event/${event._id}/upload`, backendForm, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+              });
+              if (backendRes.data && backendRes.data.media) {
+                mediaList.push(backendRes.data.media[0]);
+                successful++;
+                continue;
+              } else {
+                throw new Error(`Upload failed with status ${response.status}`);
+              }
+            }
+            const data = await response.json();
+            mediaList.push({
+              url: data.url,
+              publicId: data.fileId,
+              type: isVideo ? 'VIDEO' : 'PHOTO',
+              size: fileToUpload.size,
+              folderPath: file.webkitRelativePath || ''
+            });
+            successful++;
+          } catch (uploadErr) {
+            console.error('Upload failed for file:', file.name, uploadErr);
+            failed++;
+          } finally {
+            setUploadProgress(prev => ({ ...prev, current: prev.current + 1 }));
+          }
+        }
+      };
+
+      // Launch parallel workers for maximum speed
+      const workerCount = Math.min(concurrency, fileArray.length);
+      await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+      // ── Upload complete: show 100% briefly then auto-dismiss ──
+      // Set uploadComplete flag so the UI shows "Upload Complete!" state
+      setUploadProgress(prev => ({ ...prev, current: prev.total })); // Ensure 100%
+      
+      // Dismiss the upload modal after a brief success flash (1.5s)
+      setTimeout(() => {
+        setUploadingMedia(false);
+        setUploadProgress({ current: 0, total: 0 });
+      }, 1500);
+
+      // Run post-upload tasks in background (don't block the UI)
+      try {
+        if (mediaList.length > 0) {
+          await apiClient.post(`/media/event/${event._id}/bulk-create`, { mediaList });
+        }
+        
+        if (failed > 0) {
+          toast.error(`Uploaded ${successful}, failed ${failed}`);
+        } else {
+          toast.success(`Successfully uploaded ${files.length} file${files.length > 1 ? 's' : ''}! Click "Save Event Details" to save & deduct credits.`, { duration: 5000 });
+        }
+        
+        // Refresh event data & credits in background
+        fetchEventDetails();
+        fetchCredits();
+        window.dispatchEvent(new Event('studio_plan_updated'));
+      } catch (postErr: any) {
+        console.error('Post-upload processing error:', postErr);
+        toast.error('Files uploaded but saving to database may have failed. Please refresh the page.');
+      }
+    } catch (err: any) {
+       console.error('Upload error:', err);
+       toast.error(err?.response?.data?.error || err.message || 'Upload failed. Please check console.');
+       setUploadingMedia(false);
+       setUploadProgress({ current: 0, total: 0 });
+    } finally {
+       if (e.target) e.target.value = '';
+    }
+  };
+
+  // Auto-refresh and real-time polling
+  useEffect(() => {
+    // Real-time credits polling (every 5 seconds)
+    const creditInterval = setInterval(() => {
+      fetchCredits();
+    }, 5000);
+
+    const hasPending = mediaItems.some(item => item.processedStatus === 'PENDING' || item.processedStatus === 'PROCESSING');
+    if (!hasPending || !event?._id) {
+      return () => clearInterval(creditInterval);
+    }
+
+    // Pending media polling
+    const interval = setInterval(() => {
+      apiClient.get(`/media/event/${event._id}`).then(res => {
+        if (res.data && res.data.media) {
+          setMediaItems(res.data.media);
+        }
+      }).catch(err => console.error('Polling error', err));
+    }, 3000);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(creditInterval);
+    };
+  }, [mediaItems, event?._id]);
+
+  const getPreviewPosition = (pos: string) => {
+    switch (pos) {
+      case 'TOP_LEFT':
+        return { top: '5%', left: '5%', right: 'auto', bottom: 'auto', transform: 'none' };
+      case 'TOP_RIGHT':
+        return { top: '5%', right: '5%', left: 'auto', bottom: 'auto', transform: 'none' };
+      case 'TOP':
+      case 'TOP_CENTER':
+        return { top: '5%', left: '50%', right: 'auto', bottom: 'auto', transform: 'translateX(-50%)' };
+      case 'BOTTOM_LEFT':
+        return { bottom: '5%', left: '5%', right: 'auto', top: 'auto', transform: 'none' };
+      case 'CENTER':
+        return { top: '50%', left: '50%', right: 'auto', bottom: 'auto', transform: 'translate(-50%, -50%)' };
+      case 'BOTTOM':
+      case 'BOTTOM_CENTER':
+        return { bottom: '5%', left: '50%', right: 'auto', top: 'auto', transform: 'translateX(-50%)' };
+      case 'BOTTOM_RIGHT':
+      default:
+        return { bottom: '5%', right: '5%', left: 'auto', top: 'auto', transform: 'none' };
+    }
+  };
+
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const handleWatermarkLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploadingLogo(true);
+      const formData = new FormData();
+      formData.append('image', file);
+      
+      const res = await apiClient.post('/dashboard/upload-asset', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      if (res.data && res.data.url) {
+        setFormData(prev => ({...prev, watermarkLogoUrl: res.data.url}));
+        toast.success('Logo uploaded successfully');
+      }
+    } catch (err) {
+      console.error('Logo upload error:', err);
+      toast.error('Failed to upload logo');
+    } finally {
+      setUploadingLogo(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const [formData, setFormData] = useState({
+    name: '',
+    clientName: '',
+    clientMobile: '',
+    clientEmail: '',
+    date: '',
+    type: 'WEDDING',
+    location: '',
+    accessType: 'PUBLIC',
+    password: '',
+    customWatermark: false,
+    addToPortfolio: false,
+    coverImageUrl: '',
+    watermarkType: 'LOGO',
+    watermarkText: '',
+    watermarkLogoUrl: '',
+    watermarkPosition: 'BOTTOM_RIGHT',
+    watermarkWidth: 20,
+    watermarkOpacity: 50
+  });
+
+  const EVENT_TYPES = [
+    'WEDDING', 'PRE WEDDING', 'RECEPTION', 'BIRTHDAY', 'CORPORATE', 
+    'SCHOOL', 'GARBA', 'CONCERT', 'RELIGIOUS', 'ENGAGEMENT', 
+    'BABY SHOWER', 'PANCHMASI'
+  ];
+  const [isCustomType, setIsCustomType] = useState(false);
+
+  useEffect(() => {
+    if (event) {
+      const isCustom = !!event.type && !EVENT_TYPES.includes(event.type);
+      setIsCustomType(isCustom);
+      setFormData({
+        name: event.name || '',
+        clientName: event.clientName || '',
+        clientMobile: event.clientMobile || '',
+        clientEmail: event.clientEmail || '',
+        date: event.date ? new Date(event.date).toISOString().split('T')[0] : '',
+        type: event.type || 'WEDDING',
+        location: event.location || '',
+        accessType: event.accessType || 'PUBLIC',
+        password: '',
+        customWatermark: !!event.watermark?.isActive,
+        addToPortfolio: !!event.addToPortfolio,
+        coverImageUrl: event.coverImageUrl || '',
+        watermarkType: event.watermark?.type || 'LOGO',
+        watermarkText: event.watermark?.text || '',
+        watermarkLogoUrl: event.watermark?.logoUrl || '',
+        watermarkPosition: event.watermark?.position || 'BOTTOM_RIGHT',
+        watermarkWidth: event.watermark?.width || 20,
+        watermarkOpacity: (event.watermark?.opacity !== undefined ? event.watermark.opacity * 100 : 50)
+      });
+    }
+  }, [event]);
+
+  useEffect(() => {
+    fetchEventDetails();
+    fetchCredits();
+
+    // Instant Live Plan & Credit Sync Listeners
+    const handlePlanUpdated = () => {
+      fetchCredits();
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchCredits();
+      }
+    };
+
+    window.addEventListener('focus', handlePlanUpdated);
+    window.addEventListener('storage', handlePlanUpdated);
+    window.addEventListener('studio_plan_updated', handlePlanUpdated);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    // Live sync polling every 10s so changes elsewhere sync instantly without delay
+    const interval = setInterval(fetchCredits, 10000);
+
+    return () => {
+      window.removeEventListener('focus', handlePlanUpdated);
+      window.removeEventListener('storage', handlePlanUpdated);
+      window.removeEventListener('studio_plan_updated', handlePlanUpdated);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      clearInterval(interval);
+    };
+  }, [eventId]);
+
+  if (loading) {
+    return (
+      <div className="flex-1 bg-white p-8 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
+      </div>
+    );
+  }
+
+  if (!event) {
+    return (
+      <div className="flex-1 bg-white p-8">
+        <h1 className="text-2xl font-bold text-slate-900">Event not found</h1>
+        <Link href="/dashboard/events" className="inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-slate-900 hover:text-slate-700 text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer mt-4">
+          <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
+          <span>Back to Events</span>
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-3 xs:p-4 md:p-8 font-poppins">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
+        
+        {/* Top Header Row */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-4">
+            <Link href="/dashboard/events" className="inline-flex w-fit items-center gap-1.5 px-3 sm:px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-slate-900 hover:text-slate-700 text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer min-h-[44px]">
+              <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
+              <span>Back to Events</span>
+            </Link>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 border-l-2 border-slate-200 pl-3 sm:pl-4">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight">{event.name}</h1>
+              {(() => {
+                const baseDateStr = event.date || event.createdAt;
+                if (!baseDateStr) return null;
+                const baseDate = new Date(baseDateStr);
+                const now = new Date();
+                const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+                const baseMidnight = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()).getTime();
+                const diffDays = Math.floor((todayMidnight - baseMidnight) / (1000 * 60 * 60 * 24));
+                const days = diffDays <= 0 ? 30 : Math.max(0, 30 - diffDays);
+                const label = days === 0 ? 'Expires today' : `${days} ${days === 1 ? 'day' : 'days'} left`;
+                return (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200/80 shadow-xs">
+                    <Clock className={`w-3.5 h-3.5 ${days <= 5 ? 'text-rose-500 animate-pulse' : 'text-[#c5a880]'}`} />
+                    <span>{label}</span>
+                  </span>
+                );
+              })()}
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              onClick={() => { fetchEventDetails(); fetchCredits(); }}
+              className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-[#c5a880] hover:border-[#c5a880]/40 transition-all shadow-xs cursor-pointer"
+              title="Refresh Storage Credits & Media"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Sleek, Ultra-Modern Storage Credits Box */}
+        <div className="w-full max-w-4xl mx-auto p-[1px] rounded-3xl bg-gradient-to-r from-[#c5a880]/30 via-white/10 to-[#c5a880]/40 shadow-[0_15px_40px_rgba(0,0,0,0.4)] hover:shadow-[0_20px_50px_rgba(197,168,128,0.18)] transition-all duration-500 group relative">
+          
+          <div className="w-full bg-[#0b0b0e]/95 backdrop-blur-2xl text-white rounded-[23px] p-4 sm:p-5 relative overflow-hidden">
+            {/* Ambient Animated Aura Lighting */}
+            <div className="absolute -top-24 -right-24 w-60 h-60 bg-gradient-to-br from-[#c5a880]/20 via-[#f3d9a2]/10 to-transparent rounded-full blur-[65px] pointer-events-none animate-aura-breathe" />
+            <div className="absolute -bottom-24 -left-24 w-60 h-60 bg-gradient-to-tr from-[#9c7c56]/20 via-[#c5a880]/10 to-transparent rounded-full blur-[65px] pointer-events-none animate-aura-breathe [animation-delay:2.5s]" />
+            
+            {/* Subtle Grid / Starfield Overlay */}
+            <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none opacity-60" />
+            
+            {/* Glowing Accent Top Beam */}
+            <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#c5a880] to-transparent animate-beam-scan pointer-events-none" />
+
+            {/* Header Row */}
+            <div className="flex flex-row items-center justify-between gap-3 pb-3 border-b border-white/[0.08] relative z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-[#2a241d] to-[#141312] text-[#e6d0a7] border border-[#c5a880]/40 flex items-center justify-center shadow-[0_0_15px_rgba(197,168,128,0.25)] shrink-0 relative group/icon">
+                  <div className="absolute inset-0 rounded-xl bg-[#c5a880]/20 blur-sm opacity-0 group-hover/icon:opacity-100 transition-opacity duration-300" />
+                  <Sparkles className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-[#f3d9a2] animate-pulse-soft relative z-10" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs sm:text-sm font-black uppercase tracking-[0.16em] bg-gradient-to-r from-amber-100 via-[#f5deb3] to-[#c5a880] bg-clip-text text-transparent drop-shadow-sm leading-none">
+                      {credits?.planName || 'Standard'} Plan Storage
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
+                    </span>
+                    <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium tracking-wide">
+                      Live Balance • Deducts on event save
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* White Luxe Upgrade Button */}
+              <Link
+                href="/dashboard/plans-billing"
+                className="relative overflow-hidden group/btn inline-flex items-center gap-2 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-950 text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all duration-300 shadow-[0_4px_16px_rgba(255,255,255,0.25)] hover:shadow-[0_6px_25px_rgba(255,255,255,0.45)] hover:-translate-y-0.5 active:translate-y-0 border border-white shrink-0 cursor-pointer"
+              >
+                {/* Gloss sweep effect */}
+                <div className="absolute inset-0 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-black/10 to-transparent pointer-events-none" />
+                <Crown className="w-3.5 h-3.5 text-amber-500 fill-amber-500 drop-shadow-xs" />
+                <span className="font-extrabold tracking-wide">Upgrade</span>
+                <ArrowRight className="w-3.5 h-3.5 stroke-[2.5] text-slate-950 group-hover/btn:translate-x-0.5 transition-transform" />
+              </Link>
+            </div>
+
+            {/* 2 Credit Metric Cards: Photos & Videos */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-3.5 relative z-10">
+              
+              {/* Photo Credits Card */}
+              <div className={`relative rounded-2xl p-3.5 sm:p-4 bg-gradient-to-b from-white/[0.06] via-white/[0.02] to-transparent border transition-all duration-300 group/card shadow-md hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col justify-between space-y-3 ${pendingPhotosCount > 0 ? 'border-amber-500/50 ring-1 ring-amber-500/30' : 'border-white/10 hover:border-[#c5a880]/50'}`}>
+                {/* Glowing top line highlight */}
+                <div className={`absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent ${pendingPhotosCount > 0 ? 'via-amber-400 opacity-100' : 'via-[#c5a880]/40 group-hover/card:via-[#c5a880] opacity-70 group-hover/card:opacity-100'} transition-all duration-500`} />
+                
+                {/* Card Top Row */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#c5a880]/20 to-[#c5a880]/5 border border-[#c5a880]/30 flex items-center justify-center text-[#e6d0a7] shadow-[0_0_10px_rgba(197,168,128,0.15)]">
+                      <ImageIcon className="w-3 h-3" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-300 group-hover/card:text-white transition-colors tracking-wider uppercase">
+                      Photos
+                    </span>
+                  </div>
+
+                  {pendingPhotosCount > 0 ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border text-amber-300 bg-amber-500/20 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)] animate-pulse">
+                      ⏳ {pendingPhotosCount} Pending Save
+                    </span>
+                  ) : (
+                    <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border transition-all duration-300 ${isPhotoLimitReached ? 'text-red-400 bg-red-500/15 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'text-[#f5deb3] bg-[#c5a880]/15 border-[#c5a880]/30 shadow-[0_0_10px_rgba(197,168,128,0.12)] group-hover/card:border-[#c5a880]/60'}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+                      {credits?.photos ? `${Number(currentPhotoRemaining).toLocaleString('en-IN')} Left` : 'Active'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Primary Numbers */}
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl sm:text-3xl font-black text-white tracking-tight font-mono group-hover/card:text-[#fef3c7] transition-colors leading-none" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {Number(currentPhotoRemaining).toLocaleString('en-IN')}
+                    </span>
+                    <span className="text-xs sm:text-sm text-slate-400 font-bold font-mono tracking-wide">
+                      / {credits?.photos?.totalLimit ? Number(credits.photos.totalLimit).toLocaleString('en-IN') : '---'}
+                    </span>
+                  </div>
+
+                  {pendingPhotosCount > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono font-bold text-amber-300/90 pt-0.5">
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                        ⚡ -{pendingPhotosCount} on Save
+                      </span>
+                      <span className="text-slate-300 flex items-center gap-1">
+                        → <strong className="text-white font-black bg-white/10 px-1.5 py-0.5 rounded">{Number(projectedPhotoRemaining).toLocaleString('en-IN')}</strong> Remaining
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* High-Tech Animated Progress Bar */}
+                <div className="space-y-1.5">
+                  <div className="relative w-full bg-black/60 rounded-full h-2 p-[1px] overflow-hidden border border-white/10 shadow-inner">
+                    <div 
+                      className="bg-gradient-to-r from-[#9c7c56] via-[#c5a880] to-[#fde68a] h-full rounded-full transition-all duration-700 ease-out relative overflow-hidden animate-progress-stripe shadow-[0_0_10px_rgba(197,168,128,0.5)]"
+                      style={{ 
+                        width: (credits?.photos?.used || 0) > 0 
+                          ? `${Math.min(100, Math.max(2, credits?.photos?.percentUsed || 0))}%` 
+                          : '0%' 
+                      }}
+                    >
+                      {/* Sweeping Shimmer Highlight */}
+                      <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-credit-shimmer" />
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-mono tracking-wide text-slate-400">
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#c5a880]" />
+                      {(credits?.photos?.used || 0) > 0 ? `${credits.photos.used} Used (${(credits.photos.percentUsed || 0) < 0.01 ? '0.01%' : `${credits.photos.percentUsed}%`})` : '0 Used'}
+                    </span>
+                    {pendingPhotosCount > 0 ? (
+                      <span className="text-amber-400 font-bold flex items-center gap-1 animate-pulse">
+                        +{pendingPhotosCount} queued
+                      </span>
+                    ) : (
+                      <span className="text-slate-500 group-hover/card:text-slate-400 transition-colors">
+                        {100 - Math.min(100, Math.round(credits?.photos?.percentUsed || 0))}% Available
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Video Credits Card */}
+              <div className={`relative rounded-2xl p-3.5 sm:p-4 bg-gradient-to-b from-white/[0.06] via-white/[0.02] to-transparent border transition-all duration-300 group/card shadow-md hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col justify-between space-y-3 ${pendingVideosCount > 0 ? 'border-amber-500/50 ring-1 ring-amber-500/30' : 'border-white/10 hover:border-[#c5a880]/50'}`}>
+                {/* Glowing top line highlight */}
+                <div className={`absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent ${pendingVideosCount > 0 ? 'via-amber-400 opacity-100' : 'via-[#c5a880]/40 group-hover/card:via-[#c5a880] opacity-70 group-hover/card:opacity-100'} transition-all duration-500`} />
+                
+                {/* Card Top Row */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#c5a880]/20 to-[#c5a880]/5 border border-[#c5a880]/30 flex items-center justify-center text-[#e6d0a7] shadow-[0_0_10px_rgba(197,168,128,0.15)]">
+                      <Video className="w-3 h-3" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-300 group-hover/card:text-white transition-colors tracking-wider uppercase">
+                      Videos
+                    </span>
+                  </div>
+
+                  {pendingVideosCount > 0 ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border text-amber-300 bg-amber-500/20 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)] animate-pulse">
+                      ⏳ {pendingVideosCount} Pending Save
+                    </span>
+                  ) : (
+                    <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border transition-all duration-300 ${isVideoLimitReached ? 'text-red-400 bg-red-500/15 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'text-[#f5deb3] bg-[#c5a880]/15 border-[#c5a880]/30 shadow-[0_0_10px_rgba(197,168,128,0.12)] group-hover/card:border-[#c5a880]/60'}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+                      {credits?.videos ? `${Number(currentVideoRemaining)} Left` : 'Active'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Primary Numbers */}
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl sm:text-3xl font-black text-white tracking-tight font-mono group-hover/card:text-[#fef3c7] transition-colors leading-none" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {Number(currentVideoRemaining)}
+                    </span>
+                    <span className="text-xs sm:text-sm text-slate-400 font-bold font-mono tracking-wide">
+                      / {credits?.videos?.totalLimit ? Number(credits.videos.totalLimit) : '---'}
+                    </span>
+                  </div>
+
+                  {pendingVideosCount > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono font-bold text-amber-300/90 pt-0.5">
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                        ⚡ -{pendingVideosCount} on Save
+                      </span>
+                      <span className="text-slate-300 flex items-center gap-1">
+                        → <strong className="text-white font-black bg-white/10 px-1.5 py-0.5 rounded">{Number(projectedVideoRemaining)}</strong> Remaining
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* High-Tech Animated Progress Bar */}
+                <div className="space-y-1.5">
+                  <div className="relative w-full bg-black/60 rounded-full h-2 p-[1px] overflow-hidden border border-white/10 shadow-inner">
+                    <div 
+                      className="bg-gradient-to-r from-[#9c7c56] via-[#c5a880] to-[#fde68a] h-full rounded-full transition-all duration-700 ease-out relative overflow-hidden animate-progress-stripe shadow-[0_0_10px_rgba(197,168,128,0.5)]"
+                      style={{ 
+                        width: (credits?.videos?.used || 0) > 0 
+                          ? `${Math.min(100, Math.max(2, credits?.videos?.percentUsed || 0))}%` 
+                          : '0%' 
+                      }}
+                    >
+                      {/* Sweeping Shimmer Highlight */}
+                      <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-credit-shimmer" />
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-mono tracking-wide text-slate-400">
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#c5a880]" />
+                      {(credits?.videos?.used || 0) > 0 ? `${credits.videos.used} Used (${(credits.videos.percentUsed || 0) < 0.01 ? '0.01%' : `${credits.videos.percentUsed}%`})` : '0 Used'}
+                    </span>
+                    {pendingVideosCount > 0 ? (
+                      <span className="text-amber-400 font-bold flex items-center gap-1 animate-pulse">
+                        +{pendingVideosCount} queued
+                      </span>
+                    ) : (
+                      <span className="text-slate-500 group-hover/card:text-slate-400 transition-colors">
+                        {100 - Math.min(100, Math.round(credits?.videos?.percentUsed || 0))}% Available
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        {/* 2-Column Content Layout (Upload Media & Media Files on Left, Edit Event Details on Right - level with each other!) */}
+        <div className="flex flex-col lg:flex-row gap-8 items-start">
+          
+          {/* Left Column: Upload Media & Media Files */}
+          <div className="flex-1 flex flex-col min-w-0 w-full">
+            <div className="bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-2xl p-8 shadow-sm mb-8">
+            <div className="flex flex-col items-center justify-center mb-8">
+              <Upload className="h-10 w-10 text-[#c5a880] mb-4" />
+              <h2 className="text-xl font-bold text-slate-900 mb-2">Upload Media</h2>
+              <p className="text-sm text-slate-500">Select a category below or drag and drop files.</p>
+            </div>
+
+            {/* Credit Exhausted Warning Banner */}
+            {isAllCreditsExhausted && (
+              <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-5 h-5 text-red-500" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-red-700">All Storage Credits Exhausted</p>
+                  <p className="text-xs text-red-500 mt-0.5">Your photo and video upload limits have been reached. Upgrade your plan to continue uploading.</p>
+                </div>
+                <Link href="/dashboard/plans-billing" className="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-bold uppercase tracking-wider transition-colors shrink-0">
+                  Upgrade
+                </Link>
+              </div>
+            )}
+            {!isAllCreditsExhausted && (isPhotoLimitReached || isVideoLimitReached) && (
+              <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                  <Flame className="w-5 h-5 text-amber-500" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-amber-700">
+                    {isPhotoLimitReached ? 'Photo' : 'Video'} Credits Exhausted
+                  </p>
+                  <p className="text-xs text-amber-600 mt-0.5">
+                    Your {isPhotoLimitReached ? 'photo' : 'video'} upload limit has been reached. You can still upload {isPhotoLimitReached ? 'videos' : 'photos'}. Upgrade your plan for more credits.
+                  </p>
+                </div>
+                <Link href="/dashboard/plans-billing" className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold uppercase tracking-wider transition-colors shrink-0">
+                  Upgrade
+                </Link>
+              </div>
+            )}
+
+            {/* Pending Save Alert Banner */}
+            {(pendingPhotosCount > 0 || pendingVideosCount > 0) && (
+              <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-transparent border border-amber-400/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm backdrop-blur-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center shrink-0 text-amber-600 shadow-inner">
+                    <Sparkles className="w-5 h-5 animate-pulse text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                      <span>
+                        {pendingPhotosCount > 0 && `${pendingPhotosCount} Photo${pendingPhotosCount > 1 ? 's' : ''}`}
+                        {pendingPhotosCount > 0 && pendingVideosCount > 0 && ' & '}
+                        {pendingVideosCount > 0 && `${pendingVideosCount} Video${pendingVideosCount > 1 ? 's' : ''}`} Uploaded
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 font-mono font-bold">
+                        Pending Save
+                      </span>
+                    </p>
+                    <p className="text-[11px] text-slate-600 font-medium mt-0.5">
+                      Your credit balance will deduct <strong className="text-slate-900 font-bold">{pendingPhotosCount > 0 ? `-${pendingPhotosCount} photo credit${pendingPhotosCount > 1 ? 's' : ''}` : ''}</strong> once you click <strong>Save Event Details</strong>.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const btn = document.getElementById('save-event-button');
+                    btn?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    btn?.focus();
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-[#c5a880] hover:bg-[#b69970] text-[#09090b] text-[11px] font-black uppercase tracking-wider transition-all shadow-md hover:shadow-lg shrink-0 self-end sm:self-auto cursor-pointer"
+                >
+                  Save Event Details →
+                </button>
+              </div>
+            )}
+
+            {/* Real-time Upload Progress Banner */}
+            {uploadingMedia && (
+              <div className={`mb-6 p-5 rounded-2xl bg-white border-2 shadow-xl animate-in fade-in zoom-in-95 duration-300 ${
+                uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                  ? 'border-emerald-400'
+                  : 'border-[#c5a880]'
+              }`}>
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="flex items-center gap-2.5">
+                    {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total ? (
+                      <Check className="w-5 h-5 text-emerald-500 stroke-[3]" />
+                    ) : (
+                      <Loader2 className="w-5 h-5 text-[#c5a880] animate-spin" />
+                    )}
+                    <span className={`text-sm font-black ${
+                      uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                        ? 'text-emerald-600'
+                        : 'text-slate-900'
+                    }`}>
+                      {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                        ? 'Upload Complete!'
+                        : 'Uploading Media...'}
+                    </span>
+                  </div>
+                  <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded-lg border ${
+                    uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                      ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                      : 'bg-[#c5a880]/10 text-[#c5a880] border-[#c5a880]/25'
+                  }`}>
+                    {uploadProgress.total > 0 ? Math.round((uploadProgress.current / uploadProgress.total) * 100) : 0}%
+                  </span>
+                </div>
+                {/* Progress bar */}
+                <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mb-2.5 border border-slate-200">
+                  <div 
+                    className={`h-full transition-all duration-300 rounded-full relative ${
+                      uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                        ? 'bg-gradient-to-r from-emerald-400 to-emerald-500'
+                        : 'bg-gradient-to-r from-[#c5a880] to-[#b09672]'
+                    }`}
+                    style={{ width: `${uploadProgress.total > 0 ? Math.round((uploadProgress.current / uploadProgress.total) * 100) : 0}%` }}
+                  >
+                    {!(uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total) && (
+                      <div className="absolute inset-0 bg-white/30 animate-pulse" />
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-xs font-bold text-slate-500">
+                  <span>
+                    {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
+                      ? `All ${uploadProgress.total} files uploaded ✓`
+                      : `File ${uploadProgress.current} of ${uploadProgress.total}`}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative">
+              <input type="file" {...{ webkitdirectory: "true", directory: "true" }} multiple ref={folderInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'FOLDER')} />
+              <input type="file" accept="image/*" multiple ref={photoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'PHOTO')} />
+              <input type="file" accept="video/*" multiple ref={videoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'VIDEO')} />
+
+              <div 
+                onClick={() => {
+                  if (isAllCreditsExhausted) {
+                    toast.error('⚠️ All storage credits exhausted! Please upgrade your plan.', { duration: 4000 });
+                    return;
+                  }
+                  folderInputRef.current?.click();
+                }}
+                className={`border rounded-xl p-6 flex flex-col items-center justify-center transition-all group ${
+                  isAllCreditsExhausted 
+                    ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-50' 
+                    : 'bg-white border-slate-200 cursor-pointer hover:border-[#c5a880] hover:shadow-md'
+                }`}
+              >
+                <FolderUp className={`h-8 w-8 mb-3 transition-colors ${isAllCreditsExhausted ? 'text-slate-300' : 'text-slate-400 group-hover:text-[#c5a880]'}`} />
+                <span className={`font-bold text-sm ${isAllCreditsExhausted ? 'text-slate-400' : 'text-slate-700'}`}>Entire Folder</span>
+                {isAllCreditsExhausted && <span className="text-[10px] font-bold text-red-400 mt-1 uppercase">Credits Exhausted</span>}
+              </div>
+              <div 
+                onClick={() => {
+                  if (isPhotoLimitReached) {
+                    toast.error('📸 Photo credits exhausted! Please upgrade your plan to upload more photos.', { duration: 4000 });
+                    return;
+                  }
+                  photoInputRef.current?.click();
+                }}
+                className={`border rounded-xl p-6 flex flex-col items-center justify-center transition-all group ${
+                  isPhotoLimitReached 
+                    ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-50' 
+                    : 'bg-white border-slate-200 cursor-pointer hover:border-[#c5a880] hover:shadow-md'
+                }`}
+              >
+                <ImageIcon className={`h-8 w-8 mb-3 transition-colors ${isPhotoLimitReached ? 'text-slate-300' : 'text-slate-400 group-hover:text-[#c5a880]'}`} />
+                <span className={`font-bold text-sm ${isPhotoLimitReached ? 'text-slate-400' : 'text-slate-700'}`}>Photos</span>
+                {isPhotoLimitReached && <span className="text-[10px] font-bold text-red-400 mt-1 uppercase">Credits Exhausted</span>}
+              </div>
+              <div 
+                onClick={() => {
+                  if (isVideoLimitReached) {
+                    toast.error('🎬 Video credits exhausted! Please upgrade your plan to upload more videos.', { duration: 4000 });
+                    return;
+                  }
+                  videoInputRef.current?.click();
+                }}
+                className={`border rounded-xl p-6 flex flex-col items-center justify-center transition-all group ${
+                  isVideoLimitReached 
+                    ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-50' 
+                    : 'bg-white border-slate-200 cursor-pointer hover:border-[#c5a880] hover:shadow-md'
+                }`}
+              >
+                <Video className={`h-8 w-8 mb-3 transition-colors ${isVideoLimitReached ? 'text-slate-300' : 'text-slate-400 group-hover:text-[#c5a880]'}`} />
+                <span className={`font-bold text-sm ${isVideoLimitReached ? 'text-slate-400' : 'text-slate-700'}`}>Videos</span>
+                {isVideoLimitReached && <span className="text-[10px] font-bold text-red-400 mt-1 uppercase">Credits Exhausted</span>}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8">
+             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div className="flex flex-wrap items-center gap-2.5 sm:gap-4">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900">Media Files ({mediaItems.filter(item => mediaFilter === 'ALL' || item.type === mediaFilter).length})</h3>
+                  {mediaItems.length > 0 && (
+                    <button 
+                      onClick={() => {
+                        setIsSelectionMode(!isSelectionMode);
+                        setSelectedMediaIds([]);
+                      }}
+                      className={`text-[10px] font-bold px-3 py-1.5 rounded-full transition-colors uppercase tracking-wider min-h-[36px] flex items-center cursor-pointer ${isSelectionMode ? 'bg-[#c5a880] text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+                    >
+                      {isSelectionMode ? 'Cancel Selection' : 'Select'}
+                    </button>
+                  )}
+                  {isSelectionMode && selectedMediaIds.length > 0 && (
+                    <button 
+                      onClick={() => handleDeleteMedia(selectedMediaIds)}
+                      disabled={isDeleting}
+                      className="text-[10px] font-bold px-3 py-1.5 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors flex items-center gap-1 uppercase tracking-wider min-h-[36px] cursor-pointer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      {isDeleting ? 'Deleting...' : `Delete (${selectedMediaIds.length})`}
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                   <div className="relative">
+                     <button 
+                       onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
+                       className="flex items-center justify-between gap-2 text-xs bg-white border border-slate-200 rounded-lg px-3 py-1.5 outline-none text-slate-700 font-bold hover:border-[#c5a880] cursor-pointer shadow-sm min-w-[120px] transition-all duration-300"
+                     >
+                       <div className="flex items-center gap-2">
+                         {mediaFilter === 'ALL' && <LayoutGrid className="w-3.5 h-3.5 text-[#c5a880]" />}
+                         {mediaFilter === 'PHOTO' && <ImageIcon className="w-3.5 h-3.5 text-[#c5a880]" />}
+                         {mediaFilter === 'VIDEO' && <Video className="w-3.5 h-3.5 text-[#c5a880]" />}
+                         <span>
+                           {mediaFilter === 'ALL' && 'All Media'}
+                           {mediaFilter === 'PHOTO' && 'Photos Only'}
+                           {mediaFilter === 'VIDEO' && 'Videos Only'}
+                         </span>
+                       </div>
+                       <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-300 ${filterDropdownOpen ? 'rotate-180' : ''}`} />
+                     </button>
+
+                     {filterDropdownOpen && (
+                       <>
+                         <div className="fixed inset-0 z-10" onClick={() => setFilterDropdownOpen(false)} />
+                         <div className="absolute top-full left-0 mt-1 w-full bg-white border border-slate-100 rounded-lg shadow-lg z-20 py-1 overflow-hidden transform opacity-100 scale-100 transition-all origin-top">
+                           <button 
+                             onClick={() => { setMediaFilter('ALL'); setFilterDropdownOpen(false); }}
+                             className={`w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2 transition-colors ${mediaFilter === 'ALL' ? 'bg-[#fcfaf7] text-[#c5a880]' : 'text-slate-600 hover:bg-slate-50'}`}
+                           >
+                             <LayoutGrid className="w-3.5 h-3.5" /> All Media
+                           </button>
+                           <button 
+                             onClick={() => { setMediaFilter('PHOTO'); setFilterDropdownOpen(false); }}
+                             className={`w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2 transition-colors ${mediaFilter === 'PHOTO' ? 'bg-[#fcfaf7] text-[#c5a880]' : 'text-slate-600 hover:bg-slate-50'}`}
+                           >
+                             <ImageIcon className="w-3.5 h-3.5" /> Photos Only
+                           </button>
+                           <button 
+                             onClick={() => { setMediaFilter('VIDEO'); setFilterDropdownOpen(false); }}
+                             className={`w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2 transition-colors ${mediaFilter === 'VIDEO' ? 'bg-[#fcfaf7] text-[#c5a880]' : 'text-slate-600 hover:bg-slate-50'}`}
+                           >
+                             <Video className="w-3.5 h-3.5" /> Videos Only
+                           </button>
+                         </div>
+                       </>
+                     )}
+                   </div>
+                   <button 
+                     onClick={fetchEventDetails}
+                     className="text-xs font-bold text-slate-500 hover:text-[#c5a880] transition-colors"
+                   >
+                     Refresh
+                   </button>
+                </div>
+             </div>
+            
+            {uploadingMedia && (
+               <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
+                  <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center border border-white/20">
+                     {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total ? (
+                       <>
+                         <div className="w-16 h-16 bg-emerald-50 border border-emerald-200 text-emerald-500 rounded-full flex items-center justify-center mb-6 shadow-sm animate-in zoom-in-50 duration-300">
+                            <Check className="h-8 w-8 stroke-[3]" />
+                         </div>
+                         <h3 className="text-xl font-black text-emerald-600 mb-2">Upload Complete!</h3>
+                         <p className="text-[11px] font-bold text-slate-500 text-center mb-6 px-2 uppercase tracking-wide">
+                            All files uploaded successfully.<br/>Saving to your gallery...
+                         </p>
+                         <div className="w-full relative">
+                           <div className="w-full bg-emerald-100 rounded-full h-3.5 mb-3 overflow-hidden shadow-inner border border-emerald-200">
+                              <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-full w-full rounded-full transition-all duration-500" />
+                           </div>
+                           <div className="text-center text-xs font-bold text-emerald-600">
+                              {uploadProgress.total} <span className="text-emerald-400 mx-1">/</span> {uploadProgress.total} Files Completed ✓
+                           </div>
+                         </div>
+                       </>
+                     ) : (
+                       <>
+                         <div className="w-16 h-16 bg-[#f8f5f0] border border-[#e6d5c0] text-[#c5a880] rounded-full flex items-center justify-center mb-6 shadow-sm">
+                            <Upload className="h-7 w-7 animate-bounce" />
+                         </div>
+                         <h3 className="text-xl font-black text-slate-900 mb-2">Uploading Media</h3>
+                         <p className="text-[11px] font-bold text-slate-500 text-center mb-8 px-2 uppercase tracking-wide">
+                            Optimizing & storing securely.<br/>Please keep this window open.
+                         </p>
+                         
+                         <div className="w-full relative">
+                            <div className="flex w-full justify-between items-end mb-2">
+                               <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Progress</span>
+                               <span className="text-xl font-black text-[#c5a880] leading-none">{Math.round((uploadProgress.current / uploadProgress.total) * 100) || 0}%</span>
+                            </div>
+                            <div className="w-full bg-[#f1f5f9] rounded-full h-3.5 mb-3 overflow-hidden shadow-inner border border-slate-200">
+                               <div 
+                                  className="bg-gradient-to-r from-[#b69970] to-[#c5a880] h-full transition-all duration-300 ease-out" 
+                                  style={{ width: `${Math.max(2, (uploadProgress.current / uploadProgress.total) * 100)}%` }}
+                               />
+                            </div>
+                            <div className="text-center text-xs font-bold text-slate-700">
+                               {uploadProgress.current} <span className="text-slate-400 mx-1">/</span> {uploadProgress.total} Files Completed
+                            </div>
+                         </div>
+                       </>
+                     )}
+                  </div>
+               </div>
+            )}
+
+             {mediaItems.length === 0 ? (
+               <div className="bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-2xl p-12 flex items-center justify-center text-slate-500 text-sm">
+                 No media files uploaded yet. Select files to start.
+               </div>
+            ) : (
+               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-4 pb-12">
+                 {mediaItems.filter(item => mediaFilter === 'ALL' || item.type === mediaFilter).map((item, idx) => (
+                   <div 
+                     key={idx} 
+                     className={`relative aspect-square rounded-xl overflow-hidden bg-slate-900 border transition-all group cursor-pointer ${selectedMediaIds.includes(item._id) ? 'border-[#c5a880] ring-4 ring-[#c5a880]/30' : 'border-slate-200 hover:border-[#c5a880]/50'}`}
+                     onClick={() => {
+                       if (isSelectionMode) {
+                         toggleSelection(item._id);
+                       } else {
+                         setPreviewMedia(item);
+                       }
+                     }}
+                   >
+                      {item.type === 'VIDEO' ? (
+                         <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 overflow-hidden">
+                            {item.thumbnailUrl || (item.r2Url && item.r2Url.includes('imagekit.io')) ? (
+                              <img 
+                                src={item.thumbnailUrl || `${item.r2Url}/ik-thumbnail.jpg`} 
+                                className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300" 
+                                alt="Video thumbnail"
+                              />
+                            ) : (
+                              <video 
+                                src={item.compressedUrl || item.r2Url} 
+                                className="w-full h-full object-cover opacity-60 pointer-events-none" 
+                                preload="metadata" 
+                                muted 
+                              />
+                            )}
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/30 group-hover:bg-black/50 transition-colors">
+                               <div className="w-11 h-11 rounded-full bg-white/25 backdrop-blur-md border border-white/40 flex items-center justify-center text-white mb-1 shadow-md group-hover:scale-110 transition-transform">
+                                  <Play className="h-5 w-5 fill-white ml-0.5" />
+                               </div>
+                               <span className="text-[10px] text-white font-bold uppercase tracking-wider bg-black/50 px-2.5 py-0.5 rounded-full border border-white/20">Video</span>
+                            </div>
+                         </div>
+                      ) : (
+                         <img src={item.compressedUrl || item.r2Url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      )}
+
+                      {/* Completed Green Badge */}
+                      {item.processedStatus === 'COMPLETED' && (
+                         <div className="absolute top-3 right-3 bg-emerald-500 text-white rounded-full p-1.5 shadow-md z-10" title="Ready & Processed">
+                            <Check className="h-3.5 w-3.5 stroke-[3]" />
+                         </div>
+                      )}
+
+                      {/* Selection Checkbox */}
+                      {isSelectionMode && (
+                        <div className="absolute top-3 left-3 z-10 bg-white/90 rounded border border-slate-300 p-0.5 shadow-sm">
+                          <input 
+                            type="checkbox" 
+                            checked={selectedMediaIds.includes(item._id)}
+                            onChange={() => toggleSelection(item._id)}
+                            className="w-4 h-4 cursor-pointer accent-[#c5a880]"
+                          />
+                        </div>
+                      )}
+
+                      {/* Hover Overlay */}
+                      <div className={`absolute inset-0 bg-black/40 transition-opacity flex flex-col items-center justify-center gap-3 ${isSelectionMode ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
+                         <span className="text-[10px] font-bold text-white px-3 py-1.5 bg-black/60 rounded-full uppercase tracking-wider">{item.processedStatus}</span>
+                         <div className="flex items-center gap-2">
+                           <button 
+                             onClick={(e) => { e.stopPropagation(); setPreviewMedia(item); }}
+                             className="bg-white/20 backdrop-blur-md text-white p-2.5 rounded-full hover:bg-white/30 transition-transform hover:scale-110 shadow-lg border border-white/30"
+                             title="Preview"
+                           >
+                             <ZoomIn className="h-4 w-4" />
+                           </button>
+                           <button 
+                              onClick={(e) => { e.stopPropagation(); handleDeleteMedia([item._id]); }}
+                              className="bg-red-500 text-white p-2.5 rounded-full hover:bg-red-600 transition-transform hover:scale-110 shadow-lg"
+                              title="Delete Media"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                       </div>
+                    </div>
+                  ))}
+                </div>
+             )}
+           </div>
+         </div>
+
+          {/* Right Column: Edit Event Details Form (aligned at top with Upload Media!) */}
+          <div className="w-full lg:w-[420px] shrink-0">
+            <div className="bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-2xl p-6 shadow-sm sticky top-8">
+                <div className="flex items-center gap-2 mb-6 border-b border-slate-200 pb-4">
+                  <Settings className="h-5 w-5 text-[#c5a880]" />
+                  <h3 className="text-lg font-bold text-slate-900">Edit Event Details</h3>
+                </div>
+            
+            <style dangerouslySetInnerHTML={{__html: `
+              .edit-input {
+                width: 100%;
+                background: #ffffff;
+                border: 1px solid #cbd5e1;
+                color: #0f172a;
+                padding: 10px 12px;
+                border-radius: 8px;
+                font-size: 13px;
+                outline: none;
+                transition: border-color 0.2s;
+              }
+              .edit-input:focus {
+                border-color: #c5a880;
+              }
+              .edit-label {
+                display: block;
+                font-size: 10px;
+                color: #475569;
+                font-weight: 800;
+                margin-bottom: 6px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+              }
+              .toggle-switch {
+                position: relative;
+                width: 36px;
+                height: 20px;
+                background-color: #cbd5e1;
+                border-radius: 20px;
+                cursor: pointer;
+                transition: background-color 0.2s;
+              }
+              .toggle-switch[data-active="true"] {
+                background-color: #c5a880;
+              }
+              .toggle-switch::after {
+                content: '';
+                position: absolute;
+                top: 2px;
+                left: 2px;
+                width: 16px;
+                height: 16px;
+                background-color: white;
+                border-radius: 50%;
+                transition: transform 0.2s;
+              }
+              .toggle-switch[data-active="true"]::after {
+                transform: translateX(16px);
+              }
+              
+              .custom-slider {
+                -webkit-appearance: none;
+                height: 6px;
+                border-radius: 3px;
+                background: linear-gradient(to right, #c5a880 var(--val, 50%), #475569 var(--val, 50%));
+                outline: none;
+              }
+              .custom-slider::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                appearance: none;
+                width: 14px;
+                height: 14px;
+                border-radius: 50%;
+                background: #c5a880;
+                cursor: pointer;
+              }
+            `}} />
+
+            <form className="space-y-5" onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                setSaving(true);
+                
+                const payload = {
+                  ...formData,
+                  watermark: {
+                    ...(event?.watermark || {}),
+                    isActive: formData.customWatermark,
+                    type: formData.watermarkType,
+                    text: formData.watermarkText,
+                    logoUrl: formData.watermarkLogoUrl,
+                    position: formData.watermarkPosition,
+                    width: formData.watermarkWidth,
+                    opacity: formData.watermarkOpacity / 100
+                  }
+                };
+
+                const res = await apiClient.put(`/event/${eventId}`, payload);
+                if (res.data.event) {
+                  setEvent(res.data.event);
+                  setHasSavedDetails(true);
+                  if (res.data.credits) {
+                    setCredits(res.data.credits);
+                  }
+                  window.dispatchEvent(new Event('studio_plan_updated'));
+                  await fetchEventDetails();
+                  await fetchCredits();
+
+                  if (res.data.deductedPhotos > 0) {
+                    toast.success(
+                      `🎉 Event saved! ${res.data.deductedPhotos} photo credit${res.data.deductedPhotos > 1 ? 's' : ''} deducted. Remaining: ${Number(res.data.credits?.photos?.remaining ?? 0).toLocaleString('en-IN')} credits.`,
+                      { duration: 6000 }
+                    );
+                  } else {
+                    toast.success('Event updated successfully!');
+                  }
+                }
+              } catch (err) {
+                toast.error('Error updating event');
+              } finally {
+                setSaving(false);
+              }
+            }}>
+              <div>
+                <label className="edit-label">Event Name</label>
+                <input 
+                  type="text" 
+                  className="edit-input" 
+                  value={formData.name}
+                  onChange={e => setFormData({...formData, name: e.target.value})}
+                />
+              </div>
+
+              <div>
+                <label className="edit-label">Client Name</label>
+                <input 
+                  type="text" 
+                  className="edit-input" 
+                  value={formData.clientName}
+                  onChange={e => setFormData({...formData, clientName: e.target.value})}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="edit-label">Client Mobile</label>
+                  <input 
+                    type="text" 
+                    className="edit-input" 
+                    value={formData.clientMobile}
+                    onChange={e => setFormData({...formData, clientMobile: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="edit-label">Client Email</label>
+                  <input 
+                    type="email" 
+                    className="edit-input" 
+                    value={formData.clientEmail}
+                    onChange={e => setFormData({...formData, clientEmail: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="edit-label">Event Date</label>
+                  <CustomDatePicker
+                    type="date"
+                    className="edit-input"
+                    value={formData.date}
+                    onChange={val => setFormData({...formData, date: val})}
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="edit-label !mb-0">Event Type</label>
+                    <span className="text-[10px] font-bold text-[#c5a880] uppercase tracking-wider bg-[#c5a880]/10 px-2 py-0.5 rounded-md border border-[#c5a880]/20">
+                      {formData.type || 'WEDDING'}
+                    </span>
+                  </div>
+                  <select 
+                    className="edit-input font-bold" 
+                    value={EVENT_TYPES.includes(formData.type) ? formData.type : 'CUSTOM'}
+                    onChange={e => {
+                      if (e.target.value === 'CUSTOM') {
+                        setIsCustomType(true);
+                      } else {
+                        setIsCustomType(false);
+                        setFormData({...formData, type: e.target.value});
+                      }
+                    }}
+                  >
+                    {EVENT_TYPES.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                    <option value="CUSTOM">+ CUSTOM EVENT TYPE</option>
+                  </select>
+                  {(!EVENT_TYPES.includes(formData.type) || isCustomType) && (
+                    <div className="mt-2 relative animate-fade-in">
+                      <input 
+                        type="text" 
+                        className="edit-input border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-bold" 
+                        value={formData.type}
+                        onChange={e => setFormData({...formData, type: e.target.value})}
+                        autoFocus
+                      />
+                      <p className="text-[10px] text-slate-500 mt-1 font-medium">Whatever you type will be saved as this event&apos;s type</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="edit-label">Event Location</label>
+                <input 
+                  type="text" 
+                  className="edit-input" 
+                  value={formData.location}
+                  onChange={e => setFormData({...formData, location: e.target.value})}
+                />
+              </div>
+
+              <div>
+                <label className="edit-label">Cover Image</label>
+                <div className="flex items-center gap-3">
+                  <div className="w-40 aspect-video rounded-lg border border-slate-300 bg-slate-100 flex items-center justify-center overflow-hidden shrink-0 relative">
+                    {formData.coverImageUrl ? (
+                      <img src={formData.coverImageUrl} alt="Cover" className="w-full h-full object-cover" />
+                    ) : (
+                      <Camera className="h-6 w-6 text-slate-400" />
+                    )}
+                    {uploadingCover && (
+                      <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
+                        <Loader2 className="h-5 w-5 text-[#c5a880] animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 relative">
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        e.target.value = '';
+                        setUploadingCover(true);
+                        try {
+                          const uploadData = new FormData();
+                          uploadData.append('file', file);
+                          const res = await apiClient.post('/media/upload-asset', uploadData, {
+                            headers: { 'Content-Type': 'multipart/form-data' }
+                          });
+                          if (res.data && res.data.url) {
+                            setFormData(prev => ({ ...prev, coverImageUrl: res.data.url }));
+                          }
+                        } catch (err) {
+                          console.error("Cover upload failed", err);
+                          toast.error('Failed to upload cover');
+                        } finally {
+                          setUploadingCover(false);
+                        }
+                      }}
+                    />
+                    <div className="w-full bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-lg py-3 text-center hover:bg-slate-100 transition-colors cursor-pointer">
+                      {uploadingCover ? 'Uploading...' : (formData.coverImageUrl ? 'Change Cover Image' : 'Choose File')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="edit-label">Access Type</label>
+                <select 
+                  className="edit-input"
+                  value={formData.accessType}
+                  onChange={e => setFormData({...formData, accessType: e.target.value})}
+                >
+                  <option value="PUBLIC">PUBLIC</option>
+                  <option value="PASSWORD">PASSWORD PROTECTED</option>
+                  <option value="OTP">OTP VERIFICATION</option>
+                </select>
+              </div>
+
+              {formData.accessType === 'PASSWORD' && (
+                <div>
+                  <label className="edit-label text-rose-500">New Password</label>
+                  <input 
+                    type="text" 
+                    className="edit-input border-rose-200 focus:border-rose-500 bg-rose-50/30" 
+                    value={formData.password}
+                    onChange={(e) => setFormData({...formData, password: e.target.value})}
+                    placeholder="Leave empty to keep current password, or enter a new one"
+                  />
+                </div>
+              )}
+
+              {formData.accessType === 'OTP' && (
+                <div>
+                  <label className="edit-label text-[#c5a880]">New 4-Digit Access PIN</label>
+                  <input 
+                    type="text" 
+                    maxLength={4}
+                    className="edit-input border-[#e8e4dd] focus:border-[#c5a880] bg-[#faf9f6] text-center tracking-[1em] font-black text-xl" 
+                    value={formData.password}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setFormData({...formData, password: val});
+                    }}
+                    placeholder="••••"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1 font-medium text-center">Leave empty to keep the current PIN, or enter a new 4-digit code</p>
+                </div>
+              )}
+
+              <div className="flex flex-col border-t border-b border-slate-200 py-4 my-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-400 font-bold">W</span>
+                    <span className="text-xs font-bold text-slate-600 uppercase">Custom Event Watermark</span>
+                  </div>
+                  <div 
+                    className="toggle-switch" 
+                    data-active={formData.customWatermark}
+                    onClick={() => setFormData({...formData, customWatermark: !formData.customWatermark})}
+                  />
+                </div>
+
+                {formData.customWatermark && (() => {
+                  const previewFontSize = Math.max(13, Math.round((Number(formData.watermarkWidth || 20) / 100) * 44 + 6));
+
+                  return (
+                    <div className="mt-6 space-y-6">
+                      <div>
+                        <label className="edit-label">Watermark Type</label>
+                        <select 
+                          className="edit-input font-bold tracking-wide"
+                          value={formData.watermarkType}
+                          onChange={e => setFormData({...formData, watermarkType: e.target.value as any})}
+                        >
+                          <option value="LOGO">LOGO WATERMARK</option>
+                          <option value="TEXT">TEXT WATERMARK</option>
+                        </select>
+                      </div>
+
+                      {formData.watermarkType === 'TEXT' ? (
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <label className="edit-label">Watermark Text</label>
+                            <span className="text-[10px] font-bold text-emerald-600">Live Instant Preview</span>
+                          </div>
+                          <input 
+                            type="text" 
+                            className="edit-input font-medium" 
+                            placeholder="Enter watermark text..."
+                            value={formData.watermarkText}
+                            onChange={e => setFormData({...formData, watermarkText: e.target.value})}
+                          />
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="edit-label">Watermark Logo Image</label>
+                          <div className="flex gap-4 items-center mt-1">
+                            <div className="w-[60px] h-[60px] rounded border border-dashed border-slate-300 flex items-center justify-center shrink-0 bg-[#f8f7f4] text-slate-900">
+                               {uploadingLogo ? <Loader2 className="h-5 w-5 animate-spin text-[#c5a880]" /> : (formData.watermarkLogoUrl ? <img src={formData.watermarkLogoUrl} className="max-w-[40px] max-h-[40px] object-contain" alt="Logo preview" /> : <Camera className="h-5 w-5 text-slate-400" />)}
+                            </div>
+                            <div className="flex-1 flex flex-col">
+                              <label className="w-full text-center border border-slate-200 text-[#b69970] font-bold text-[13px] py-2 rounded-lg bg-white cursor-pointer hover:bg-[#f8f7f4] text-slate-900 transition-colors shadow-sm">
+                                 Choose File
+                                 <input type="file" accept="image/*" className="hidden" onChange={handleWatermarkLogoUpload} />
+                              </label>
+                              <p className="text-[10px] text-slate-600 font-bold mt-2">PNG with transparent background recommended.</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Watermark Position Dropdown */}
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 sm:p-4">
+                        <label className="edit-label text-slate-700 font-bold mb-1.5 block">Watermark Position</label>
+                        <select 
+                          className="edit-input font-bold tracking-wide text-xs py-2 px-3 w-full bg-white border border-slate-200 rounded-lg cursor-pointer"
+                          value={formData.watermarkPosition}
+                          onChange={e => setFormData({...formData, watermarkPosition: e.target.value as any})}
+                        >
+                          <option value="BOTTOM_RIGHT">BOTTOM RIGHT (Default)</option>
+                          <option value="BOTTOM_LEFT">BOTTOM LEFT</option>
+                          <option value="BOTTOM">BOTTOM CENTER</option>
+                          <option value="TOP_RIGHT">TOP RIGHT</option>
+                          <option value="TOP_LEFT">TOP LEFT</option>
+                          <option value="TOP">TOP CENTER</option>
+                          <option value="CENTER">CENTER</option>
+                        </select>
+                      </div>
+
+                      {/* Size and Opacity Controls */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="edit-label mb-0">Size ({formData.watermarkWidth}%)</label>
+                            <span className="text-xs font-mono font-black text-[#c5a880] bg-white px-2 py-0.5 rounded border border-slate-200">
+                              {formData.watermarkWidth}%
+                            </span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="5" max="100" 
+                            className="w-full custom-slider mt-2"
+                            value={formData.watermarkWidth}
+                            onChange={e => setFormData({...formData, watermarkWidth: Number(e.target.value)})}
+                            style={{'--val': `${formData.watermarkWidth}%`} as any}
+                          />
+                        </div>
+
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="edit-label mb-0">Opacity ({formData.watermarkOpacity}%)</label>
+                            <span className="text-xs font-mono font-black text-[#c5a880] bg-white px-2 py-0.5 rounded border border-slate-200">
+                              {formData.watermarkOpacity}%
+                            </span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="10" max="100" 
+                            className="w-full custom-slider mt-2"
+                            value={formData.watermarkOpacity}
+                            onChange={e => setFormData({...formData, watermarkOpacity: Number(e.target.value)})}
+                            style={{'--val': `${formData.watermarkOpacity}%`} as any}
+                          />
+                        </div>
+                      </div>
+
+                      {/* LIVE PREVIEW BOX WITH FIXED PHOTO */}
+                      <div className="mt-8 border border-slate-200 rounded-2xl overflow-hidden bg-slate-900 shadow-sm relative w-full aspect-[3/2] flex items-center justify-center select-none">
+                         <img 
+                           src="/wedding.jpg" 
+                           className="absolute inset-0 w-full h-full object-cover" 
+                           alt="Preview Background" 
+                         />
+                         
+                         {formData.watermarkType === 'LOGO' && formData.watermarkLogoUrl && (
+                            <img 
+                              src={formData.watermarkLogoUrl} 
+                              className="absolute pointer-events-none object-contain"
+                              style={{
+                                opacity: Number(formData.watermarkOpacity || 80) / 100,
+                                width: `${formData.watermarkWidth}%`,
+                                maxHeight: '65%',
+                                ...getPreviewPosition(formData.watermarkPosition)
+                              }}
+                              alt="Live Logo Watermark"
+                            />
+                         )}
+
+                         {formData.watermarkType === 'TEXT' && formData.watermarkText && (
+                            <div 
+                              className="absolute pointer-events-none text-white font-black whitespace-nowrap tracking-wide select-none"
+                              style={{
+                                opacity: Number(formData.watermarkOpacity || 100) / 100,
+                                fontSize: `${previewFontSize}px`, 
+                                filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.9)) drop-shadow(0 1px 2px rgba(0,0,0,0.7))',
+                                textShadow: '0 2px 4px rgba(0,0,0,0.85)',
+                                ...getPreviewPosition(formData.watermarkPosition)
+                              }}
+                            >
+                              {formData.watermarkText}
+                            </div>
+                         )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="flex items-center justify-between py-4">
+                <div className="flex items-center gap-2">
+                  <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-400 font-bold">P</span>
+                  <span className="text-xs font-bold text-slate-600 uppercase">Add to Portfolio</span>
+                  {saving && <Loader2 className="h-3 w-3 animate-spin text-slate-400 ml-2" />}
+                </div>
+                <div 
+                  className={`toggle-switch ${saving ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                  data-active={formData.addToPortfolio}
+                  onClick={async () => {
+                    if (saving) return;
+                    const newValue = !formData.addToPortfolio;
+                    
+                    setFormData({...formData, addToPortfolio: newValue});
+                    setSaving(true);
+                    
+                    try {
+                      await apiClient.patch(`/event/${eventId}/portfolio-status`, { 
+                        addToPortfolio: newValue 
+                      });
+                      
+                      if (event) {
+                        setEvent({...event, addToPortfolio: newValue});
+                      }
+                    } catch (err) {
+                      toast.error("Failed to save portfolio status.");
+                      setFormData({...formData, addToPortfolio: !newValue});
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                />
+              </div>
+
+              {event && mediaItems.length > 0 && hasSavedDetails && (
+                <div className="pt-2 mb-4">
+                  <div className="bg-[#f8f5f0] border border-[#e6d5c0] rounded-xl p-4 flex flex-col items-center justify-center text-center shadow-sm">
+                     <h4 className="text-sm font-bold text-slate-800 mb-1">Gallery is Ready</h4>
+                     <p className="text-xs text-slate-500 mb-4">Share this link with your clients to view {mediaItems.length} media files.</p>
+                     <div className="relative w-full h-[48px] mt-2">
+                       <button
+                         type="button"
+                         onClick={() => setShowGalleryLink(true)}
+                         className={`absolute inset-0 w-full h-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl text-sm transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] flex items-center justify-center gap-2 ${showGalleryLink ? 'opacity-0 pointer-events-none scale-95 translate-y-2' : 'opacity-100 scale-100 translate-y-0'}`}
+                       >
+                         <span className="text-base leading-none">🔗</span> Generate Public Gallery Link
+                       </button>
+                       
+                       <div className={`absolute inset-0 w-full h-full flex items-center bg-white border border-[#e6d5c0] rounded-xl overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${!showGalleryLink ? 'opacity-0 pointer-events-none scale-105 -translate-y-2' : 'opacity-100 scale-100 translate-y-0'}`}>
+                          <input 
+                            type="text" 
+                            readOnly 
+                            value={`${typeof window !== 'undefined' ? window.location.origin : ''}/e/${event.code}`} 
+                            className="flex-1 h-full bg-transparent text-[11px] sm:text-xs text-slate-600 px-3 outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(`${typeof window !== 'undefined' ? window.location.origin : ''}/e/${event.code}`);
+                              setLinkCopied(true);
+                              setTimeout(() => setLinkCopied(false), 2000);
+                            }}
+                            className="h-full bg-[#c5a880] hover:bg-[#b59a72] text-[#09090b] px-4 font-bold text-xs transition-colors border-l border-[#e6d5c0] flex items-center gap-1"
+                          >
+                            {linkCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                            {linkCopied ? 'Copied' : 'Copy'}
+                          </button>
+                       </div>
+                     </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 pt-2">
+                <button 
+                  id="save-event-button"
+                  type="submit" 
+                  disabled={saving} 
+                  className="flex-1 flex justify-center items-center gap-2 bg-[#c5a880] hover:bg-[#b59a72] text-[#09090b] font-black py-3 rounded-xl text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 cursor-pointer"
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <span>Save Event Details</span>
+                      {pendingPhotosCount > 0 && (
+                        <span className="text-[10px] font-mono font-black bg-[#09090b] text-[#e6d0a7] px-2 py-0.5 rounded-full border border-[#c5a880]/30 shadow-xs">
+                          -{pendingPhotosCount} Credit{pendingPhotosCount > 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </button>
+                <button 
+                  type="button" 
+                  onClick={async () => {
+                    if (window.confirm('Are you sure you want to delete this event permanently?')) {
+                      try {
+                        setSaving(true);
+                        await apiClient.delete(`/event/${eventId}`);
+                        router.push('/dashboard/events');
+                      } catch (error) {
+                        console.error('Error deleting event:', error);
+                        toast.error('Error deleting event.');
+                        setSaving(false);
+                      }
+                    }
+                  }}
+                  className="flex items-center gap-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold px-4 py-3 rounded-xl text-sm transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete Event
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+      </div>
+      </div>
+
+      {/* Preview Lightbox Modal */}
+      {previewMedia && (
+        <div 
+          className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
+          onClick={() => setPreviewMedia(null)}
+        >
+          <div className="relative max-w-5xl w-full max-h-[90vh] flex flex-col items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            <button 
+              onClick={() => setPreviewMedia(null)}
+              className="absolute -top-12 right-0 text-white/80 hover:text-white p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+              title="Close"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {previewMedia.type === 'VIDEO' ? (
+              <video 
+                controls 
+                autoPlay 
+                src={previewMedia.compressedUrl || previewMedia.r2Url} 
+                className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl border border-white/10"
+              />
+            ) : (
+              <img 
+                src={previewMedia.compressedUrl || previewMedia.r2Url} 
+                alt="Preview" 
+                className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl border border-white/10"
+              />
+            )}
+
+            <div className="mt-4 flex items-center gap-4 text-white text-xs font-medium">
+              <span>Type: <strong>{previewMedia.type}</strong></span>
+              <span>Status: <strong className="text-emerald-400">{previewMedia.processedStatus}</strong></span>
+              <a 
+                href={previewMedia.compressedUrl || previewMedia.r2Url} 
+                target="_blank" 
+                rel="noreferrer"
+                className="underline text-[#c5a880] hover:text-white flex items-center gap-1"
+              >
+                Open Original
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

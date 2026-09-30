@@ -1,0 +1,16 @@
+@echo off
+echo Starting Mara Photo Project Services...
+
+echo Starting MongoDB...
+start "MongoDB" cmd /k "start_mongo.bat"
+
+echo Starting AI Service...
+start "AI Service" cmd /k "cd ai-service && .\venv\Scripts\activate && python app\main.py"
+
+echo Starting Backend...
+start "Backend" cmd /k "cd backend && npm run dev"
+
+echo Starting Frontend...
+start "Frontend" cmd /k "cd frontend && npm run dev"
+
+echo All services launched in separate windows!

@@ -1,0 +1,2396 @@
+return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxIndex, eventMedia.length]);
+
+  // Poll media status if processing modal is open
+  useEffect(() => {
+    if (!isProcessingModalOpen || !selectedEvent) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const { data } = await apiClient.get(`/media/event/${selectedEvent._id}`);
+        const total = data.media.length;
+        const completed = data.media.filter((m: any) => m.processedStatus === 'COMPLETED').length;
+        
+        setProcessingStats({ total, completed });
+        setEventMedia(data.media);
+
+        if (total > 0 && completed === total) {
+          setIsProcessingModalOpen(false);
+          setSuccessMsg('Watermarks successfully applied to all images!');
+          clearInterval(interval);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [isProcessingModalOpen, selectedEvent]);
+
+
+  // Auto-refresh gallery when media is still processing
+  useEffect(() => {
+    if (!selectedEvent) return;
+    const hasPending = eventMedia.some(m => m.processedStatus === 'PENDING' || m.processedStatus === 'PROCESSING');
+    if (!hasPending) return;
+
+    const intervalId = setInterval(() => {
+      fetchEventDetails(selectedEvent._id, selectedEvent.code);
+    }, 3000);
+
+    return () => clearInterval(intervalId);
+  }, [selectedEvent, eventMedia]);
+
+  // 2. BRANDING UPDATE
+  const handleUpdateBranding = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      const payload = {
+        name: studioName,
+        logoUrl: studioLogo,
+        subdomain: studioSubdomain,
+        customDomain: studioCustomDomain,
+        watermark: {
+          type: wmType,
+          text: wmText,
+          logoUrl: wmLogo,
+          position: wmPos,
+          opacity: wmOpacity,
+        },
+      };
+      const res = await apiClient.put('/studio/me', payload);
+      setStudio(res.data.studio);
+      setSuccessMsg('Studio branding updated successfully!');
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.error || 'Update failed.');
+    }
+  };
+
+  // 3. BILLING SUB
+  const handleSubscribe = async (plan: string) => {
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    const rzpKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_TCrfzMZeYCcbsJ';
+
+    // Localhost simulation check ONLY if key is mock
+    if (rzpKey === 'rzp_test_mock_id' && typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      setMockPlan(plan);
+      setIsRazorpayMockOpen(true);
+      return;
+    }
+
+    const prices: { [key: string]: number } = {
+      'BASIC': 3500,
+      'STANDARD': 7900,
+      'ESSENTIAL': 15900,
+      'PREMIUM': 31900
+    };
+    
+    const amount = prices[plan] || 3500;
+
+    // Direct client-side Razorpay trigger
+    if (typeof window !== 'undefined' && (window as any).Razorpay) {
+      const options = {
+        key: rzpKey,
+        amount: amount * 100, // in paise
+        currency: 'INR',
+        name: 'Mara Photo',
+        description: `${plan} Plan Upgrade`,
+        handler: async function (response: any) {
+          setSuccessMsg(`Subscribed to ${plan} Plan successfully! (Payment ID: ${response.razorpay_payment_id})`);
+          
+          if (studio) {
+            const updatedStudio = { 
+              ...studio, 
+              subscriptionPlan: plan, 
+              subscriptionStatus: 'ACTIVE' 
+            };
+            setStudio(updatedStudio);
+            localStorage.setItem('studio', JSON.stringify(updatedStudio));
+          }
+          fetchStudioAndData();
+        },
+        prefill: {
+          name: sessionUser ? sessionUser.name : 'Mara Studio',
+          email: sessionUser ? sessionUser.email : 'studio@maraphoto.com',
+        },
+        theme: {
+          color: '#c5a880',
+        },
+      };
+      
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+      return;
+    }
+
+    try {
+      const res = await apiClient.post('/payment/checkout', { plan });
+      if (studio) {
+        const updatedStudio = { 
+          ...studio, 
+          subscriptionPlan: plan, 
+          subscriptionStatus: 'ACTIVE' 
+        };
+        setStudio(updatedStudio);
+        localStorage.setItem('studio', JSON.stringify(updatedStudio));
+      }
+      setSuccessMsg(`Subscribed to ${plan} Plan successfully!`);
+      fetchStudioAndData();
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.error || 'Subscription checkout failed.');
+    }
+  };
+
+  const handleCancelSub = async () => {
+    if (!confirm('Are you sure you want to cancel your subscription plan?')) return;
+    try {
+      await apiClient.post('/payment/cancel');
+      setSuccessMsg('Subscription cancelled successfully.');
+      
+      // Update local state and localStorage cache for development mock sandbox mode
+      if (studio) {
+        const updatedStudio = { ...studio, subscriptionStatus: 'CANCELLED' };
+        setStudio(updatedStudio);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('studio', JSON.stringify(updatedStudio));
+        }
+      }
+      
+      fetchStudioAndData();
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.error || 'Cancellation failed.');
+    }
+  };
+
+  // 4. SUPPORT ACTIONS
+  const handleOpenTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      await apiClient.post('/support/ticket', {
+        subject: newTicketSubject,
+        message: newTicketMessage,
+      });
+      setSuccessMsg('Support ticket created successfully!');
+      setNewTicketSubject('');
+      setNewTicketMessage('');
+      
+      const resTickets = await apiClient.get('/support/tickets');
+      setTickets(resTickets.data.tickets);
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.error || 'Failed to open ticket');
+    }
+  };
+
+  const handleReplyTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!replyMessage || !selectedTicket) return;
+    try {
+      const res = await apiClient.post(`/support/ticket/${selectedTicket._id}/reply`, {
+        message: replyMessage,
+      });
+      setSelectedTicket(res.data.ticket);
+      setReplyMessage('');
+
+      const resTickets = await apiClient.get('/support/tickets');
+      setTickets(resTickets.data.tickets);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#09090b] text-[#faf9f6] flex overflow-hidden">
+      {/* Sidebar navigation - Dark Obsidian background (#0c0c0e) */}
+      <aside className="w-64 bg-[#0c0c0e] text-slate-100 flex flex-col justify-between p-6 shrink-0 border-r border-white/5 shadow-2xl">
+        <div>
+          <div className="flex items-center gap-3 mb-8 px-2">
+            <div className="flex items-center justify-center w-full py-2">
+              <Link href="/" className="cursor-pointer">
+                <img src="/logo.png" alt="Mara Photo Logo" className="max-h-11 w-auto object-contain filter invert" />
+              </Link>
+            </div>
+          </div>
+
+          <nav className="flex flex-col gap-4 overflow-y-auto max-h-[calc(100vh-220px)] pr-1 scrollbar-thin scrollbar-thumb-white/10">
+            {/* Category: DASHBOARD */}
+            <div>
+              <span className="px-4 text-[9px] text-slate-500 font-black uppercase tracking-widest block mb-1.5">Dashboard</span>
+              <button onClick={() => { setActiveTab('overview'); setSelectedEvent(null); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${activeTab === 'overview' ? 'bg-[#c5a880] text-[#09090b] shadow-md' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                <LayoutDashboard className="h-4.5 w-4.5" />
+                Overview
+              </button>
+            </div>
+
+            {/* Category: EVENTS */}
+            <div className="flex flex-col gap-1">
+              <span className="px-4 text-[9px] text-slate-500 font-black uppercase tracking-widest block mb-1.5">Events</span>
+              <button onClick={() => setActiveTab('events')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${activeTab === 'events' ? 'bg-[#c5a880] text-[#09090b] shadow-md' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                <BookOpen className="h-4.5 w-4.5" />
+                Events Management
+              </button>
+              <button onClick={() => { setActiveTab('create-event'); setSelectedEvent(null); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${activeTab === 'create-event' ? 'bg-[#c5a880] text-[#09090b] shadow-md' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                <Plus className="h-4.5 w-4.5" />
+                Create Event
+              </button>
+              <button onClick={() => { setActiveTab('portfolios'); setSelectedEvent(null); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${activeTab === 'portfolios' ? 'bg-[#c5a880] text-[#09090b] shadow-md' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                <Briefcase className="h-4.5 w-4.5" />
+                Portfolios
+              </button>
+            </div>
+
+            {/* Category: MANAGEMENT */}
+            <div className="flex flex-col gap-1">
+              <span className="px-4 text-[9px] text-slate-500 font-black uppercase tracking-widest block mb-1.5">Management</span>
+              <button onClick={() => { setActiveTab('customers'); setSelectedEvent(null); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${activeTab === 'customers' ? 'bg-[#c5a880] text-[#09090b] shadow-md' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                <Users className="h-4.5 w-4.5" />
+                Customers
+              </button>
+              <button onClick={() => { setActiveTab('team'); setSelectedEvent(null); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${activeTab === 'team' ? 'bg-[#c5a880] text-[#09090b] shadow-md' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                <Users2 className="h-4.5 w-4.5" />
+                Team
+              </button>
+              <button onClick={() => { setActiveTab('bookings'); setSelectedEvent(null); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${activeTab === 'bookings' ? 'bg-[#c5a880] text-[#09090b] shadow-md' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                <Calendar className="h-4.5 w-4.5" />
+                Order Booking
+              </button>
+              <button onClick={() => { setActiveTab('quotations'); setSelectedEvent(null); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${activeTab === 'quotations' ? 'bg-[#c5a880] text-[#09090b] shadow-md' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                <FileText className="h-4.5 w-4.5" />
+                Quotation
+              </button>
+              <button onClick={() => { setActiveTab('bills'); setSelectedEvent(null); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${activeTab === 'bills' ? 'bg-[#c5a880] text-[#09090b] shadow-md' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                <Receipt className="h-4.5 w-4.5" />
+                Bill
+              </button>
+            </div>
+
+            {/* Category: MORE */}
+            <div className="flex flex-col gap-1">
+              <span className="px-4 text-[9px] text-slate-500 font-black uppercase tracking-widest block mb-1.5">More</span>
+              <button onClick={() => { setActiveTab('payment-qr'); setSelectedEvent(null); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${activeTab === 'payment-qr' ? 'bg-[#c5a880] text-[#09090b] shadow-md' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                <QrCode className="h-4.5 w-4.5" />
+                Payment QR
+              </button>
+              <button onClick={() => { setActiveTab('calendar'); setSelectedEvent(null); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${activeTab === 'calendar' ? 'bg-[#c5a880] text-[#09090b] shadow-md' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                <Calendar className="h-4.5 w-4.5" />
+                Calendar
+              </button>
+              <button onClick={() => { setActiveTab('profile'); setSelectedEvent(null); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${activeTab === 'profile' ? 'bg-[#c5a880] text-[#09090b] shadow-md' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                <User className="h-4.5 w-4.5" />
+                Profile
+              </button>
+            </div>
+
+            {/* Category: SYSTEM */}
+            <div className="flex flex-col gap-1">
+              <span className="px-4 text-[9px] text-slate-500 font-black uppercase tracking-widest block mb-1.5">System</span>
+              <button onClick={() => { setActiveTab('branding'); setSelectedEvent(null); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${activeTab === 'branding' ? 'bg-[#c5a880] text-[#09090b] shadow-md' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                <Settings className="h-4.5 w-4.5" />
+                Studio Branding
+              </button>
+              <button onClick={() => { setActiveTab('billing'); setSelectedEvent(null); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${activeTab === 'billing' ? 'bg-[#c5a880] text-[#09090b] shadow-md' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                <CreditCard className="h-4.5 w-4.5" />
+                Plans & Billing
+              </button>
+              <button onClick={() => { setActiveTab('support'); setSelectedEvent(null); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${activeTab === 'support' ? 'bg-[#c5a880] text-[#09090b] shadow-md' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                <HelpCircle className="h-4.5 w-4.5" />
+                Support Help
+              </button>
+            </div>
+          </nav>
+        </div>
+
+        <div className="border-t border-white/5 pt-4">
+          {sessionUser && (
+            <div className="flex items-center justify-between px-2 mb-4">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold truncate max-w-[120px] text-white">{sessionUser.name}</span>
+                <span className="text-[10px] text-[#c5a880] uppercase font-semibold">{sessionUser.role}</span>
+              </div>
+              <button onClick={handleLogout} className="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      </aside>
+
+      {/* Main Panel Content */}
+      <main className="flex-1 flex flex-col overflow-y-auto relative p-8 bg-[#09090b]">
+        {/* Banner Messages */}
+        {successMsg && (
+          <div className="mb-6 bg-emerald-950/30 border border-emerald-500/20 text-emerald-400 p-4 rounded-2xl flex items-center justify-between text-xs font-semibold leading-relaxed">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="h-4.5 w-4.5 shrink-0" />
+              <span>{successMsg}</span>
+            </div>
+            <button onClick={() => setSuccessMsg('')} className="hover:text-emerald-300">Close</button>
+          </div>
+        )}
+        {errorMsg && (
+          <div className="mb-6 bg-rose-950/30 border border-rose-500/20 text-rose-400 p-4 rounded-2xl flex items-center justify-between text-xs font-semibold leading-relaxed">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-4.5 w-4.5 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+            <button onClick={() => setErrorMsg('')} className="hover:text-rose-300">Close</button>
+          </div>
+        )}
+        {uploadProgress && (
+          <div className="mb-6 bg-[#c5a880]/10 border border-[#c5a880]/20 text-[#c5a880] p-4 rounded-2xl flex items-center gap-3 text-xs font-semibold">
+            <Loader className="h-4.5 w-4.5 animate-spin" />
+            <span>{uploadProgress}</span>
+          </div>
+        )}
+
+        {/* 1. OVERVIEW TAB */}
+        {activeTab === 'overview' && stats && (
+          <div className="flex flex-col gap-8">
+            <div className="text-left">
+              <h1 className="text-3xl font-extrabold text-white font-poppins">Studio Overview</h1>
+              <p className="text-sm text-slate-300 font-medium mt-1">Real-time statistics and studio usage dashboard.</p>
+            </div>
+            
+            {/* Stats Metrics Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 font-poppins">
+              <div className="bg-white/[0.02] border border-white/10 p-6 rounded-2xl flex flex-col gap-1.5 shadow-md hover:border-[#c5a880]/30 transition-all">
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest font-black">Total Events</span>
+                <span className="text-3xl font-black font-mono text-[#c5a880]">{stats.totalEvents}</span>
+              </div>
+              <div className="bg-white/[0.02] border border-white/10 p-6 rounded-2xl flex flex-col gap-1.5 shadow-md hover:border-[#c5a880]/30 transition-all">
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest font-black">Uploaded Photos</span>
+                <span className="text-3xl font-black font-mono text-white">{stats.totalPhotos || 0}</span>
+              </div>
+              <div className="bg-white/[0.02] border border-white/10 p-6 rounded-2xl flex flex-col gap-1.5 shadow-md hover:border-[#c5a880]/30 transition-all">
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest font-black">Active QR Scans</span>
+                <span className="text-3xl font-black font-mono text-white">{stats.activeQrScans || 24}</span>
+              </div>
+              <div className="bg-white/[0.02] border border-white/10 p-6 rounded-2xl flex flex-col gap-1.5 shadow-md hover:border-[#c5a880]/30 transition-all">
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest font-black">Total Earnings</span>
+                <span className="text-3xl font-black font-mono text-[#c5a880]">{stats.totalEarnings || '₹4,999'}</span>
+              </div>
+            </div>
+
+            {/* Subscription & limit cards */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 font-poppins">
+              <div className="lg:col-span-8 bg-white/[0.02] p-6 rounded-2xl border border-white/10 shadow-md">
+                <h3 className="text-sm font-bold mb-6 text-slate-300">Monthly Upload Volume</h3>
+                <div className="h-64">
+                  {chartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                        <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} />
+                        <YAxis stroke="#94a3b8" fontSize={11} />
+                        <Tooltip contentStyle={{ backgroundColor: '#0c0c0e', border: '1px solid rgba(255,255,255,0.1)', color: '#ffffff' }} />
+                        <Bar dataKey="uploads" fill="#c5a880" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-sm text-slate-300">No uploads recorded yet</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="lg:col-span-4 bg-white/[0.02] p-6 rounded-2xl flex flex-col justify-between border border-white/10 shadow-md">
+                <div>
+                  <h3 className="text-sm font-bold mb-4 text-slate-300">Subscription Status</h3>
+                  <div className="flex flex-col gap-2">
+                    <span className="text-lg font-extrabold text-[#c5a880]">{stats.plan} Plan</span>
+                    <span className="text-sm text-slate-300 font-medium">Status: <strong className="text-emerald-400">{stats.status}</strong></span>
+                  </div>
+                </div>
+
+                <div className="border-t border-white/5 pt-4 mt-4 text-left">
+                  <p className="text-[10px] text-slate-400 leading-relaxed font-semibold">
+                    Need higher event limits or AI face search limits? You can change your active plan at any time.
+                  </p>
+                  <button onClick={() => setActiveTab('billing')} className="w-full mt-4 bg-[#c5a880] hover:bg-white text-[#09090b] py-3 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer">
+                    Upgrade Subscription
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Credits and Premium Expiry Section */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 font-poppins">
+              <div className="bg-white/[0.02] border border-white/10 p-6 rounded-2xl flex flex-col gap-1.5 shadow-md hover:border-[#c5a880]/30 transition-all text-left">
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest font-black">AI Credits (Face Recognition)</span>
+                <span className="text-3xl font-black font-mono text-[#c5a880]">24,500 <span className="text-xs text-slate-400 font-semibold font-sans">/ 50,000 queries</span></span>
+                <div className="w-full bg-white/10 h-1.5 rounded-full mt-2 overflow-hidden">
+                  <div className="bg-[#c5a880] h-full rounded-full" style={{ width: '49%' }} />
+                </div>
+              </div>
+              <div className="bg-white/[0.02] border border-white/10 p-6 rounded-2xl flex flex-col gap-1.5 shadow-md hover:border-[#c5a880]/30 transition-all text-left">
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest font-black">Premium Expiry Date</span>
+                <span className="text-2xl font-black font-mono text-white">June 15, 2027</span>
+                <span className="text-[10px] text-emerald-450 font-bold uppercase tracking-wider mt-2 flex items-center gap-1">
+                  ● ACTIVE (338 days remaining)
+                </span>
+              </div>
+            </div>
+
+            {/* Recent Photos Grid */}
+            <div className="bg-white/[0.02] p-6 rounded-2xl border border-white/10 shadow-md text-left font-poppins">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Recent Photos Uploaded</h3>
+                <span className="text-[10px] text-slate-400 font-semibold font-mono">Live Sync</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {[
+                  { id: 'rp1', event: 'Sharma Wedding', url: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=500&q=80', time: '10m ago' },
+                  { id: 'rp2', event: 'Sharma Wedding', url: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=500&q=80', time: '23m ago' },
+                  { id: 'rp3', event: 'Corporate Gala', url: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=500&q=80', time: '1h ago' },
+                  { id: 'rp4', event: 'Sunset Shoot', url: 'https://images.unsplash.com/photo-1469371670807-013ccf25f16a?w=500&q=80', time: '4h ago' },
+                ].map((photo) => (
+                  <div key={photo.id} className="relative aspect-square rounded-xl overflow-hidden group border border-white/5 shadow-sm">
+                    <img src={photo.url} alt={photo.event} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent flex flex-col justify-end p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <p className="text-[10px] text-[#c5a880] font-black uppercase tracking-wider">{photo.event}</p>
+                      <p className="text-[9px] text-slate-400 font-semibold">{photo.time}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Edit & Download History Activity Logs */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-poppins">
+              {/* Edit History */}
+              <div className="bg-white/[0.02] p-6 rounded-2xl border border-white/10 shadow-md text-left">
+                <h3 className="text-sm font-bold mb-4 text-slate-300 uppercase tracking-wider">Edit History Logs</h3>
+                <div className="space-y-4">
+                  {[
+                    { id: 'eh1', action: 'Branding Logo Updated', details: 'Uploaded transparent studio signature logo', time: '2 hours ago' },
+                    { id: 'eh2', action: 'Event Details Modified', details: 'Changed client contact details for ABC Event', time: '1 day ago' },
+                    { id: 'eh3', action: 'Watermark Position Changed', details: 'Position updated from BOTTOM_RIGHT to CENTER', time: '3 days ago' },
+                  ].map((item) => (
+                    <div key={item.id} className="flex flex-col gap-0.5 border-b border-white/5 pb-3 last:border-0 last:pb-0">
+                      <span className="text-xs font-extrabold text-white">{item.action}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">{item.details}</span>
+                      <span className="text-[9px] text-[#c5a880] font-bold mt-1 uppercase tracking-wider">{item.time}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Download History */}
+              <div className="bg-white/[0.02] p-6 rounded-2xl border border-white/10 shadow-md text-left">
+                <h3 className="text-sm font-bold mb-4 text-slate-300 uppercase tracking-wider">Download History Logs</h3>
+                <div className="space-y-4">
+                  {[
+                    { id: 'dh1', guest: 'Guest +91987***3210', event: 'ABC Birthday', items: '12 Photos (ZIP archive)', time: '5 mins ago' },
+                    { id: 'dh2', guest: 'Guest +91879***9502', event: 'Sharma Wedding', items: '5 Photos (High-Res)', time: '40 mins ago' },
+                    { id: 'dh3', guest: 'Guest +91901***1155', event: 'Gala Night', items: '23 Photos (Originals)', time: '2 hours ago' },
+                  ].map((item) => (
+                    <div key={item.id} className="flex flex-col gap-0.5 border-b border-white/5 pb-3 last:border-0 last:pb-0">
+                      <span className="text-xs font-extrabold text-white">{item.guest}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">Downloaded: {item.items} from {item.event}</span>
+                      <span className="text-[9px] text-emerald-400 font-bold mt-1 uppercase tracking-wider">{item.time}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 2. EVENTS TAB */}
+        {activeTab === 'events' && (
+          <div className="flex flex-col gap-8">
+            {!selectedEvent ? (
+              <div className="flex flex-col gap-6">
+                <div className="flex justify-between items-center text-left">
+                  <div>
+                    <h1 className="text-2xl font-extrabold text-white">Event Galleries</h1>
+                    <p className="text-xs text-slate-400 mt-1 font-semibold">Manage your live galleries, download logs, and select events to upload/manage photos.</p>
+                  </div>
+                </div>
+                
+                {events.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
+                    {events.map((event) => (
+                      <div key={event._id} onClick={() => handleSelectEvent(event)} className="glass-panel bg-white/[0.02] border border-white/10 hover:border-[#c5a880] p-5 rounded-2xl cursor-pointer flex flex-col justify-between h-44 group shadow-sm transition-colors">
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#c5a880]/10 text-[#c5a880] border border-[#c5a880]/10 uppercase font-bold">
+                              {event.type}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-bold font-mono">
+                              {new Date(event.date).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <h3 className="text-base font-extrabold text-white group-hover:text-[#c5a880] transition-colors">{event.name}</h3>
+                          <p className="text-sm text-slate-300 font-medium mt-1">{event.location || 'No location'}</p>
+                        </div>
+                        <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-3">
+                          <span className="text-[10px] text-slate-400 font-bold">Access: <strong className="text-white">{event.accessType}</strong></span>
+                          <span className="text-xs font-bold text-[#c5a880] inline-flex items-center gap-1">
+                            Manage
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-16 text-center text-slate-400 border border-dashed border-white/10 rounded-2xl font-poppins">
+                    <p className="text-sm font-semibold">No event galleries created yet. Go to "Create Event" tab to create your first event gallery.</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              // MANAGE EVENT PANEL
+              <div className="flex flex-col gap-6">
+                <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                  <div className="flex items-center gap-4">
+                    <button onClick={() => setSelectedEvent(null)} className="text-slate-300 hover:text-white text-xs font-bold underline">
+                      ← Back to Events
+                    </button>
+                    <h1 className="text-xl font-extrabold text-white">{selectedEvent.name}</h1>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <a href={`/e/${selectedEvent.code}`} target="_blank" className="flex items-center gap-1.5 text-xs font-bold text-[#c5a880] hover:underline">
+                      View Live Gallery
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-12 gap-8">
+                  {/* Upload & Gallery Area */}
+                  <div className="col-span-8 flex flex-col gap-6">
+                    <div
+                      className={`glass-panel p-8 rounded-3xl border-2 border-dashed flex flex-col items-center justify-center text-center transition-all relative ${
+                        isDragging
+                          ? 'border-[#c5a880] bg-[#c5a880]/10 text-[#c5a880]/50 scale-[1.01]'
+                          : 'border-white/10 bg-white hover:bg-white/[0.02]/50'
+                      }`}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                    >
+                      <Upload className={`h-8 w-8 mb-3 transition-colors ${isDragging ? 'text-[#c5a880] animate-bounce' : 'text-[#c5a880]'}`} />
+                      <span className="text-sm font-bold text-slate-200">Upload Media</span>
+                      <span className="text-sm text-slate-300 mt-1 font-semibold mb-6">Select a category below or drag and drop files.</span>
+                      
+                      <div className="grid grid-cols-3 gap-4 w-full">
+                        {/* Folder Upload */}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); folderInputRef.current?.click(); }}
+                          className="flex flex-col items-center justify-center gap-2 p-4 bg-white/[0.02] hover:bg-[#c5a880]/10 text-[#c5a880] text-slate-300 hover:text-[#c5a880] rounded-2xl border border-white/10 hover:border-[#c5a880]/20 transition-colors"
+                        >
+                          <FolderUp className="h-6 w-6" />
+                          <span className="text-xs font-bold">Entire Folder</span>
+                        </button>
+                        
+                        {/* Image Upload */}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); imageInputRef.current?.click(); }}
+                          className="flex flex-col items-center justify-center gap-2 p-4 bg-white/[0.02] hover:bg-[#c5a880]/10 text-[#c5a880] text-slate-300 hover:text-[#c5a880] rounded-2xl border border-white/10 hover:border-[#c5a880]/20 transition-colors"
+                        >
+                          <ImageIcon className="h-6 w-6" />
+                          <span className="text-xs font-bold">Photos</span>
+                        </button>
+                        
+                        {/* Video Upload */}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); videoInputRef.current?.click(); }}
+                          className="flex flex-col items-center justify-center gap-2 p-4 bg-white/[0.02] hover:bg-[#c5a880]/10 text-[#c5a880] text-slate-300 hover:text-[#c5a880] rounded-2xl border border-white/10 hover:border-[#c5a880]/20 transition-colors"
+                        >
+                          <Film className="h-6 w-6" />
+                          <span className="text-xs font-bold">Videos</span>
+                        </button>
+                      </div>
+
+                      <input type="file" multiple ref={imageInputRef} onChange={handleFileUpload} className="hidden" accept="image/*" />
+                      <input type="file" multiple ref={videoInputRef} onChange={handleFileUpload} className="hidden" accept="video/*" />
+                      <input
+                        type="file"
+                        ref={folderInputRef}
+                        onChange={handleFolderUpload}
+                        className="hidden"
+                        /* @ts-ignore */
+                        webkitdirectory=""
+                        directory=""
+                        multiple
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-slate-650">Media Files ({eventMedia.length})</h3>
+                        {eventMedia.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            {isSelectMode ? (
+                              <>
+                                <button onClick={() => setIsSelectMode(false)} className="px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.06] text-slate-200 text-xs font-bold rounded-lg transition-colors">
+                                  Cancel
+                                </button>
+                                {selectedMediaIds.size > 0 && (
+                                  <button onClick={handleBulkDelete} className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5">
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    Delete Selected ({selectedMediaIds.size})
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <button onClick={() => setIsSelectMode(true)} className="px-3 py-1.5 bg-[#c5a880]/10 text-[#c5a880] hover:bg-[#c5a880]/20 text-[#c5a880] border border-[#c5a880]/20 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5">
+                                  <CheckSquare className="h-3.5 w-3.5" />
+                                  Select Photos
+                                </button>
+                                <button onClick={handleDeleteAll} className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  Delete All
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {eventMedia.length > 0 ? (
+                        <div className="flex flex-col gap-6">
+                          {Object.entries(
+                            eventMedia.reduce((acc, m) => {
+                              const fp = m.folderPath || 'Root Folder';
+                              if (!acc[fp]) acc[fp] = [];
+                              acc[fp].push(m);
+                              return acc;
+                            }, {} as Record<string, any[]>)
+                          ).map(([folder, items]: any) => (
+                            <div key={folder} className="flex flex-col gap-3">
+                              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{folder} ({items.length})</h4>
+                              <div className="grid grid-cols-4 gap-4">
+                                {items.map((m: any) => (
+                                  <div 
+                                    key={m._id} 
+                                    className={`aspect-square rounded-xl overflow-hidden relative group cursor-pointer transition-all ${selectedMediaIds.has(m._id) ? 'ring-4 ring-[#c5a880] ring-offset-2' : 'border border-slate-250 hover:border-orange-400'}`}
+                                    onClick={() => isSelectMode ? toggleSelection(m._id) : openLightbox(m._id)}
+                                  >
+                                    {isSelectMode && (
+                                      <div className="absolute top-2 right-2 z-10 bg-white rounded-md shadow-sm pointer-events-none">
+                                        {selectedMediaIds.has(m._id) ? (
+                                          <CheckSquare className="h-5 w-5 text-[#c5a880]" />
+                                        ) : (
+                                          <Square className="h-5 w-5 text-slate-300" />
+                                        )}
+                                      </div>
+                                    )}
+                                    {resolveMediaUrl(m) ? (
+                                      <img src={resolveMediaUrl(m)} alt="media" className="w-full h-full object-cover" />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400 font-bold font-mono">
+                                        {m.type}
+                                      </div>
+                                    )}
+                                    
+                                    <div className="absolute top-1.5 left-1.5">
+                                    <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${m.processedStatus === 'COMPLETED' ? 'bg-emerald-500 text-white' : m.processedStatus === 'PROCESSING' ? 'bg-[#c5a880] text-white animate-pulse' : m.processedStatus === 'PENDING' ? 'bg-amber-500 text-white animate-pulse' : 'bg-rose-500 text-white'}`}>
+                                        {m.processedStatus}
+                                      </span>
+                                    </div>
+
+                                    <button onClick={() => handleDeleteMedia(m._id)} className="absolute bottom-2.5 right-2.5 bg-rose-600 hover:bg-rose-500 text-white p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="py-12 text-center text-sm text-slate-300 glass-panel bg-white/[0.02] border border-white/10 rounded-2xl shadow-sm">
+                          No media files uploaded yet. Select files to start.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* QR Panel */}
+                  <div className="col-span-4 flex flex-col gap-6">
+                    <div className="glass-panel bg-white/[0.02] border border-white/10 p-6 rounded-2xl flex flex-col items-center text-center shadow-sm">
+                      <h3 className="text-sm font-bold text-slate-650 mb-4">Event Guest QR Code</h3>
+                      {qrLoading ? (
+                        <div className="h-48 flex items-center justify-center">
+                          <Loader className="h-8 w-8 animate-spin text-[#c5a880]" />
+                        </div>
+                      ) : qrCodeData ? (
+                        <div className="flex flex-col items-center gap-4">
+                          <img src={qrCodeData} alt="Event QR" className="w-48 h-48 rounded-xl border border-white/10 bg-white p-2" />
+                          <p className="text-[10px] text-slate-400 font-semibold leading-relaxed max-w-[200px]">
+                            Guests can scan this QR code to access the gallery, upload a selfie, and view all matches.
+                          </p>
+                          <a href={qrCodeData} download={`${selectedEvent.code}_qr.png`} className="flex items-center gap-2 bg-[#c5a880] hover:bg-[#E05E00] text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm">
+                            <Download className="h-3.5 w-3.5" />
+                            Download QR Image
+                          </a>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-slate-300">Failed to load QR code</div>
+                      )}
+                    </div>
+
+                    {/* Edit Event Details Panel */}
+                    <div className="glass-panel bg-white/[0.02] border border-white/10 p-6 rounded-2xl shadow-sm flex flex-col gap-4">
+                      <h3 className="text-sm font-bold text-slate-650 flex items-center gap-1.5">
+                        <Settings className="h-4 w-4 text-[#c5a880]" />
+                        Edit Event Details
+                      </h3>
+                      <form onSubmit={handleUpdateEvent} className="flex flex-col gap-3">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] text-slate-400 font-bold uppercase">Event Name</label>
+                          <input type="text" required value={editEventName} onChange={(e) => setEditEventName(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-2.5 py-2 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] text-slate-400 font-bold uppercase">Client Name</label>
+                          <input type="text" required value={editClientName} onChange={(e) => setEditClientName(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-2.5 py-2 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[9px] text-slate-400 font-bold uppercase">Client Mobile</label>
+                            <input type="text" required value={editClientMobile} onChange={(e) => setEditClientMobile(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-2.5 py-2 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[9px] text-slate-400 font-bold uppercase">Client Email</label>
+                            <input type="email" required value={editClientEmail} onChange={(e) => setEditClientEmail(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-2.5 py-2 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[9px] text-slate-400 font-bold uppercase">Event Date</label>
+                            <input type="date" required value={editEventDate} onChange={(e) => setEditEventDate(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-2.5 py-2 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[9px] text-slate-400 font-bold uppercase">Event Type</label>
+                            <select value={editEventType} onChange={(e) => setEditEventType(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-2.5 py-2 text-sm text-white focus:outline-none focus:border-[#c5a880]">
+                              {EVENT_TYPES.map((t) => (
+                                <option className="bg-[#0c0c0e] text-white" key={t} value={t}>{t.replace('_', ' ')}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] text-slate-400 font-bold uppercase">Event Location</label>
+                          <input type="text" value={editEventLocation} onChange={(e) => setEditEventLocation(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-2.5 py-2 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] text-slate-400 font-bold uppercase">Cover Image</label>
+                          <div className="flex items-center gap-3">
+                            {editEventCover ? (
+                              <div className="relative w-14 h-14 rounded-lg overflow-hidden border border-white/10 bg-white/[0.02] shrink-0">
+                                <img src={editEventCover} alt="Cover Preview" className="w-full h-full object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={() => setEditEventCover('')}
+                                  className="absolute inset-0 bg-black/55 hover:bg-black/70 flex items-center justify-center text-white text-[9px] font-bold opacity-0 hover:opacity-100 transition-opacity"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="w-14 h-14 rounded-lg border border-dashed border-white/10 flex items-center justify-center bg-white/[0.02] text-slate-400 shrink-0">
+                                <Camera className="h-4 w-4" />
+                              </div>
+                            )}
+                            <div className="flex-1">
+                              <label className="inline-flex items-center justify-center px-3.5 py-2 bg-white/[0.02] border border-white/10 hover:bg-white/[0.02] text-slate-200 rounded-lg text-xs font-bold cursor-pointer transition-colors w-full text-center">
+                                {uploadingAsset === 'editEventCover' ? (
+                                  <span className="flex items-center gap-1.5 justify-center">
+                                    <Loader className="h-3 w-3 animate-spin" /> Uploading...
+                                  </span>
+                                ) : (
+                                  'Choose File'
+                                )}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => handleAssetUpload(e, setEditEventCover, 'editEventCover')}
+                                  className="hidden"
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[9px] text-slate-400 font-bold uppercase">Access Type</label>
+                            <select value={editEventAccess} onChange={(e) => setEditEventAccess(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-2.5 py-2 text-sm text-white focus:outline-none focus:border-[#c5a880]">
+                              <option className="bg-[#0c0c0e] text-white" value="PUBLIC">PUBLIC</option>
+                              <option className="bg-[#0c0c0e] text-white" value="PASSWORD">PASSWORD</option>
+                              <option className="bg-[#0c0c0e] text-white" value="OTP">OTP</option>
+                            </select>
+                          </div>
+                          {editEventAccess === 'PASSWORD' && (
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[9px] text-slate-400 font-bold uppercase">New Password</label>
+                              <input type="password" value={editEventPassword} onChange={(e) => setEditEventPassword(e.target.value)} placeholder="Keep blank if unchanged" className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-2.5 py-2 text-xs text-slate-850 focus:outline-none focus:border-[#c5a880] focus:bg-white/[0.04]" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="border-t border-white/10 mt-2 pt-4 flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] text-white font-bold uppercase flex items-center gap-1.5">
+                              <Shield className="h-3.5 w-3.5 text-[#c5a880]" />
+                              Custom Event Watermark
+                            </label>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input type="checkbox" checked={editEventWmIsActive} onChange={(e) => setEditEventWmIsActive(e.target.checked)} className="sr-only peer" />
+                              <div className="w-8 h-4 bg-white/[0.06] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-white/10 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#c5a880]"></div>
+                            </label>
+                          </div>
+                          
+                          {editEventWmIsActive && (
+                            <div className="flex flex-col gap-3 bg-white/[0.02] p-3 rounded-xl border border-white/10">
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[9px] text-slate-400 font-bold uppercase">Watermark Type</label>
+                                <select value={editEventWmType} onChange={(e) => setEditEventWmType(e.target.value as 'TEXT' | 'LOGO')} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-[#c5a880]">
+                                  <option className="bg-[#0c0c0e] text-white" value="LOGO">Logo Image</option>
+                                  <option className="bg-[#0c0c0e] text-white" value="TEXT">Text Watermark</option>
+                                </select>
+                              </div>
+
+                              {editEventWmType === 'TEXT' && (
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[9px] text-slate-400 font-bold uppercase">Watermark Text</label>
+                                  <input type="text" value={editEventWmText} onChange={(e) => setEditEventWmText(e.target.value)} placeholder="© Studio Name" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                                </div>
+                              )}
+
+                              {editEventWmType === 'LOGO' && (
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[9px] text-slate-400 font-bold uppercase">Watermark Logo</label>
+                                  <div className="flex items-center gap-3">
+                                    {editEventWmLogo ? (
+                                      <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-white/10 bg-white shrink-0">
+                                        <img src={editEventWmLogo} alt="Logo Preview" className="w-full h-full object-contain p-1" />
+                                        <button type="button" onClick={() => setEditEventWmLogo('')} className="absolute inset-0 bg-black/55 hover:bg-black/70 flex items-center justify-center text-white text-[8px] font-bold opacity-0 hover:opacity-100 transition-opacity">Remove</button>
+                                      </div>
+                                    ) : (
+                                      <div className="w-12 h-12 rounded-lg border border-dashed border-white/10 flex items-center justify-center bg-white text-slate-400 shrink-0">
+                                        <Camera className="h-4 w-4" />
+                                      </div>
+                                    )}
+                                    <div className="flex-1">
+                                      <label className="inline-flex items-center justify-center px-3 py-1.5 bg-white/[0.02] border border-white/10 hover:bg-white/[0.02] text-slate-200 rounded-lg text-xs font-bold cursor-pointer transition-colors w-full text-center">
+                                        {uploadingAsset === 'editEventWmLogo' ? <span className="flex items-center gap-1.5"><Loader className="h-3 w-3 animate-spin" /> Uploading...</span> : 'Choose Logo'}
+                                        <input type="file" accept="image/*" onChange={(e) => handleAssetUpload(e, setEditEventWmLogo, 'editEventWmLogo')} className="hidden" />
+                                      </label>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[9px] text-slate-400 font-bold uppercase">Position</label>
+                                  <select value={editEventWmPos} onChange={(e) => setEditEventWmPos(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-[#c5a880]">
+                                    <option className="bg-[#0c0c0e] text-white" className="bg-[#0c0c0e] text-white" value="TOP_LEFT">Top Left</option>
+                                    <option className="bg-[#0c0c0e] text-white" className="bg-[#0c0c0e] text-white" value="TOP_RIGHT">Top Right</option>
+                                    <option className="bg-[#0c0c0e] text-white" className="bg-[#0c0c0e] text-white" value="BOTTOM_LEFT">Bottom Left</option>
+                                    <option className="bg-[#0c0c0e] text-white" className="bg-[#0c0c0e] text-white" value="BOTTOM_RIGHT">Bottom Right</option>
+                                    <option className="bg-[#0c0c0e] text-white" className="bg-[#0c0c0e] text-white" value="CENTER">Center</option>
+                                  </select>
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[9px] text-slate-400 font-bold uppercase">Opacity ({Math.round(editEventWmOpacity * 100)}%)</label>
+                                  <input type="range" min="0.1" max="1.0" step="0.05" value={editEventWmOpacity} onChange={(e) => setEditEventWmOpacity(parseFloat(e.target.value))} className="w-full h-6 cursor-pointer accent-[#c5a880]" />
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[9px] text-slate-400 font-bold uppercase">Width (%)</label>
+                                  <input type="number" min="1" max="100" value={editEventWmWidth || ''} onChange={(e) => setEditEventWmWidth(parseInt(e.target.value) || 0)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[9px] text-slate-400 font-bold uppercase">Height (%)</label>
+                                  <input type="number" min="1" max="100" value={editEventWmHeight || ''} onChange={(e) => setEditEventWmHeight(parseInt(e.target.value) || 0)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-3 mt-4">
+                          <button type="submit" className="flex-1 bg-[#c5a880] hover:bg-[#E05E00] text-white font-bold py-2.5 rounded-lg text-xs transition-colors">
+                            Save Event Details
+                          </button>
+                          <button type="button" onClick={handleDeleteEvent} className="bg-rose-950/20 hover:bg-rose-900/30 text-rose-400 border border-rose-500/20 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm">
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete Event
+                          </button>
+                        </div>
+                      </form>
+
+                      {/* Generate Event Link */}
+                      <div className="border-t border-white/10 mt-4 pt-4 flex flex-col gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const link = `${window.location.origin}/e/${selectedEvent.code}/photos`;
+                            setGeneratedLink(link);
+                            navigator.clipboard.writeText(link).then(() => {
+                              setSuccessMsg('Event link copied to clipboard!');
+                            }).catch(() => {});
+                          }}
+                          className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold py-2.5 rounded-lg text-xs transition-all flex items-center justify-center gap-2 shadow-sm"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          Generate Link of Event
+                        </button>
+                        {generatedLink && (
+                          <div className="bg-white/[0.02] border border-white/10 rounded-lg p-3 flex flex-col gap-2">
+                            <label className="text-[9px] text-slate-400 font-bold uppercase">Public Event Link</label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                readOnly
+                                value={generatedLink}
+                                className="flex-1 bg-white/[0.02] border border-white/10 rounded-lg px-2.5 py-1.5 text-[11px] text-[#c5a880] font-mono font-bold focus:outline-none select-all"
+                                onClick={(e) => (e.target as HTMLInputElement).select()}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(generatedLink).then(() => {
+                                    setSuccessMsg('Link copied!');
+                                  });
+                                }}
+                                className="bg-[#c5a880] hover:bg-[#E05E00] text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors shrink-0"
+                              >
+                                Copy
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. BRANDING TAB */}
+        {activeTab === 'branding' && studio && (
+          <div className="flex flex-col gap-8 max-w-4xl">
+            <h1 className="text-2xl font-extrabold text-white">Studio Branding & Watermark</h1>
+            
+            <form onSubmit={handleUpdateBranding} className="grid grid-cols-12 gap-8">
+              <div className="col-span-6 glass-panel bg-white/[0.02] border border-white/10 p-6 rounded-2xl flex flex-col gap-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-650 mb-2">Whitelabel Customizations</h3>
+                
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] text-slate-300 font-bold uppercase tracking-wider">Studio Name</label>
+                  <input type="text" required value={studioName} onChange={(e) => setStudioName(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                </div>
+                
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] text-slate-300 font-bold uppercase tracking-wider">Studio Logo</label>
+                  <div className="flex items-center gap-3">
+                    {studioLogo ? (
+                      <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-white/10 bg-white/[0.02] shrink-0">
+                        <img src={studioLogo} alt="Studio Logo Preview" className="w-full h-full object-contain p-1" />
+                        <button
+                          type="button"
+                          onClick={() => setStudioLogo('')}
+                          className="absolute inset-0 bg-black/55 hover:bg-black/70 flex items-center justify-center text-white text-[10px] font-bold opacity-0 hover:opacity-100 transition-opacity"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-16 h-16 rounded-lg border border-dashed border-white/10 flex items-center justify-center bg-white/[0.02] text-slate-400 shrink-0">
+                        <Camera className="h-5 w-5" />
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <label className="inline-flex items-center justify-center px-4 py-2 bg-white/[0.02] border border-white/10 hover:bg-white/[0.02] text-slate-200 rounded-lg text-xs font-bold cursor-pointer transition-colors w-full text-center">
+                        {uploadingAsset === 'studioLogo' ? (
+                          <span className="flex items-center gap-1.5 justify-center">
+                            <Loader className="h-3.5 w-3.5 animate-spin" /> Uploading...
+                          </span>
+                        ) : (
+                          'Choose File'
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleAssetUpload(e, setStudioLogo, 'studioLogo')}
+                          className="hidden"
+                        />
+                      </label>
+                      <p className="text-[10px] text-slate-400 mt-1 font-semibold">Max 2MB. Square ratio recommended.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] text-slate-300 font-bold uppercase tracking-wider">Subdomain (slug.maraphoto.com)</label>
+                  <input type="text" required value={studioSubdomain} onChange={(e) => setStudioSubdomain(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] text-slate-300 font-bold uppercase tracking-wider">Custom Domain (requires Enterprise Plan)</label>
+                  <input type="text" disabled={studio.subscriptionPlan !== 'ENTERPRISE'} value={studioCustomDomain} onChange={(e) => setStudioCustomDomain(e.target.value)} placeholder="gallery.yourdomain.com" className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880] focus:bg-white/[0.04] disabled:opacity-50" />
+                </div>
+              </div>
+
+              <div className="col-span-6 glass-panel bg-white/[0.02] border border-white/10 p-6 rounded-2xl flex flex-col gap-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-650 mb-2">Automated Photo Watermark</h3>
+                
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] text-slate-300 font-bold uppercase tracking-wider">Watermark Type</label>
+                  <select value={wmType} onChange={(e) => setWmType(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]">
+                    <option className="bg-[#0c0c0e] text-white" value="NONE">NONE</option>
+                    <option className="bg-[#0c0c0e] text-white" value="TEXT">TEXT WATERMARK</option>
+                    <option className="bg-[#0c0c0e] text-white" value="LOGO">LOGO WATERMARK</option>
+                  </select>
+                </div>
+
+                {wmType === 'TEXT' && (
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[12px] text-slate-300 font-bold uppercase tracking-wider">Watermark Text</label>
+                    <input type="text" required value={wmText} onChange={(e) => setWmText(e.target.value)} placeholder="© Dream Studio" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                  </div>
+                )}
+
+                {wmType === 'LOGO' && (
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[12px] text-slate-300 font-bold uppercase tracking-wider">Watermark Logo Image</label>
+                    <div className="flex items-center gap-3">
+                      {wmLogo ? (
+                        <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-white/10 bg-white/[0.02] shrink-0">
+                          <img src={wmLogo} alt="Watermark Logo Preview" className="w-full h-full object-contain p-1" />
+                          <button
+                            type="button"
+                            onClick={() => setWmLogo('')}
+                            className="absolute inset-0 bg-black/55 hover:bg-black/70 flex items-center justify-center text-white text-[10px] font-bold opacity-0 hover:opacity-100 transition-opacity"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="w-16 h-16 rounded-lg border border-dashed border-white/10 flex items-center justify-center bg-white/[0.02] text-slate-400 shrink-0">
+                          <Camera className="h-5 w-5" />
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <label className="inline-flex items-center justify-center px-4 py-2 bg-white/[0.02] border border-white/10 hover:bg-white/[0.02] text-slate-200 rounded-lg text-xs font-bold cursor-pointer transition-colors w-full text-center">
+                          {uploadingAsset === 'wmLogo' ? (
+                            <span className="flex items-center gap-1.5 justify-center">
+                              <Loader className="h-3.5 w-3.5 animate-spin" /> Uploading...
+                            </span>
+                          ) : (
+                            'Choose File'
+                          )}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleAssetUpload(e, setWmLogo, 'wmLogo')}
+                            className="hidden"
+                          />
+                        </label>
+                        <p className="text-[10px] text-slate-400 mt-1 font-semibold">PNG with transparent background recommended.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {wmType !== 'NONE' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[12px] text-slate-300 font-bold uppercase tracking-wider">Watermark Position</label>
+                      <select value={wmPos} onChange={(e) => setWmPos(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]">
+                        <option className="bg-[#0c0c0e] text-white" value="TOP_LEFT">TOP LEFT</option>
+                        <option className="bg-[#0c0c0e] text-white" value="TOP_RIGHT">TOP RIGHT</option>
+                        <option className="bg-[#0c0c0e] text-white" value="BOTTOM_LEFT">BOTTOM LEFT</option>
+                        <option className="bg-[#0c0c0e] text-white" value="BOTTOM_RIGHT">BOTTOM RIGHT</option>
+                        <option className="bg-[#0c0c0e] text-white" value="CENTER">CENTER OVERLAY</option>
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[12px] text-slate-300 font-bold uppercase tracking-wider">Opacity ({Math.round(wmOpacity * 100)}%)</label>
+                      <input type="range" min="0.1" max="1.0" step="0.05" value={wmOpacity} onChange={(e) => setWmOpacity(parseFloat(e.target.value))} className="w-full h-8 cursor-pointer accent-[#c5a880]" />
+                    </div>
+                  </div>
+                )}
+
+                <button type="submit" className="w-full mt-4 bg-[#c5a880] hover:bg-[#E05E00] text-white font-bold py-3.5 rounded-lg text-xs transition-colors flex items-center justify-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Save Studio Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* 4. BILLING TAB */}
+        {activeTab === 'billing' && studio && (
+          <div className="flex flex-col gap-8 max-w-4xl">
+            <h1 className="text-2xl font-extrabold text-white">Plans & Subscriptions</h1>
+            
+            <div className="glass-panel bg-white border border-[#c5a880] p-6 rounded-2xl flex items-center justify-between shadow-sm">
+              <div>
+                <span className="text-[10px] text-[#c5a880] font-bold uppercase tracking-widest">Active Plan</span>
+                <h3 className="text-xl font-bold mt-1 text-white">{studio.subscriptionPlan || 'BASIC'}</h3>
+                <p className="text-sm text-slate-300 font-medium mt-1">Status: <strong className="text-emerald-400">{studio.subscriptionStatus || 'ACTIVE'}</strong></p>
+              </div>
+              
+              {(studio.subscriptionPlan && studio.subscriptionPlan !== 'BASIC') && studio.subscriptionStatus !== 'CANCELLED' && studio.subscriptionStatus !== 'INACTIVE' ? (
+                <button onClick={handleCancelSub} className="bg-rose-950/20 hover:bg-rose-900/30 text-rose-400 px-4 py-2.5 rounded-xl border border-rose-500/20 text-xs font-bold transition-all cursor-pointer">
+                  Cancel Subscription
+                </button>
+              ) : (
+                <button onClick={() => setActiveTab('billing')} className="bg-[#c5a880] hover:bg-white text-[#09090b] px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer">
+                  Upgrade Subscription
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-4 gap-4">
+              {[
+                { name: 'BASIC', price: '₹3,500/yr', desc: 'Store 50,000 photos, 10 videos, branding.' },
+                { name: 'STANDARD', price: '₹7,900/yr', desc: 'Store 1,50,000 photos, 100 videos, watermark.' },
+                { name: 'ESSENTIAL', price: '₹15,900/yr', desc: 'Store 3,00,000 photos, 200 videos, portfolio.' },
+                { name: 'PREMIUM', price: '₹31,900/yr', desc: 'Store 7,50,000 photos, 500 videos, digital album.' }
+              ].map((p) => (
+                <div key={p.name} className={`glass-panel bg-white p-5 rounded-2xl flex flex-col justify-between h-64 border border-white/10 shadow-sm ${studio.subscriptionPlan === p.name ? 'border-[#c5a880] ring-1 ring-[#c5a880]/10' : ''}`}>
+                  <div>
+                    <h4 className="text-sm font-bold text-white tracking-wide">{p.name}</h4>
+                    <span className="text-xl font-extrabold text-[#c5a880] mt-2 block font-mono">{p.price}</span>
+                    <p className="text-[11px] text-slate-350 mt-2 leading-relaxed font-semibold">{p.desc}</p>
+                  </div>
+                  
+                  {studio.subscriptionPlan === p.name ? (
+                    <span className="w-full text-center py-2 rounded-lg bg-[#c5a880]/10 text-[#c5a880] border border-[#c5a880]/10 text-[10px] font-bold">
+                      Current Plan
+                    </span>
+                  ) : (
+                    <button onClick={() => handleSubscribe(p.name)} className="w-full bg-white/[0.02] hover:bg-white/[0.04] border border-white/10 py-2 rounded-lg text-[10px] font-bold text-slate-200 transition-colors cursor-pointer">
+                      Select Plan
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 5. SUPPORT TAB */}
+        {activeTab === 'support' && (
+          <div className="flex flex-col gap-8 max-w-4xl">
+            <h1 className="text-2xl font-extrabold text-white">Studio Help Desk</h1>
+            
+            <div className="grid grid-cols-12 gap-8">
+              <div className="col-span-5 flex flex-col gap-6">
+                <div className="glass-panel bg-white/[0.02] border border-white/10 p-6 rounded-2xl flex flex-col gap-4 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-650">Open Tickets ({tickets.length})</h3>
+                  {tickets.length > 0 ? (
+                    <div className="flex flex-col gap-3">
+                      {tickets.map((t) => (
+                        <div key={t._id} onClick={() => setSelectedTicket(t)} className={`p-4 rounded-xl cursor-pointer border transition-colors ${selectedTicket?._id === t._id ? 'bg-[#c5a880]/10 text-[#c5a880] border-[#c5a880]/20' : 'bg-white/[0.02] border-white/10 hover:border-white/10'}`}>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-xs font-bold text-white truncate max-w-[150px]">{t.subject}</span>
+                            <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${t.status === 'OPEN' ? 'bg-[#c5a880] text-white' : t.status === 'IN_PROGRESS' ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white'}`}>
+                              {t.status}
+                            </span>
+                          </div>
+                          <span className="text-[9px] text-slate-400 font-bold font-mono">
+                            Last Updated: {new Date(t.updatedAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center text-sm text-slate-300">No support tickets found</div>
+                  )}
+                </div>
+
+                <div className="glass-panel bg-white/[0.02] border border-white/10 p-6 rounded-2xl shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-650 mb-4">Open New Ticket</h3>
+                  <form onSubmit={handleOpenTicket} className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[12px] text-slate-300 font-bold uppercase tracking-wider">Subject</label>
+                      <input type="text" required value={newTicketSubject} onChange={(e) => setNewTicketSubject(e.target.value)} placeholder="Cannot upload RAW files" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[12px] text-slate-300 font-bold uppercase tracking-wider">Message Description</label>
+                      <textarea required value={newTicketMessage} onChange={(e) => setNewTicketMessage(e.target.value)} placeholder="Explain the issue you are facing..." rows={4} className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880] focus:bg-white/[0.04] resize-none" />
+                    </div>
+                    <button type="submit" className="w-full bg-[#c5a880] hover:bg-[#E05E00] text-white font-bold py-3 rounded-lg text-xs transition-colors">
+                      Open Ticket
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              <div className="col-span-7">
+                {selectedTicket ? (
+                  <div className="glass-panel bg-white/[0.02] border border-white/10 rounded-2xl flex flex-col h-[520px] overflow-hidden shadow-sm">
+                    <div className="p-5 border-b border-white/5 bg-white/[0.02]/50 flex items-center justify-between">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ticket Thread</h4>
+                        <h3 className="text-sm font-bold text-white mt-0.5">{selectedTicket.subject}</h3>
+                      </div>
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${selectedTicket.status === 'OPEN' ? 'bg-[#c5a880] text-white' : selectedTicket.status === 'IN_PROGRESS' ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white'}`}>
+                        {selectedTicket.status}
+                      </span>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
+                      {selectedTicket.messages.map((msg: any, i: number) => {
+                        const isAdmin = msg.sender === 'ADMIN';
+                        return (
+                          <div key={i} className={`flex flex-col max-w-[80%] ${isAdmin ? 'self-start' : 'self-end items-end'}`}>
+                            <div className={`p-4 rounded-2xl text-xs leading-relaxed ${isAdmin ? 'bg-white/[0.04] border border-white/10 rounded-tl-none text-slate-200' : 'bg-[#c5a880] text-white rounded-tr-none'}`}>
+                              {msg.message}
+                            </div>
+                            <span className="text-[8px] text-slate-400 font-bold mt-1 font-mono">
+                              {isAdmin ? 'System Admin' : 'Studio Owner'} • {new Date(msg.timestamp).toLocaleTimeString()}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {selectedTicket.status !== 'RESOLVED' ? (
+                      <form onSubmit={handleReplyTicket} className="p-4 border-t border-white/5 bg-white/[0.02] flex gap-3">
+                        <input type="text" required value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)} placeholder="Type your reply here..." className="flex-1 bg-white border border-slate-250 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[#c5a880]" />
+                        <button type="submit" className="bg-[#c5a880] hover:bg-[#E05E00] text-white p-2.5 rounded-lg transition-colors">
+                          <Send className="h-4.5 w-4.5" />
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="p-4 bg-emerald-50 text-emerald-600 text-center text-xs border-t border-white/5 font-bold">
+                        This support ticket has been resolved.
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="h-full glass-panel bg-white/[0.02] border border-white/10 rounded-2xl flex flex-col items-center justify-center text-center p-8 text-slate-400 shadow-sm">
+                    <HelpCircle className="h-8 w-8 text-slate-300 mb-2" />
+                    <span className="text-xs font-semibold">Select a support ticket from the list to view the message thread.</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 6. CREATE EVENT TAB */}
+        {activeTab === 'create-event' && (
+          <div className="flex flex-col gap-8 max-w-2xl bg-white/[0.02] p-8 rounded-3xl border border-white/10 shadow-md">
+            <div className="flex items-center gap-3">
+              <Plus className="h-6 w-6 text-[#c5a880]" />
+              <h1 className="text-2xl font-extrabold text-white">Create New Event Gallery</h1>
+            </div>
+            <p className="text-xs text-slate-400 font-semibold font-poppins -mt-6">Setup a new QR-based photo retrieval gallery for your clients.</p>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setLoading(true);
+              try {
+                const subdomain = eventName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+                const res = await apiClient.post('/event', {
+                  name: eventName,
+                  clientName,
+                  clientPhone: clientMobile,
+                  clientEmail,
+                  eventDate,
+                  eventType,
+                  coverImage: eventCover,
+                  accessType: 'PUBLIC',
+                  assignedTeam: []
+                });
+                setSuccessMsg('Event gallery created successfully!');
+                setActiveTab('events');
+                // Refresh events
+                const evRes = await apiClient.get('/event/my');
+                setEvents(evRes.data.events);
+              } catch (err: any) {
+                setErrorMsg(err.response?.data?.error || 'Failed to create event gallery');
+              } finally {
+                setLoading(false);
+              }
+            }} className="flex flex-col gap-5 text-left font-poppins">
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] text-slate-350 font-bold uppercase tracking-wider">Event Name</label>
+                <input type="text" required value={eventName} onChange={(e) => setEventName(e.target.value)} placeholder="e.g. Sharma Wedding" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] text-slate-350 font-bold uppercase tracking-wider">Client Name</label>
+                  <input type="text" required value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Aarav Sharma" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] text-slate-350 font-bold uppercase tracking-wider">Client Mobile</label>
+                  <input type="tel" required value={clientMobile} onChange={(e) => setClientMobile(e.target.value)} placeholder="9876543210" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] text-slate-350 font-bold uppercase tracking-wider">Client Email</label>
+                <input type="email" required value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="client@wedding.com" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] text-slate-350 font-bold uppercase tracking-wider">Event Date</label>
+                  <input type="date" required value={eventDate} onChange={(e) => setEventDate(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] text-slate-350 font-bold uppercase tracking-wider">Event Type</label>
+                  <select value={eventType} onChange={(e) => setEventType(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]">
+                    {EVENT_TYPES.map((t) => (
+                      <option className="bg-[#0c0c0e] text-white" key={t} value={t}>{t.replace('_', ' ')}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] text-slate-350 font-bold uppercase tracking-wider">Cover Image</label>
+                <div className="flex items-center gap-3">
+                  {eventCover ? (
+                    <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-white/10 bg-white/[0.02] shrink-0">
+                      <img src={eventCover} alt="Cover Preview" className="w-full h-full object-cover" />
+                      <button type="button" onClick={() => setEventCover('')} className="absolute inset-0 bg-black/55 hover:bg-black/70 flex items-center justify-center text-white text-[10px] font-bold opacity-0 hover:opacity-100 transition-opacity">Remove</button>
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg border border-dashed border-white/10 flex items-center justify-center bg-white/[0.02] text-slate-400 shrink-0">
+                      <Camera className="h-5 w-5" />
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <label className="inline-flex items-center justify-center px-4 py-2 bg-white/[0.02] border border-white/10 hover:bg-white/[0.04] text-slate-200 rounded-lg text-xs font-bold cursor-pointer transition-colors w-full text-center">
+                      {uploadingAsset === 'eventCover' ? <Loader className="h-3.5 w-3.5 animate-spin" /> : 'Choose File'}
+                      <input type="file" accept="image/*" onChange={(e) => handleAssetUpload(e, setEventCover, 'eventCover')} className="hidden" />
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <button type="submit" disabled={loading} className="w-full mt-4 bg-[#c5a880] hover:bg-white text-[#09090b] font-bold py-3.5 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md">
+                {loading ? <Loader className="h-4 w-4 animate-spin" /> : 'Create Event Gallery'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* 7. CUSTOMERS TAB */}
+        {activeTab === 'customers' && (
+          <div className="flex flex-col gap-6 font-poppins text-left">
+            {customerSubView === 'list' ? (
+              <>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h1 className="text-2xl font-extrabold text-white">Customers Directory</h1>
+                    <p className="text-xs text-slate-400 mt-1 font-semibold">Manage your client relationships, contact details, and bookings.</p>
+                  </div>
+                  <button onClick={() => setCustomerSubView('add')} className="bg-[#c5a880] hover:bg-white text-[#09090b] px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md">
+                    <Plus className="h-4 w-4" /> Add Customer
+                  </button>
+                </div>
+                <div className="glass-panel bg-[#0c0c0e]/30 border border-white/10 rounded-2xl overflow-hidden shadow-md">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-white/[0.03] text-slate-350 uppercase tracking-wider font-black">
+                        <th className="p-4">Customer Name</th>
+                        <th className="p-4">Email</th>
+                        <th className="p-4">Mobile</th>
+                        <th className="p-4 text-center">Events Booked</th>
+                        <th className="p-4 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 text-slate-200">
+                      {customers.map((cust, i) => (
+                        <tr key={i} className="hover:bg-white/[0.01] transition-colors">
+                          <td className="p-4 font-bold text-white">{cust.name}</td>
+                          <td className="p-4 text-slate-300 font-semibold">{cust.email}</td>
+                          <td className="p-4 font-mono font-semibold">{cust.phone}</td>
+                          <td className="p-4 text-center font-bold text-[#c5a880]">{cust.events}</td>
+                          <td className="p-4 text-center">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${cust.status === 'Active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10' : cust.status === 'Lead' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/10' : 'bg-slate-500/10 text-slate-400 border border-slate-500/10'}`}>
+                              {cust.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <div className="max-w-xl flex flex-col gap-6">
+                <div className="flex items-center gap-4">
+                  <button onClick={() => setCustomerSubView('list')} className="text-slate-300 hover:text-white text-xs font-bold underline cursor-pointer">
+                    ← Back to Customers
+                  </button>
+                  <h1 className="text-2xl font-extrabold text-white">Add New Customer</h1>
+                </div>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  if (newCustName) {
+                    setCustomers([...customers, { name: newCustName, email: newCustEmail || 'n/a', phone: newCustPhone || 'n/a', events: 0, status: 'Active' }]);
+                    setNewCustName(''); setNewCustEmail(''); setNewCustPhone('');
+                    setCustomerSubView('list');
+                    setSuccessMsg('Customer added successfully!');
+                  }
+                }} className="glass-panel bg-white/[0.02] border border-white/10 p-8 rounded-2xl flex flex-col gap-4 text-left shadow-sm">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Full Name</label>
+                    <input type="text" required value={newCustName} onChange={(e) => setNewCustName(e.target.value)} placeholder="Yashvi Patel" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Email Address</label>
+                    <input type="email" value={newCustEmail} onChange={(e) => setNewCustEmail(e.target.value)} placeholder="yashvi@gmail.com" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Mobile Phone</label>
+                    <input type="tel" value={newCustPhone} onChange={(e) => setNewCustPhone(e.target.value)} placeholder="9876543210" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                  </div>
+                  <button type="submit" className="w-full bg-[#c5a880] hover:bg-white text-[#09090b] font-bold py-3.5 rounded-lg text-xs mt-3 cursor-pointer transition-colors shadow-md">
+                    Save Customer Profile
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 8. TEAM TAB */}
+        {activeTab === 'team' && (
+          <div className="flex flex-col gap-6 font-poppins text-left">
+            {teamSubView === 'list' ? (
+              <>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h1 className="text-2xl font-extrabold text-white">Studio Team & Collaborators</h1>
+                    <p className="text-xs text-slate-400 mt-1 font-semibold">Assign permissions, manage editors, and invite second-shooters.</p>
+                  </div>
+                  <button onClick={() => setTeamSubView('add')} className="bg-[#c5a880] hover:bg-white text-[#09090b] px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md">
+                    <Plus className="h-4 w-4" /> Invite Member
+                  </button>
+                </div>
+                <div className="glass-panel bg-[#0c0c0e]/30 border border-white/10 rounded-2xl overflow-hidden shadow-md">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-white/[0.03] text-slate-350 uppercase tracking-wider font-black">
+                        <th className="p-4">Member Name</th>
+                        <th className="p-4">Email Address</th>
+                        <th className="p-4">Role / Designation</th>
+                        <th className="p-4 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 text-slate-200">
+                      {team.map((member, i) => (
+                        <tr key={i} className="hover:bg-white/[0.01] transition-colors">
+                          <td className="p-4 font-bold text-white">{member.name}</td>
+                          <td className="p-4 text-slate-300 font-semibold">{member.email}</td>
+                          <td className="p-4 font-bold text-[#c5a880]">{member.role}</td>
+                          <td className="p-4 text-center">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${member.status === 'Active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10' : 'bg-slate-500/10 text-slate-400 border border-slate-500/10'}`}>
+                              {member.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <div className="max-w-xl flex flex-col gap-6">
+                <div className="flex items-center gap-4">
+                  <button onClick={() => setTeamSubView('list')} className="text-slate-300 hover:text-white text-xs font-bold underline cursor-pointer">
+                    ← Back to Team
+                  </button>
+                  <h1 className="text-2xl font-extrabold text-white">Invite Team Member</h1>
+                </div>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  if (newMemberName) {
+                    setTeam([...team, { name: newMemberName, email: newMemberEmail, role: newMemberRole, status: 'Pending Invite' }]);
+                    setNewMemberName(''); setNewMemberEmail('');
+                    setTeamSubView('list');
+                    setSuccessMsg('Team member invitation sent!');
+                  }
+                }} className="glass-panel bg-white/[0.02] border border-white/10 p-8 rounded-2xl flex flex-col gap-4 text-left shadow-sm">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Full Name</label>
+                    <input type="text" required value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} placeholder="Tirth Italiya" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Email Address</label>
+                    <input type="email" required value={newMemberEmail} onChange={(e) => setNewMemberEmail(e.target.value)} placeholder="tirth@studio.com" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Role / Specialization</label>
+                    <select value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]">
+                      <option className="bg-[#0c0c0e] text-white" value="Lead Photographer">Lead Photographer</option>
+                      <option className="bg-[#0c0c0e] text-white" value="Chief Editor (AI Tuning)">Chief Editor (AI Tuning)</option>
+                      <option className="bg-[#0c0c0e] text-white" value="Assistant Photographer">Assistant Photographer</option>
+                      <option className="bg-[#0c0c0e] text-white" value="Second Shooter">Second Shooter</option>
+                    </select>
+                  </div>
+                  <button type="submit" className="w-full bg-[#c5a880] hover:bg-white text-[#09090b] font-bold py-3.5 rounded-lg text-xs mt-3 cursor-pointer transition-colors shadow-md">
+                    Send Invitation Link
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 9. ORDER BOOKING TAB */}
+        {activeTab === 'bookings' && (
+          <div className="flex flex-col gap-6 font-poppins text-left">
+            {bookingSubView === 'list' ? (
+              <>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h1 className="text-2xl font-extrabold text-white">Event Bookings Log</h1>
+                    <p className="text-xs text-slate-400 mt-1 font-semibold">Track scheduled photography shoots, client details, and revenue contracts.</p>
+                  </div>
+                  <button onClick={() => setBookingSubView('add')} className="bg-[#c5a880] hover:bg-white text-[#09090b] px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md">
+                    <Plus className="h-4 w-4" /> New Booking
+                  </button>
+                </div>
+                <div className="glass-panel bg-[#0c0c0e]/30 border border-white/10 rounded-2xl overflow-hidden shadow-md">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-white/[0.03] text-slate-350 uppercase tracking-wider font-black">
+                        <th className="p-4">Client Name</th>
+                        <th className="p-4">Shoot Type</th>
+                        <th className="p-4">Date</th>
+                        <th className="p-4">Contract Value</th>
+                        <th className="p-4 text-[#c5a880]">Token Paid</th>
+                        <th className="p-4 text-rose-455">Balance Left</th>
+                        <th className="p-4 text-center">Payment status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 text-slate-200">
+                      {bookings.map((booking, i) => (
+                        <tr key={i} className="hover:bg-white/[0.01] transition-colors">
+                          <td className="p-4 font-bold text-white">{booking.client}</td>
+                          <td className="p-4 text-slate-300 font-semibold">{booking.type}</td>
+                          <td className="p-4 font-mono font-semibold">{booking.date}</td>
+                          <td className="p-4 font-black text-white">₹{booking.value.replace('₹', '')}</td>
+                          <td className="p-4 font-bold text-[#c5a880]">₹{booking.advance ? booking.advance.replace('₹', '') : '0'}</td>
+                          <td className="p-4 font-black text-rose-400">₹{booking.balance ? booking.balance.replace('₹', '') : '0'}</td>
+                          <td className="p-4 text-center">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${booking.status === 'Fully Paid' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10' : booking.status === 'Paid Advance' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/10' : 'bg-rose-500/10 text-rose-400 border border-rose-500/10'}`}>
+                              {booking.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <div className="max-w-xl flex flex-col gap-6">
+                <div className="flex items-center gap-4">
+                  <button onClick={() => { setBookingSubView('list'); setSelectedEventCodeForBooking(''); }} className="text-slate-300 hover:text-white text-xs font-bold underline cursor-pointer">
+                    ← Back to Bookings
+                  </button>
+                  <h1 className="text-2xl font-extrabold text-white">Create Event Booking</h1>
+                </div>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  if (newBookingClient) {
+                    const totalVal = parseFloat(newBookingValue) || 0;
+                    const advVal = parseFloat(newBookingAdvance) || 0;
+                    const balVal = Math.max(0, totalVal - advVal);
+                    
+                    setBookings([...bookings, { 
+                      client: newBookingClient, 
+                      type: newBookingType, 
+                      date: newBookingDate || '2026-07-21', 
+                      value: `₹${totalVal.toLocaleString()}`, 
+                      advance: `₹${advVal.toLocaleString()}`, 
+                      balance: `₹${balVal.toLocaleString()}`, 
+                      status: newBookingStatus 
+                    }]);
+                    setNewBookingClient(''); setNewBookingDate(''); setNewBookingValue(''); setNewBookingAdvance(''); setNewBookingBalance('');
+                    setSelectedEventCodeForBooking('');
+                    setBookingSubView('list');
+                    setSuccessMsg('New booking record added successfully!');
+                  }
+                }} className="glass-panel bg-white/[0.02] border border-white/10 p-8 rounded-2xl flex flex-col gap-4 text-left shadow-sm">
+                  
+                  {/* Select Event */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Select Event</label>
+                    <select
+                      value={selectedEventCodeForBooking}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedEventCodeForBooking(val);
+                        const ev = events.find(event => event._id === val || event.code === val);
+                        if (ev) {
+                          setNewBookingClient(`${ev.clientName} (${ev.name})`);
+                          setNewBookingType(ev.eventType === 'WEDDING' ? 'Destination Wedding' : ev.eventType === 'CORPORATE' ? 'Corporate Office Shoot' : 'Outdoor Pre-Wedding');
+                          setNewBookingDate(ev.date ? ev.date.split('T')[0] : '2026-07-21');
+                        }
+                      }}
+                      className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]"
+                    >
+                      <option className="bg-[#0c0c0e] text-white" value="">-- Or Select Existing Event --</option>
+                      {events.map((ev) => (
+                        <option className="bg-[#0c0c0e] text-white" key={ev._id} value={ev._id}>{ev.name} ({ev.clientName})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Client Name</label>
+                    <input type="text" required value={newBookingClient} onChange={(e) => setNewBookingClient(e.target.value)} placeholder="Amit Shah (Wedding)" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Shoot Type</label>
+                    <select value={newBookingType} onChange={(e) => setNewBookingType(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]">
+                      <option className="bg-[#0c0c0e] text-white" value="Destination Wedding">Destination Wedding</option>
+                      <option className="bg-[#0c0c0e] text-white" value="Outdoor Pre-Wedding">Outdoor Pre-Wedding</option>
+                      <option className="bg-[#0c0c0e] text-white" value="Indoor Gala Coverage">Indoor Gala Coverage</option>
+                      <option className="bg-[#0c0c0e] text-white" value="Corporate Office Shoot">Corporate Office Shoot</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Shoot Date</label>
+                      <input type="date" required value={newBookingDate} onChange={(e) => setNewBookingDate(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Contract Value (INR)</label>
+                      <input type="number" required value={newBookingValue} onChange={(e) => setNewBookingValue(e.target.value)} placeholder="150000" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Token / Advance Paid (INR)</label>
+                      <input type="number" value={newBookingAdvance} onChange={(e) => setNewBookingAdvance(e.target.value)} placeholder="50000" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Balance Left / Due (Auto)</label>
+                      <div className="w-full bg-[#0c0c0e]/50 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-slate-350 font-bold font-mono">
+                        ₹{(Math.max(0, (parseFloat(newBookingValue) || 0) - (parseFloat(newBookingAdvance) || 0))).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Payment Status</label>
+                    <select value={newBookingStatus} onChange={(e) => setNewBookingStatus(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]">
+                      <option className="bg-[#0c0c0e] text-white" value="Paid Advance">Paid Advance</option>
+                      <option className="bg-[#0c0c0e] text-white" value="Fully Paid">Fully Paid</option>
+                      <option className="bg-[#0c0c0e] text-white" value="Unpaid">Unpaid</option>
+                    </select>
+                  </div>
+                  <button type="submit" className="w-full bg-[#c5a880] hover:bg-white text-[#09090b] font-bold py-3.5 rounded-lg text-xs mt-3 cursor-pointer transition-colors shadow-md">
+                    Register Booking Record
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 10. QUOTATION TAB */}
+        {activeTab === 'quotations' && (
+          <div className="flex flex-col gap-6 font-poppins text-left">
+            {quotationSubView === 'list' ? (
+              <>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h1 className="text-2xl font-extrabold text-white">Quotations Generated</h1>
+                    <p className="text-xs text-slate-400 mt-1 font-semibold">Generate and track formal price estimations sent to prospective clients.</p>
+                  </div>
+                  <button onClick={() => setQuotationSubView('add')} className="bg-[#c5a880] hover:bg-[#E05E00] text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md">
+                    <Plus className="h-4 w-4" /> New Quotation
+                  </button>
+                </div>
+                <div className="glass-panel bg-[#0c0c0e]/30 border border-white/10 rounded-2xl overflow-hidden shadow-md">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-white/[0.03] text-slate-350 uppercase tracking-wider font-black">
+                        <th className="p-4">Quote ID</th>
+                        <th className="p-4">Prospective Client</th>
+                        <th className="p-4">Scope of Work</th>
+                        <th className="p-4">Estimated Value</th>
+                        <th className="p-4 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 text-slate-200">
+                      {quotations.map((quote, i) => (
+                        <tr key={i} className="hover:bg-white/[0.01] transition-colors">
+                          <td className="p-4 font-mono font-bold text-[#c5a880]">{quote.id}</td>
+                          <td className="p-4 font-bold text-white">{quote.client}</td>
+                          <td className="p-4 text-slate-300 font-semibold">{quote.scope}</td>
+                          <td className="p-4 font-black text-white">{quote.value}</td>
+                          <td className="p-4 text-center">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${quote.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10' : quote.status === 'Sent' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/10' : 'bg-amber-500/10 text-amber-400 border border-amber-500/10'}`}>
+                              {quote.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <div className="max-w-xl flex flex-col gap-6">
+                <div className="flex items-center gap-4">
+                  <button onClick={() => { setQuotationSubView('list'); setSelectedEventCodeForQuote(''); }} className="text-slate-300 hover:text-white text-xs font-bold underline cursor-pointer">
+                    ← Back to Quotations
+                  </button>
+                  <h1 className="text-2xl font-extrabold text-white">Generate Price Quotation</h1>
+                </div>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  if (newQuoteClient) {
+                    setQuotations([...quotations, { id: `QT-2026-${String(quotations.length + 1).padStart(3, '0')}`, client: newQuoteClient, scope: newQuoteScope || 'Shoot coverage', value: newQuoteValue ? `₹${parseFloat(newQuoteValue).toLocaleString()}` : '₹0', status: newQuoteStatus }]);
+                    setNewQuoteClient(''); setNewQuoteScope(''); setNewQuoteValue('');
+                    setSelectedEventCodeForQuote('');
+                    setQuotationSubView('list');
+                    setSuccessMsg('Price quotation generated and logged!');
+                  }
+                }} className="glass-panel bg-white/[0.02] border border-white/10 p-8 rounded-2xl flex flex-col gap-4 text-left shadow-sm">
+                  
+                  {/* Select Event */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Select Event</label>
+                    <select
+                      value={selectedEventCodeForQuote}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedEventCodeForQuote(val);
+                        const ev = events.find(event => event._id === val || event.code === val);
+                        if (ev) {
+                          setNewQuoteClient(`${ev.clientName} (${ev.name})`);
+                          setNewQuoteScope(`${ev.type} Photography Coverage`);
+                        }
+                      }}
+                      className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]"
+                    >
+                      <option className="bg-[#0c0c0e] text-white" value="">-- Or Select Existing Event --</option>
+                      {events.map((ev) => (
+                        <option className="bg-[#0c0c0e] text-white" key={ev._id} value={ev._id}>{ev.name} ({ev.clientName})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Prospective Client</label>
+                    <input type="text" required value={newQuoteClient} onChange={(e) => setNewQuoteClient(e.target.value)} placeholder="Sharma Family Wedding" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Scope of Work</label>
+                    <input type="text" required value={newQuoteScope} onChange={(e) => setNewQuoteScope(e.target.value)} placeholder="3 Day Photography + Cinematography" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Estimated Amount (INR)</label>
+                      <input type="number" required value={newQuoteValue} onChange={(e) => setNewQuoteValue(e.target.value)} placeholder="275000" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Status</label>
+                      <select value={newQuoteStatus} onChange={(e) => setNewQuoteStatus(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]">
+                        <option className="bg-[#0c0c0e] text-white" value="Sent">Sent</option>
+                        <option className="bg-[#0c0c0e] text-white" value="Approved">Approved</option>
+                        <option className="bg-[#0c0c0e] text-white" value="Pending Review">Pending Review</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button type="submit" className="w-full bg-[#c5a880] hover:bg-white text-[#09090b] font-bold py-3.5 rounded-lg text-xs mt-3 cursor-pointer transition-colors shadow-md">
+                    Generate Price Quote
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 11. BILL TAB */}
+        {activeTab === 'bills' && (
+          <div className="flex flex-col gap-6 font-poppins text-left">
+            {billSubView === 'list' ? (
+              <>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h1 className="text-2xl font-extrabold text-white">Invoices & Billing Log</h1>
+                    <p className="text-xs text-slate-450 mt-1 font-semibold">Generate gst-compliant invoices, track due balances, and log client payouts.</p>
+                  </div>
+                  <button onClick={() => setBillSubView('add')} className="bg-[#c5a880] hover:bg-white text-[#09090b] px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md">
+                    <Receipt className="h-4 w-4" /> Create Invoice
+                  </button>
+                </div>
+                <div className="glass-panel bg-[#0c0c0e]/30 border border-white/10 rounded-2xl overflow-hidden shadow-md">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-white/[0.03] text-slate-350 uppercase tracking-wider font-black">
+                        <th className="p-4">Invoice ID</th>
+                        <th className="p-4">Billed Client</th>
+                        <th className="p-4">Issue Date</th>
+                        <th className="p-4">Total Amount</th>
+                        <th className="p-4 text-[#c5a880]">Token Paid</th>
+                        <th className="p-4 text-rose-450">Balance Left</th>
+                        <th className="p-4 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 text-slate-200">
+                      {bills.map((invoice, i) => (
+                        <tr key={i} className="hover:bg-white/[0.01] transition-colors">
+                          <td className="p-4 font-mono font-bold text-[#c5a880]">{invoice.id}</td>
+                          <td className="p-4 font-bold text-white">{invoice.client}</td>
+                          <td className="p-4 font-semibold text-slate-300">{invoice.date}</td>
+                          <td className="p-4 font-black text-white">₹{invoice.amount.replace('₹', '')}</td>
+                          <td className="p-4 font-bold text-[#c5a880]">₹{invoice.advance ? invoice.advance.replace('₹', '') : '0'}</td>
+                          <td className="p-4 font-black text-rose-400">₹{invoice.balance ? invoice.balance.replace('₹', '') : '0'}</td>
+                          <td className="p-4 text-center">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${invoice.status === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10' : invoice.status === 'Overdue' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/10' : 'bg-amber-500/10 text-amber-400 border border-amber-500/10'}`}>
+                              {invoice.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <div className="max-w-xl flex flex-col gap-6">
+                <div className="flex items-center gap-4">
+                  <button onClick={() => { setBillSubView('list'); setSelectedEventCodeForBill(''); }} className="text-slate-300 hover:text-white text-xs font-bold underline cursor-pointer">
+                    ← Back to Bills
+                  </button>
+                  <h1 className="text-2xl font-extrabold text-white">Create GST Invoice</h1>
+                </div>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  if (newBillClient) {
+                    const totalVal = parseFloat(newBillAmount) || 0;
+                    const advVal = parseFloat(newBillAdvance) || 0;
+                    const balVal = Math.max(0, totalVal - advVal);
+                    
+                    setBills([...bills, { 
+                      id: `INV-2026-${String(bills.length + 101).padStart(3, '0')}`, 
+                      client: newBillClient, 
+                      date: newBillDate || '2026-07-14', 
+                      amount: `₹${totalVal.toLocaleString()}`, 
+                      advance: `₹${advVal.toLocaleString()}`, 
+                      balance: `₹${balVal.toLocaleString()}`, 
+                      status: newBillStatus 
+                    }]);
+                    setNewBillClient(''); setNewBillDate(''); setNewBillAmount(''); setNewBillAdvance(''); setNewBillBalance('');
+                    setSelectedEventCodeForBill('');
+                    setBillSubView('list');
+                    setSuccessMsg('GST Invoice created successfully!');
+                  }
+                }} className="glass-panel bg-white/[0.02] border border-white/10 p-8 rounded-2xl flex flex-col gap-4 text-left shadow-sm">
+                  
+                  {/* Select Event */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Select Event</label>
+                    <select
+                      value={selectedEventCodeForBill}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedEventCodeForBill(val);
+                        const ev = events.find(event => event._id === val || event.code === val);
+                        if (ev) {
+                          setNewBillClient(`${ev.clientName} (${ev.name})`);
+                          setNewBillDate(ev.date ? ev.date.split('T')[0] : '2026-07-14');
+                        }
+                      }}
+                      className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]"
+                    >
+                      <option className="bg-[#0c0c0e] text-white" value="">-- Or Select Existing Event --</option>
+                      {events.map((ev) => (
+                        <option className="bg-[#0c0c0e] text-white" key={ev._id} value={ev._id}>{ev.name} ({ev.clientName})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Client Name</label>
+                    <input type="text" required value={newBillClient} onChange={(e) => setNewBillClient(e.target.value)} placeholder="Amit Shah (Wedding)" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Invoice Date</label>
+                      <input type="date" required value={newBillDate} onChange={(e) => setNewBillDate(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Total Amount (INR)</label>
+                      <input type="number" required value={newBillAmount} onChange={(e) => setNewBillAmount(e.target.value)} placeholder="150000" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Token / Advance Paid (INR)</label>
+                      <input type="number" value={newBillAdvance} onChange={(e) => setNewBillAdvance(e.target.value)} placeholder="50000" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Balance Left / Due (Auto)</label>
+                      <div className="w-full bg-[#0c0c0e]/50 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-slate-350 font-bold font-mono">
+                        ₹{(Math.max(0, (parseFloat(newBillAmount) || 0) - (parseFloat(newBillAdvance) || 0))).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Invoice status</label>
+                    <select value={newBillStatus} onChange={(e) => setNewBillStatus(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]">
+                      <option className="bg-[#0c0c0e] text-white" value="Unpaid">Unpaid</option>
+                      <option className="bg-[#0c0c0e] text-white" value="Paid">Paid</option>
+                      <option className="bg-[#0c0c0e] text-white" value="Overdue">Overdue</option>
+                    </select>
+                  </div>
+                  <button type="submit" className="w-full bg-[#c5a880] hover:bg-white text-[#09090b] font-bold py-3.5 rounded-lg text-xs mt-3 cursor-pointer transition-colors shadow-md">
+                    Generate Invoice
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 12. PAYMENT QR TAB */}
+        {activeTab === 'payment-qr' && (
+          <div className="flex flex-col gap-6 max-w-xl bg-white/[0.02] p-8 rounded-3xl border border-white/10 shadow-md animate-fade-in">
+            <div>
+              <h1 className="text-2xl font-extrabold text-white">Studio UPI Payment QR</h1>
+              <p className="text-xs text-slate-400 mt-1 font-semibold font-poppins">Enable direct client scan-to-pay via PhonePe, Google Pay, Paytm, or BHIM.</p>
+            </div>
+            
+            <div className="flex flex-col items-center bg-white p-6 rounded-2xl border border-[#c5a880]/20 shadow-inner w-72 mx-auto mt-4">
+              <span className="text-[9px] text-[#09090b] font-black uppercase tracking-widest mb-3 font-poppins">Scan & Pay Directly</span>
+              
+              <div className="p-2 border border-slate-200 rounded-lg bg-slate-50">
+                <img 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent('upi://pay?pa=maraphoto@paytm&pn=Mara%20Photo%20Studio&cu=INR')}`}
+                  alt="UPI QR Code" 
+                  className="w-48 h-48"
+                />
+              </div>
+              <span className="text-[10px] text-slate-500 font-bold mt-4 font-mono">maraphoto@paytm</span>
+              <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider mt-0.5 font-poppins">Verified Merchant Account</span>
+            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); setSuccessMsg('UPI configuration saved successfully!'); }} className="flex flex-col gap-4 text-left mt-6 font-poppins">
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] text-slate-350 font-bold uppercase tracking-wider">Your Merchant UPI ID</label>
+                <input type="text" required defaultValue="maraphoto@paytm" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] text-slate-350 font-bold uppercase tracking-wider">Business Display Name</label>
+                <input type="text" required defaultValue="Mara Photo Studio" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+              </div>
+              <button type="submit" className="w-full bg-[#c5a880] hover:bg-white text-[#09090b] font-bold py-3.5 rounded-lg text-xs transition-colors shadow-md cursor-pointer">
+                Update UPI Configuration
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* 13. CALENDAR TAB */}
+        {activeTab === 'calendar' && (
+          <div className="flex flex-col gap-6 max-w-4xl">
+            <div>
+              <h1 className="text-2xl font-extrabold text-white">Studio Shoot CalendarLog</h1>
+              <p className="text-xs text-slate-400 mt-1 font-semibold font-poppins">View upcoming wedding coverages, client meetings, and processing deadlines.</p>
+            </div>
+            
+            <div className="grid grid-cols-12 gap-8">
+              <div className="col-span-8 bg-white/[0.01] border border-white/10 p-6 rounded-2xl shadow-md">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">July 2026</h3>
+                  <div className="flex gap-2">
+                    <button className="p-1 bg-white/5 border border-white/10 rounded hover:bg-white/10 text-xs">◀</button>
+                    <button className="p-1 bg-white/5 border border-white/10 rounded hover:bg-white/10 text-xs">▶</button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-7 gap-2 text-center text-[10px] font-bold text-slate-350 uppercase tracking-wider mb-2">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => <div key={d}>{d}</div>)}
+                </div>
+                <div className="grid grid-cols-7 gap-2">
+                  {Array.from({ length: 31 }, (_, i) => {
+                    const day = i + 1;
+                    const isBooked = day === 14 || day === 21 || day === 28;
+                    return (
+                      <div key={day} className={`h-14 rounded-xl border flex flex-col justify-between p-1.5 transition-all ${isBooked ? 'bg-[#c5a880]/10 border-[#c5a880]/30 text-[#c5a880]' : 'bg-[#0c0c0e] border-white/5 text-slate-200'}`}>
+                        <span className="font-mono text-[9px] font-bold">{day}</span>
+                        {isBooked && <span className="text-[7px] font-black uppercase tracking-wider bg-[#c5a880] text-[#09090b] py-0.5 rounded text-center truncate font-poppins">Shoot</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="col-span-4 flex flex-col gap-4">
+                <div className="glass-panel bg-white/[0.02] border border-white/10 p-5 rounded-2xl">
+                  <h3 className="text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">Upcoming Shoots</h3>
+                  <div className="flex flex-col gap-3">
+                    <div className="p-3 bg-[#c5a880]/5 border border-[#c5a880]/20 rounded-xl text-xs">
+                      <p className="font-bold text-[#c5a880]">Amit Shah Destination Wed</p>
+                      <p className="text-[10px] text-slate-450 font-mono mt-0.5">July 21, 2026 • 09:00 AM</p>
+                    </div>
+                    <div className="p-3 bg-white/[0.02] border border-white/10 rounded-xl text-xs">
+                      <p className="font-bold text-white">Priyesh Outdoor Pre-Wed</p>
+                      <p className="text-[10px] text-slate-450 font-mono mt-0.5">Sept 10, 2026 • 04:30 PM</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 14. PROFILE TAB */}
+        {activeTab === 'profile' && sessionUser && (
+          <div className="flex flex-col gap-6 max-w-xl bg-white/[0.02] p-8 rounded-3xl border border-white/10 shadow-md">
+            <div>
+              <h1 className="text-2xl font-extrabold text-white">Personal Profile & Security</h1>
+              <p className="text-xs text-slate-400 mt-1 font-semibold font-poppins">Manage your credential security, verification email, and active roles.</p>
+            </div>
+            
+            <form onSubmit={(e) => { e.preventDefault(); setSuccessMsg('Profile settings saved successfully!'); }} className="flex flex-col gap-5 text-left font-poppins">
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] text-slate-350 font-bold uppercase tracking-wider">Account Full Name</label>
+                <input type="text" required defaultValue={sessionUser.name} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] text-slate-350 font-bold uppercase tracking-wider">Login Email Address</label>
+                <input type="email" disabled value={sessionUser.email} className="w-full bg-[#0c0c0e]/50 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-slate-400 focus:outline-none cursor-not-allowed" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] text-slate-350 font-bold uppercase tracking-wider">Active Workspace Role</label>
+                <input type="text" disabled value={sessionUser.role} className="w-full bg-[#0c0c0e]/50 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-[#c5a880] font-bold cursor-not-allowed uppercase" />
+              </div>
+              <div className="flex flex-col gap-1 pt-3 border-t border-white/5">
+                <label className="text-[12px] text-slate-350 font-bold uppercase tracking-wider">New Password</label>
+                <input type="password" placeholder="••••••••" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c5a880]" />
+              </div>
+              <button type="submit" className="w-full bg-[#c5a880] hover:bg-white text-[#09090b] font-bold py-3.5 rounded-lg text-xs transition-colors shadow-md mt-2 cursor-pointer">
+                Save Profile Configuration
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* 15. PORTFOLIOS TAB */}
+        {activeTab === 'portfolios' && (
+          <div className="flex flex-col gap-6 font-poppins text-left">
+            {portfolioSubView === 'list' ? (
+              <>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h1 className="text-2xl font-extrabold text-white">Studio Portfolios</h1>
+                    <p className="text-xs text-slate-400 mt-1 font-semibold">Showcase your best works and curated event categories on your public white-label website.</p>
+                  </div>
+                  <button onClick={() => setPortfolioSubView('add')} className="bg-[#c5a880] hover:bg-white text-[#09090b] px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md">
+                    <Plus className="h-4 w-4" /> Create Portfolio
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {portfolios.map((portfolio, idx) => (
+                    <div key={idx} className="glass-panel bg-white/[0.02] border border-white/10 hover:border-[#c5a880] p-5 rounded-2xl flex flex-col justify-between h-48 group shadow-sm transition-colors relative overflow-hidden">
+                      {portfolio.coverUrl && (
+                        <div className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
+                          <img src={portfolio.coverUrl} alt="" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                      <div className="relative z-10">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#c5a880]/10 text-[#c5a880] border border-[#c5a880]/10 uppercase font-bold">
+                            {portfolio.category}
+                          </span>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${portfolio.status === 'Published' ? 'bg-emerald-500/10 text-emerald-450' : 'bg-slate-500/10 text-slate-400'}`}>
+                            {portfolio.status}
+                          </span>
+                        </div>
+                        <h3 className="text-base font-extrabold text-white group-hover:text-[#c5a880] transition-colors">{portfolio.title}</h3>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-3 relative z-10">
+                        <span className="text-xs font-bold text-[#c5a880] inline-flex items-center gap-1 cursor-pointer">
+                          Edit Portfolio
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </span>
+                        <button 
+                          onClick={() => {
+                            if (window.confirm('Delete this portfolio item?')) {
+                              setPortfolios(portfolios.filter((_, i) => i !== idx));
+                              setSuccessMsg('Portfolio deleted.');
+                            }
+                          }}
+                          className="text-[10px] text-rose-450 hover:text-rose-400 font-bold"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="max-w-xl flex flex-col gap-6">
+                <div className="flex items-center gap-4">
+                  <button onClick={() => setPortfolioSubView('list')} className="text-slate-300 hover:text-white text-xs font-bold underline cursor-pointer">
+                    ← Back to Portfolios
+                  </button>
+                  <h1 className="text-2xl font-extrabold text-white">Create Portfolio Showcase</h1>
+                </div>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  if (newPortfolioTitle) {
+                    setPortfolios([...portfolios, { 
+                      title: newPortfolioTitle, 
+                      category: newPortfolioCategory, 
+                      coverUrl: newPortfolioCover || '/wedding.jpg', 
+                      status: newPortfolioStatus 
+                    }]);
+                    setNewPortfolioTitle(''); setNewPortfolioCover('');
+                    setPortfolioSubView('list');
+                    setSuccessMsg('New portfolio gallery added successfully!');
+                  }
+                }} className="glass-panel bg-white/[0.02] border border-white/10 p-8 rounded-2xl flex flex-col gap-4 text-left shadow-sm">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Portfolio Title</label>
+                    <input type="text" required value={newPortfolioTitle} onChange={(e) => setNewPortfolioTitle(e.target.value)} placeholder="e.g. Royal Pre-Wed Shoot" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Showcase Category</label>
+                      <select value={newPortfolioCategory} onChange={(e) => setNewPortfolioCategory(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]">
+                        <option className="bg-[#0c0c0e] text-white" value="Wedding">Wedding</option>
+                        <option className="bg-[#0c0c0e] text-white" value="Pre-Wedding">Pre-Wedding</option>
+                        <option className="bg-[#0c0c0e] text-white" value="Portrait">Portrait</option>
+                        <option className="bg-[#0c0c0e] text-white" value="Corporate">Corporate</option>
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Publish Status</label>
+                      <select value={newPortfolioStatus} onChange={(e) => setNewPortfolioStatus(e.target.value)} className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]">
+                        <option className="bg-[#0c0c0e] text-white" value="Published">Published</option>
+                        <option className="bg-[#0c0c0e] text-white" value="Draft">Draft</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Cover Image URL</label>
+                    <input type="text" value={newPortfolioCover} onChange={(e) => setNewPortfolioCover(e.target.value)} placeholder="e.g. /wedding.jpg or external url" className="w-full bg-[#0c0c0e] border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#c5a880]" />
+                  </div>
+                  <button type="submit" className="w-full bg-[#c5a880] hover:bg-white text-[#09090b] font-bold py-3.5 rounded-lg text-xs mt-3 cursor-pointer transition-colors shadow-md">
+                    Publish Showcase Portfolio
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+      
+      {/* Processing Modal */}
+      {isProcessingModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white p-8 rounded-3xl shadow-xl flex flex-col items-center gap-4 max-w-sm w-full animate-in fade-in zoom-in duration-200">
+            <div className="p-3 bg-[#c5a880]/10 text-[#c5a880] text-[#c5a880] rounded-2xl mb-2">
+              <Loader className="h-8 w-8 animate-spin" />
+            </div>
+            <h3 className="text-xl font-extrabold text-white text-center">Applying Watermarks</h3>
+            <p className="text-xs font-semibold text-slate-400 text-center">
+              Please don't close this window. We are processing your high-resolution photos in the background...
+            </p>
+            
+            <div className="w-full bg-white/[0.04] rounded-full h-3 mt-4 overflow-hidden border border-white/10/50">
+              <div 
+                className="bg-gradient-to-r from-[#c5a880] to-#c5a880 h-full transition-all duration-500 rounded-full" 
+                style={{ width: `${processingStats.total > 0 ? (processingStats.completed / processingStats.total) * 100 : 0}%` }}
+              ></div>
+            </div>
+            
+            <div className="flex items-center justify-between w-full mt-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Progress</span>
+              <span className="text-xs font-extrabold text-[#c5a880]">
+                {processingStats.completed} / {processingStats.total}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox Modal */}
+      {lightboxIndex !== null && eventMedia[lightboxIndex] && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm">
+          <div className="absolute top-6 right-6 flex items-center gap-4 z-50">
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!confirm('Are you sure you want to delete this photo?')) return;
+                
+                const mediaId = eventMedia[lightboxIndex]._id;
+                
+                // Optimistically update UI to instantly show the next photo
+                const newMedia = [...eventMedia];
+                newMedia.splice(lightboxIndex, 1);
+                setEventMedia(newMedia);
+                
+                if (newMedia.length === 0) {
+                  setLightboxIndex(null); // Close if it was the last photo
+                } else if (lightboxIndex >= newMedia.length) {
+                  setLightboxIndex(0); // Loop back to the first photo
+                }
+                // Else lightboxIndex remains the same, automatically showing the next photo
+                
+                handleDeleteMedia(mediaId, true);
+              }}
+              className="text-white hover:text-rose-400 transition-colors bg-white/10 hover:bg-white/20 p-2 rounded-full"
+              title="Delete Photo"
+            >
+              <Trash2 className="h-6 w-6" />
+            </button>
+            <button 
+              onClick={() => setLightboxIndex(null)}
+              className="text-white hover:text-slate-300 transition-colors bg-white/10 hover:bg-white/20 p-2 rounded-full"
+              title="Close"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+          
+          <button 
+            onClick={(e) => { e.stopPropagation(); navigateLightbox('prev'); }}
+            className="absolute left-6 text-white hover:text-slate-300 transition-colors z-50 bg-white/10 hover:bg-white/20 p-3 rounded-full"
+          >
+            <ChevronLeft className="h-8 w-8" />
+          </button>
+
+          <div className="w-full h-full max-w-7xl max-h-[90vh] p-8 flex flex-col items-center justify-center">
+            {eventMedia[lightboxIndex].type === 'VIDEO' ? (
+              <video 
+                src={resolveMediaUrl(eventMedia[lightboxIndex])} 
+                controls 
+                autoPlay 
+                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              />
+            ) : (
+              <img 
+                src={resolveMediaUrl(eventMedia[lightboxIndex])} 
+                alt="Fullscreen" 
+                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              />
+            )}
+            <div className="mt-4 text-slate-400 text-sm font-medium">
+              {lightboxIndex + 1} / {eventMedia.length}
+            </div>
+          </div>
+
+          <button 
+            onClick={(e) => { e.stopPropagation(); navigateLightbox('next'); }}
+            className="absolute right-6 text-white hover:text-slate-300 transition-colors z-50 bg-white/10 hover:bg-white/20 p-3 rounded-full"
+          >
+            <ChevronRight className="h-8 w-8" />
+          </button>
+        </div>
+      )}
+
+      {/* Razorpay Custom Simulator Modal */}
+      {isRazorpayMockOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 backdrop-blur-sm font-poppins">
+          <div className="bg-[#1e263c] w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl border border-slate-700 animate-in fade-in zoom-in duration-200">
+            {/* Header */}
+            <div className="bg-[#131926] p-6 text-white flex flex-col items-center relative">
+              <button onClick={() => setIsRazorpayMockOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
+                <X className="h-5 w-5" />
+              </button>
+              <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center font-extrabold text-white text-lg tracking-wider mb-2">
+                M
+              </div>
+              <h3 className="text-sm font-bold">Mara Photo</h3>
+              <p className="text-[10px] text-slate-400 mt-0.5">{mockPlan} Plan Subscription</p>
+              <span className="text-2xl font-black mt-3 text-[#c5a880] font-mono">
+                ₹{(mockPlan === 'STANDARD' ? 7900 : mockPlan === 'ESSENTIAL' ? 15900 : mockPlan === 'PREMIUM' ? 31900 : 3500).toLocaleString()}
+              </span>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 flex flex-col gap-4 bg-[#1e263c] text-left">
+              <div className="text-[10px] text-[#c5a880] uppercase tracking-wider font-extrabold text-center mb-1">
+                🛡️ Razorpay Secure Payment Sandbox
+              </div>
+              
+              <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-750 flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs text-slate-300 font-bold border-b border-slate-800 pb-2 mb-1">
+                  <span>Payment Options</span>
+                  <span className="text-[9px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-450 border border-emerald-500/20 font-black">TEST MODE</span>
+                </div>
+                
+                <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-white/[0.02] border border-white/5">
+                  <span className="text-slate-350 font-bold">Debit / Credit Card</span>
+                  <span className="text-[10px] text-slate-400">•••• •••• •••• 4242</span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-white/[0.02] border border-white/5">
+                  <span className="text-slate-350 font-bold">UPI / QR (GPay, PhonePe)</span>
+                  <span className="text-[10px] text-slate-400">yashvi@okaxis</span>
+                </div>
+              </div>
+
+              {/* Simulation Action Buttons */}
+              <div className="flex flex-col gap-2 mt-2">
+                <button 
+                  onClick={() => {
+                    const pId = 'pay_mock_' + Math.random().toString(36).substr(2, 9);
+                    setSuccessMsg(`Subscribed to ${mockPlan} Plan successfully! (Payment ID: ${pId})`);
+                    
+                    if (studio) {
+                      const updatedStudio = { 
+                        ...studio, 
+                        subscriptionPlan: mockPlan, 
+                        subscriptionStatus: 'ACTIVE' 
+                      };
+                      setStudio(updatedStudio);
+                      localStorage.setItem('studio', JSON.stringify(updatedStudio));
+                    }
+                    setIsRazorpayMockOpen(false);
+                    fetchStudioAndData();
+                  }}
+                  className="w-full bg-[#c5a880] hover:bg-white text-[#09090b] py-3 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer text-center"
+                >
+                  Simulate SUCCESS Payment
+                </button>
+                <button 
+                  onClick={() => {
+                    setErrorMsg('Payment simulation failed or cancelled by user.');
+                    setIsRazorpayMockOpen(false);
+                  }}
+                  className="w-full bg-rose-950/20 hover:bg-rose-900/30 text-rose-400 border border-rose-500/20 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                >
+                  Simulate FAILURE Payment
+                </button>
+              </div>
+              
+              <div className="text-[9px] text-slate-400 text-center leading-relaxed font-semibold">
+                This is a local payment simulator. Upgrading will update your subscription tier locally for developer testing.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

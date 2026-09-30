@@ -1,0 +1,13 @@
+node_modules/
+mongodb_data/
+uploads/
+dist/
+.env
+*.jpg
+*.png
+*.jpeg
+!src/**/*.ts
+__pycache__/
+*.pyc
+venv/
+.venv/
