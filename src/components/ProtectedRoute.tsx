@@ -5,16 +5,24 @@ import { useAuth } from '../lib/AuthContext';
 import { useRouter, usePathname } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
-export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, loading } = useAuth();
+export default function ProtectedRoute({ 
+  children, 
+  allowedRoles 
+}: { 
+  children: React.ReactNode; 
+  allowedRoles?: string[];
+}) {
+  const { isAuthenticated, loading, user } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
       router.replace('/auth/login');
+    } else if (!loading && isAuthenticated && allowedRoles && user && !allowedRoles.includes(user.role)) {
+      router.replace('/dashboard');
     }
-  }, [loading, isAuthenticated, router]);
+  }, [loading, isAuthenticated, allowedRoles, user, router]);
 
   if (loading) {
     return (
@@ -32,7 +40,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || (allowedRoles && user && !allowedRoles.includes(user.role))) {
     return null;
   }
 

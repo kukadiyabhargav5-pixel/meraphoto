@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
 import { apiClient } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Plus, X, Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRight, Edit2, Trash2, Camera, Video, Bell, AlertTriangle } from 'lucide-react';
+import { Plus, X, Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRight, Edit2, Trash2, Camera, Video, Bell, AlertTriangle, Loader } from 'lucide-react';
 import CustomDatePicker from '../../../components/CustomDatePicker';
 
 const EVENT_TYPES = [

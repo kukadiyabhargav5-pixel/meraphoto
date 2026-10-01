@@ -6,7 +6,7 @@ import {
   Plus, Trash2, Calendar, Clock, MapPin, Loader2, Upload, 
   Camera, ArrowRight, ArrowLeft, Check, Lock, 
   User as UserIcon, Phone, Mail, Sparkles, Image as ImageIcon,
-  Settings, Type, Layers, ShieldCheck, HeartHandshake, Film
+  Settings, Type, Layers, ShieldCheck, HeartHandshake, Film, AlertTriangle, CheckCircle
 } from 'lucide-react';
 import CustomDatePicker from '../../../components/CustomDatePicker';
 import { useRouter } from 'next/navigation';
@@ -49,10 +49,30 @@ export default function CreateEventPage() {
   const [totalDays, setTotalDays] = useState(1);
   const [eventDays, setEventDays] = useState<{date: string, time: string, location: string}[]>([]);
 
-  // Step 4: Cover Image
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [coverDimensions, setCoverDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [ratioMismatch, setRatioMismatch] = useState(false);
+
+  React.useEffect(() => {
+    if (!coverImage) {
+      setCoverDimensions(null);
+      setRatioMismatch(false);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      const ratio = w / h;
+      const targetRatio = 16 / 9;
+      const is16by9 = Math.abs(ratio - targetRatio) <= 0.05;
+      setCoverDimensions({ width: w, height: h });
+      setRatioMismatch(!is16by9);
+    };
+    img.src = coverImage;
+  }, [coverImage]);
 
   // Step 5: Watermark & Portfolio
   const [customWatermark, setCustomWatermark] = useState(false);
@@ -246,6 +266,28 @@ export default function CreateEventPage() {
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Pre-check image dimensions & aspect ratio
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      const ratio = w / h;
+      const targetRatio = 16 / 9;
+      const is16by9 = Math.abs(ratio - targetRatio) <= 0.05;
+      setCoverDimensions({ width: w, height: h });
+      setRatioMismatch(!is16by9);
+      if (!is16by9) {
+        toast.error(`Warning: Image is not in 1920 × 1080 px (16:9 ratio)! (Current: ${w} × ${h} px)`, {
+          duration: 5000,
+          icon: '⚠️'
+        });
+      }
+      URL.revokeObjectURL(objectUrl);
+    };
+    img.src = objectUrl;
+
     try {
       setUploadingImage(true);
       const formData = new FormData();
@@ -357,7 +399,7 @@ export default function CreateEventPage() {
     in: { x: 0, opacity: 1 },
     out: (direction: 'next' | 'prev') => ({ x: direction === 'next' ? -30 : 30, opacity: 0 })
   };
-  const pageTransition = { type: 'tween', ease: 'anticipate', duration: 0.35 };
+  const pageTransition: any = { type: 'tween', ease: 'anticipate', duration: 0.35 };
 
   return (
     <div className="flex-1 overflow-y-auto bg-gradient-to-b from-[#faf9f6] via-[#f7f5ef] to-[#efece2] text-slate-900 min-h-full font-poppins relative">
@@ -952,66 +994,117 @@ export default function CreateEventPage() {
                 {/* STEP 4: Hero Cover Image */}
                 {/* ======================================================== */}
                 {currentStep === 4 && (
-                  <motion.div key="step4" custom={direction} variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition} className="space-y-6">
+                  <motion.div key="step4" custom={direction} variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition} className="space-y-5">
                     
-                    <div className="border-b border-slate-100 pb-4">
+                    <div className="border-b border-slate-100 pb-3">
                       <h3 className="text-base sm:text-lg font-black text-slate-900">Step 4: Hero Cover Image</h3>
-                      <p className="text-xs text-slate-500 mt-0.5">This cover photo will be displayed prominently on your client&apos;s gallery landing page.</p>
+                      <p className="text-xs text-slate-500 mt-0.5">This cover photo will be displayed prominently on your client&apos;s gallery landing page and event boxes.</p>
                     </div>
 
-                    {coverImage ? (
-                      <div className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-[#c5a880] bg-slate-950 shadow-md group transition-all duration-300">
-                        {/* Full Image in normal flow: box expands dynamically to image height with 0% cropping! */}
-                        <img 
-                          src={coverImage} 
-                          alt="Cover" 
-                          className="w-full h-auto max-h-[750px] object-contain block mx-auto select-none" 
-                        />
-                        
-                        {/* Hover Overlay for Desktop */}
-                        <label className="hidden sm:flex absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex-col items-center justify-center gap-3 backdrop-blur-xs cursor-pointer">
-                          {uploadingImage ? (
-                            <div className="flex flex-col items-center gap-3">
-                              <Loader2 className="w-10 h-10 text-[#c5a880] animate-spin" />
-                              <span className="text-xs font-bold text-white">Uploading new cover...</span>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-white backdrop-blur-md shadow-lg group-hover:scale-110 transition-transform">
-                                <Camera className="w-6 h-6" />
-                              </div>
-                              <span className="text-xs font-black text-white uppercase tracking-wider bg-black/60 px-4 py-2 rounded-full border border-white/20 shadow-md">
-                                Click to Change Cover Photo
+                    {/* 🔴 Top Notice in Red Text - Shown ONLY if ratio does NOT match 16:9 */}
+                    {ratioMismatch && (
+                      <div className="p-3.5 sm:p-4 rounded-2xl bg-red-50 border-2 border-red-200 flex items-start gap-3 text-red-700 shadow-xs animate-in fade-in duration-300">
+                        <AlertTriangle className="w-5 h-5 shrink-0 text-red-600 mt-0.5" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs sm:text-sm font-black text-red-700 tracking-wide uppercase">
+                            ⚠️ NOTICE: Cover Image Is Not in 1920 × 1080 px (16:9 Ratio)
+                          </div>
+                          <p className="text-xs font-semibold text-red-600 mt-1 leading-relaxed">
+                            This image is not in 16:9 aspect ratio and will not fit properly!
+                            {coverDimensions && (
+                              <span className="block mt-1 font-mono text-[11px] text-red-800 font-bold">
+                                Current Size: {coverDimensions.width} × {coverDimensions.height} px • Required: 1920 × 1080 px (16:9)
                               </span>
-                            </>
-                          )}
-                          <input 
-                            type="file" 
-                            accept="image/*" 
-                            className="hidden" 
-                            onChange={handleCoverUpload} 
-                          />
-                        </label>
-
-                        {/* Touch-Friendly Action Bar for Mobile Screens */}
-                        <div className="sm:hidden absolute bottom-3 left-3 right-3 z-10">
-                          <label className="w-full flex items-center justify-center gap-2 bg-slate-950/85 backdrop-blur-md text-white border border-[#c5a880]/50 py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg active:scale-95 transition-all cursor-pointer">
-                            <Camera className="w-4 h-4 text-[#c5a880]" />
-                            <span>{uploadingImage ? 'Uploading...' : 'Change Cover Photo'}</span>
-                            <input type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
-                          </label>
-                        </div>
-
-                        {/* Top corner status badge */}
-                        <div className="absolute top-3.5 right-3.5 z-10 pointer-events-none">
-                          <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-black/60 text-[#f5deb3] border border-[#c5a880]/50 text-[9px] sm:text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-md flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            Full View
-                          </span>
+                            )}
+                          </p>
                         </div>
                       </div>
+                    )}
+
+                    {/* 🟢 Green Success - Shown when 16:9 ratio is verified */}
+                    {coverImage && !ratioMismatch && coverDimensions && (
+                      <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center gap-2.5 text-emerald-800 shadow-xs animate-in fade-in duration-300">
+                        <CheckCircle className="w-4 h-4 shrink-0 text-emerald-600" />
+                        <div className="text-xs font-semibold leading-tight">
+                          <span className="font-bold text-emerald-700">Perfect Fit:</span> Cover image matches 16:9 ratio ({coverDimensions.width} × {coverDimensions.height} px).
+                        </div>
+                      </div>
+                    )}
+
+                    {coverImage ? (
+                      <div className="space-y-3">
+                        <div className="relative w-full aspect-[16/9] rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-[#c5a880] bg-slate-950 shadow-md group transition-all duration-300">
+                          {/* Full Image in 1920 × 1080 (16:9) frame */}
+                          <img 
+                            src={coverImage} 
+                            alt="Cover" 
+                            className="w-full h-full object-cover block mx-auto select-none transition-transform duration-700 group-hover:scale-105" 
+                          />
+                          
+                          {/* Hover Overlay for Desktop */}
+                          <label className="hidden sm:flex absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex-col items-center justify-center gap-3 backdrop-blur-xs cursor-pointer">
+                            {uploadingImage ? (
+                              <div className="flex flex-col items-center gap-3">
+                                <Loader2 className="w-10 h-10 text-[#c5a880] animate-spin" />
+                                <span className="text-xs font-bold text-white">Uploading new cover...</span>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-white backdrop-blur-md shadow-lg group-hover:scale-110 transition-transform">
+                                  <Camera className="w-6 h-6" />
+                                </div>
+                                <span className="text-xs font-black text-white uppercase tracking-wider bg-black/60 px-4 py-2 rounded-full border border-white/20 shadow-md">
+                                  Click to Change Cover Photo
+                                </span>
+                              </>
+                            )}
+                            <input 
+                              type="file" 
+                              accept="image/*" 
+                              className="hidden" 
+                              onChange={handleCoverUpload} 
+                            />
+                          </label>
+
+                          {/* Touch-Friendly Action Bar for Mobile Screens */}
+                          <div className="sm:hidden absolute bottom-3 left-3 right-3 z-10">
+                            <label className="w-full flex items-center justify-center gap-2 bg-slate-950/85 backdrop-blur-md text-white border border-[#c5a880]/50 py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg active:scale-95 transition-all cursor-pointer">
+                              <Camera className="w-4 h-4 text-[#c5a880]" />
+                              <span>{uploadingImage ? 'Uploading...' : 'Change Cover Photo'}</span>
+                              <input type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
+                            </label>
+                          </div>
+
+                          {/* Top corner 16:9 ratio badge */}
+                          <div className="absolute top-3.5 right-3.5 z-10 pointer-events-none">
+                            <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-black/70 text-[#f5deb3] border border-[#c5a880]/50 text-[9px] sm:text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-md flex items-center gap-1.5">
+                              <span className={`w-1.5 h-1.5 rounded-full ${ratioMismatch ? 'bg-amber-400' : 'bg-emerald-400'} animate-pulse`} />
+                              1920 × 1080 (16:9 Box)
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 🔴 Bottom Warning in Red if Ratio Does NOT Match */}
+                        {ratioMismatch && (
+                          <div className="p-3.5 sm:p-4 rounded-2xl bg-red-50 border-2 border-red-300 flex items-start gap-3 text-red-700 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                            <AlertTriangle className="w-5 h-5 shrink-0 text-red-600 mt-0.5" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs sm:text-sm font-black text-red-700 leading-snug">
+                                ⚠️ This image is not in 1920 × 1080 px (16:9 ratio) and will not fit properly!
+                              </p>
+                              {coverDimensions && (
+                                <div className="mt-1.5 inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-red-100/80 border border-red-200 text-[11px] font-mono font-bold text-red-800 flex-wrap">
+                                  <span>Current Size: {coverDimensions.width} × {coverDimensions.height} px</span>
+                                  <span>•</span>
+                                  <span>Required Size: 1920 × 1080 px (16:9)</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     ) : (
-                      <label className="relative flex flex-col items-center justify-center w-full min-h-[200px] sm:min-h-[260px] border-2 border-dashed rounded-2xl sm:rounded-3xl overflow-hidden cursor-pointer transition-all duration-300 border-slate-300 bg-slate-50 hover:bg-[#faf9f6] hover:border-[#c5a880] group">
+                      <label className="relative flex flex-col items-center justify-center w-full min-h-[200px] sm:min-h-[260px] aspect-[16/9] border-2 border-dashed rounded-2xl sm:rounded-3xl overflow-hidden cursor-pointer transition-all duration-300 border-slate-300 bg-slate-50 hover:bg-[#faf9f6] hover:border-[#c5a880] group">
                         <div className="flex flex-col items-center justify-center p-5 sm:p-8 text-center">
                           {uploadingImage ? (
                             <div className="flex flex-col items-center gap-3">
@@ -1024,7 +1117,8 @@ export default function CreateEventPage() {
                                 <ImageIcon className="w-7 sm:w-8 h-7 sm:h-8" />
                               </div>
                               <span className="text-xs sm:text-sm font-black text-slate-900">Click or tap to upload cover photo</span>
-                              <span className="text-[10px] sm:text-[11px] text-slate-500 mt-1 font-medium">Recommended: High-resolution JPG or PNG (up to 2MB)</span>
+                              <span className="text-[11px] text-red-600 mt-1 font-bold">⚠️ Required: 1920 × 1080 px (16:9 aspect ratio)</span>
+                              <span className="text-[10px] text-slate-400 mt-0.5 font-medium">Supports high-resolution JPG or PNG</span>
                             </>
                           )}
                         </div>

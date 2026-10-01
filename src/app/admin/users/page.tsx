@@ -5,21 +5,21 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { apiClient } from '@/lib/api';
 import toast from 'react-hot-toast';
 
-const containerVariants = {
+const containerVariants: any = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.04 } },
 };
-const rowVariants = {
+const rowVariants: any = {
   hidden: { opacity: 0, x: -16 },
   show: { opacity: 1, x: 0, transition: { duration: 0.4, ease: [0.4, 0, 0.2, 1] } },
 };
 
-const modalOverlay = {
+const modalOverlay: any = {
   hidden: { opacity: 0 },
   visible: { opacity: 1 },
   exit: { opacity: 0 },
 };
-const modalContent = {
+const modalContent: any = {
   hidden: { opacity: 0, scale: 0.95, y: 20 },
   visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.3, ease: [0.4, 0, 0.2, 1] } },
   exit: { opacity: 0, scale: 0.95, y: 20, transition: { duration: 0.2 } },

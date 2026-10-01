@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Lock, Key, AlertCircle, Loader, ChevronLeft, ChevronRight, X, Camera, ScanFace, Download, UploadCloud, CheckCircle2, ImagePlus, Video, Sparkles, CheckCircle, RefreshCw, Check, ShieldCheck, Upload } from 'lucide-react';
+import { useParams } from 'next/navigation';
+import { Lock, Key, AlertCircle, Loader, ChevronLeft, ChevronRight, X, Camera, ScanFace, Download, UploadCloud, CheckCircle2, ImagePlus, Video, Sparkles, CheckCircle, RefreshCw, Check, ShieldCheck, Upload, Play } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';

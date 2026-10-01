@@ -47,15 +47,19 @@ function getClosestLoadedImage(index: number, images: (HTMLImageElement | null)[
 /* ─────────────── COMPONENT ─────────────── */
 
 export default function CinematicHero() {
+  const sectionRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imagesRef = useRef<(HTMLImageElement | null)[]>(new Array(TOTAL_FRAMES).fill(null));
   const currentFrameRef = useRef<number>(0);
   const lastDrawnFrameRef = useRef<number>(-1);
   const wheelAccumulatorRef = useRef<number>(0);
   const touchStartYRef = useRef<number>(0);
+  const touchAccumulatorRef = useRef<number>(0);
+  const isUnlockedRef = useRef<boolean>(false);
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
+  const [isUnlocked, setIsUnlocked] = useState(false);
 
   // Preload an individual image
   const loadImage = useCallback((index: number): Promise<void> => {
@@ -85,7 +89,7 @@ export default function CinematicHero() {
     }
   }, []);
 
-  // Preload all 35 frames
+  // Preload all 35 frames in background
   useEffect(() => {
     let cancelled = false;
 
@@ -140,86 +144,133 @@ export default function CinematicHero() {
     return () => window.removeEventListener('resize', resizeCanvas);
   }, [resizeCanvas]);
 
-  // Wheel and Touch scroll interception:
-  // While user is on the hero at top, keep page pinned until the LAST image (frame 35) is reached!
-  // Once the last image is reached, allow normal scroll down!
+  // ── SCROLL-PINNED INTERACTION (MOBILE & DESKTOP LOCK) ──
+  // The page CANNOT scroll down until the LAST image (Frame 35 / index 34) is reached.
+  // Uses touch-action: none + non-passive event listeners to ensure 100% lock on iOS/Android.
   useEffect(() => {
-    const WHEEL_THRESHOLD = 26; // Wheel delta required to advance one frame
+    const WHEEL_THRESHOLD = 18; // wheel delta per frame
+    const TOUCH_THRESHOLD = 8;  // 8px swipe distance per frame (fast & responsive)
 
     const onWheel = (e: WheelEvent) => {
-      // If user is at the top of the page
-      if (window.scrollY <= 10) {
-        if (e.deltaY > 0) {
-          // Scrolling down: until last image arrives, PIN the page and change image!
-          if (currentFrameRef.current < TOTAL_FRAMES - 1) {
-            e.preventDefault();
-            wheelAccumulatorRef.current += e.deltaY;
-            if (Math.abs(wheelAccumulatorRef.current) >= WHEEL_THRESHOLD) {
-              const step = Math.sign(wheelAccumulatorRef.current);
-              wheelAccumulatorRef.current = 0;
-              const next = Math.min(TOTAL_FRAMES - 1, currentFrameRef.current + step);
-              currentFrameRef.current = next;
-              setCurrentFrameIndex(next);
-              drawFrame(next);
+      // If user is scrolled down into page content, let normal scrolling happen
+      if (window.scrollY > 15) return;
+
+      if (e.deltaY > 0) {
+        // Scrolling DOWN
+        if (currentFrameRef.current < TOTAL_FRAMES - 1) {
+          // Lock page and advance frame
+          e.preventDefault();
+          wheelAccumulatorRef.current += e.deltaY;
+          if (Math.abs(wheelAccumulatorRef.current) >= WHEEL_THRESHOLD) {
+            const step = Math.sign(wheelAccumulatorRef.current);
+            wheelAccumulatorRef.current = 0;
+            const next = Math.min(TOTAL_FRAMES - 1, currentFrameRef.current + step);
+            currentFrameRef.current = next;
+            setCurrentFrameIndex(next);
+            drawFrame(next);
+
+            if (next >= TOTAL_FRAMES - 1) {
+              isUnlockedRef.current = true;
+              setIsUnlocked(true);
             }
           }
-          // Once last image (frame 34) is reached, do NOT preventDefault!
-          // Page scrolls down naturally to next sections!
-        } else if (e.deltaY < 0) {
-          // Scrolling up: if not at first image, scrub backwards!
-          if (currentFrameRef.current > 0) {
-            e.preventDefault();
-            wheelAccumulatorRef.current += e.deltaY;
-            if (Math.abs(wheelAccumulatorRef.current) >= WHEEL_THRESHOLD) {
-              const step = Math.sign(wheelAccumulatorRef.current);
-              wheelAccumulatorRef.current = 0;
-              const next = Math.max(0, currentFrameRef.current + step);
-              currentFrameRef.current = next;
-              setCurrentFrameIndex(next);
-              drawFrame(next);
+        } else {
+          // User is at last frame: allow normal scroll down!
+          isUnlockedRef.current = true;
+          setIsUnlocked(true);
+        }
+      } else if (e.deltaY < 0) {
+        // Scrolling UP at top of page: scrub backwards
+        if (window.scrollY <= 10 && currentFrameRef.current > 0) {
+          e.preventDefault();
+          wheelAccumulatorRef.current += e.deltaY;
+          if (Math.abs(wheelAccumulatorRef.current) >= WHEEL_THRESHOLD) {
+            const step = Math.sign(wheelAccumulatorRef.current);
+            wheelAccumulatorRef.current = 0;
+            const next = Math.max(0, currentFrameRef.current + step);
+            currentFrameRef.current = next;
+            setCurrentFrameIndex(next);
+            drawFrame(next);
+
+            if (next < TOTAL_FRAMES - 1) {
+              isUnlockedRef.current = false;
+              setIsUnlocked(false);
             }
           }
         }
       }
     };
 
-    // Touch support for mobile swipe
+    // Mobile touch interaction
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length > 0) {
         touchStartYRef.current = e.touches[0].clientY;
+        touchAccumulatorRef.current = 0;
       }
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (window.scrollY <= 10 && e.touches.length > 0) {
-        const deltaY = touchStartYRef.current - e.touches[0].clientY;
-        if (deltaY > 14) {
-          // Swiping up (scrolling down): pin until last frame!
-          if (currentFrameRef.current < TOTAL_FRAMES - 1) {
-            e.preventDefault();
-            touchStartYRef.current = e.touches[0].clientY;
-            const next = Math.min(TOTAL_FRAMES - 1, currentFrameRef.current + 1);
+      if (e.touches.length === 0) return;
+
+      // If user is already scrolled down into the page body, allow normal scrolling
+      if (window.scrollY > window.innerHeight * 0.6) return;
+
+      const currentY = e.touches[0].clientY;
+      const deltaY = touchStartYRef.current - currentY; // positive = swiping up (trying to scroll down)
+      touchStartYRef.current = currentY;
+
+      if (deltaY > 0) {
+        // Swiping UP -> wants to advance down
+        if (currentFrameRef.current < TOTAL_FRAMES - 1) {
+          // STRICT LOCK: Must preventDefault on mobile so page does NOT scroll down early!
+          if (e.cancelable) e.preventDefault();
+
+          touchAccumulatorRef.current += deltaY;
+          if (touchAccumulatorRef.current >= TOUCH_THRESHOLD) {
+            const framesToAdvance = Math.floor(touchAccumulatorRef.current / TOUCH_THRESHOLD);
+            touchAccumulatorRef.current %= TOUCH_THRESHOLD;
+            const next = Math.min(TOTAL_FRAMES - 1, currentFrameRef.current + framesToAdvance);
             currentFrameRef.current = next;
             setCurrentFrameIndex(next);
             drawFrame(next);
+
+            if (next >= TOTAL_FRAMES - 1) {
+              isUnlockedRef.current = true;
+              setIsUnlocked(true);
+            }
           }
-        } else if (deltaY < -14) {
-          // Swiping down (scrolling up): scrub backwards!
-          if (currentFrameRef.current > 0) {
-            e.preventDefault();
-            touchStartYRef.current = e.touches[0].clientY;
-            const next = Math.max(0, currentFrameRef.current - 1);
+        } else {
+          // ALREADY AT LAST FRAME:
+          // Unlocked! Move window scroll down seamlessly
+          isUnlockedRef.current = true;
+          setIsUnlocked(true);
+          window.scrollBy({ top: Math.max(deltaY * 1.2, 12), behavior: 'auto' });
+        }
+      } else if (deltaY < 0) {
+        // Swiping DOWN -> wants to scroll up
+        if (window.scrollY <= 10 && currentFrameRef.current > 0) {
+          if (e.cancelable) e.preventDefault();
+          touchAccumulatorRef.current += deltaY;
+          if (Math.abs(touchAccumulatorRef.current) >= TOUCH_THRESHOLD) {
+            const framesToRewind = Math.floor(Math.abs(touchAccumulatorRef.current) / TOUCH_THRESHOLD);
+            touchAccumulatorRef.current = -(Math.abs(touchAccumulatorRef.current) % TOUCH_THRESHOLD);
+            const next = Math.max(0, currentFrameRef.current - framesToRewind);
             currentFrameRef.current = next;
             setCurrentFrameIndex(next);
             drawFrame(next);
+
+            if (next < TOTAL_FRAMES - 1) {
+              isUnlockedRef.current = false;
+              setIsUnlocked(false);
+            }
           }
         }
       }
     };
 
-    // Keyboard support (down arrow / spacebar)
+    // Keyboard support (down arrow / spacebar / up arrow)
     const onKeyDown = (e: KeyboardEvent) => {
-      if (window.scrollY <= 10) {
+      if (window.scrollY <= 8) {
         if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
           if (currentFrameRef.current < TOTAL_FRAMES - 1) {
             e.preventDefault();
@@ -227,6 +278,10 @@ export default function CinematicHero() {
             currentFrameRef.current = next;
             setCurrentFrameIndex(next);
             drawFrame(next);
+            if (next >= TOTAL_FRAMES - 1) {
+              isUnlockedRef.current = true;
+              setIsUnlocked(true);
+            }
           }
         } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
           if (currentFrameRef.current > 0) {
@@ -235,21 +290,37 @@ export default function CinematicHero() {
             currentFrameRef.current = next;
             setCurrentFrameIndex(next);
             drawFrame(next);
+            if (next < TOTAL_FRAMES - 1) {
+              isUnlockedRef.current = false;
+              setIsUnlocked(false);
+            }
           }
         }
       }
     };
 
+    const heroSection = sectionRef.current;
+
+    // Attach listeners with passive: false to guarantee preventDefault works
     window.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('keydown', onKeyDown, { passive: false });
+
+    if (heroSection) {
+      heroSection.addEventListener('touchstart', onTouchStart, { passive: true });
+      heroSection.addEventListener('touchmove', onTouchMove, { passive: false });
+    }
     window.addEventListener('touchstart', onTouchStart, { passive: true });
     window.addEventListener('touchmove', onTouchMove, { passive: false });
-    window.addEventListener('keydown', onKeyDown, { passive: false });
 
     return () => {
       window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('keydown', onKeyDown);
+      if (heroSection) {
+        heroSection.removeEventListener('touchstart', onTouchStart);
+        heroSection.removeEventListener('touchmove', onTouchMove);
+      }
       window.removeEventListener('touchstart', onTouchStart);
       window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('keydown', onKeyDown);
     };
   }, [drawFrame]);
 
@@ -257,50 +328,43 @@ export default function CinematicHero() {
 
   return (
     <section
+      ref={sectionRef}
       className="hero-section"
       id="hero"
       style={{
+        touchAction: isUnlocked ? 'pan-y' : 'none',
         position: 'relative',
         width: '100%',
         height: `calc(100vh - ${HEADER_HEIGHT}px)`,
         minHeight: '520px',
-        maxHeight: '920px',
+        maxHeight: '960px',
         overflow: 'hidden',
-        background: '#faf9f6',
+        background: '#09090b',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}
     >
       {/* Zero-latency poster fallback */}
       <img
         src={getFramePath(0)}
-        alt=""
+        alt="Mara Photo Cinematic Hero"
+        className="hero-poster"
         style={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          opacity: isLoaded ? 0.35 : 0.9,
-          pointerEvents: 'none',
+          opacity: isLoaded ? 0.3 : 0.95,
         }}
       />
 
-      {/* Dynamic Canvas: Scrubbed on scroll until last image */}
+      {/* Dynamic Canvas */}
       <canvas
         ref={canvasRef}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          display: 'block',
-          zIndex: 1,
-        }}
+        className="hero-canvas"
       />
 
       {/* Subtle vignette */}
       <div className="hero-cinematic-overlay" />
 
-      {/* Visual progress bar at bottom of frame (pure visual, NO text) */}
+      {/* Clean luxury progress bar at bottom of hero section */}
       <div
         className="hero-progress-bar"
         style={{
@@ -308,10 +372,11 @@ export default function CinematicHero() {
           bottom: 0,
           left: 0,
           height: '2.5px',
-          background: 'linear-gradient(90deg, #c5a880, #e3d8c8)',
+          background: 'linear-gradient(90deg, #c5a880 0%, #e3d8c8 50%, #f5f2eb 100%)',
           width: `${progressPercent}%`,
-          zIndex: 5,
+          zIndex: 10,
           transition: 'width 0.05s linear',
+          boxShadow: '0 0 10px rgba(197, 168, 128, 0.5)',
         }}
       />
     </section>

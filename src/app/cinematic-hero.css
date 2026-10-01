@@ -2,15 +2,16 @@
    CINEMATIC HERO — Scroll-Driven Image Sequence
    ================================================================ */
 
-/* ── Hero Main Section (Clean viewport height, no black gap) ── */
+/* ── Hero Main Section: clean viewport block, zero black screen below ── */
 .hero-section {
   position: relative;
   width: 100%;
   height: calc(100vh - 64px);
-  min-height: 580px;
-  max-height: 920px;
+  min-height: 520px;
+  max-height: 960px;
   background: #09090b;
   overflow: hidden;
+  touch-action: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -384,43 +385,7 @@
   transform: translateX(4px);
 }
 
-/* ── Scroll Indicator ── */
-.hero-scroll-indicator {
-  position: absolute;
-  bottom: 40px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 6;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  opacity: 1;
-  transition: opacity 0.5s ease, transform 0.5s ease;
-  animation: heroIndicatorFadeIn 1.5s cubic-bezier(0.16, 1, 0.3, 1) 1s forwards;
-  pointer-events: none;
-}
 
-.hero-scroll-indicator.hero-indicator-hidden {
-  opacity: 0;
-  transform: translateX(-50%) translateY(20px);
-}
-
-.hero-scroll-indicator-text {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.hero-scroll-indicator-arrow {
-  width: 20px;
-  height: 20px;
-  color: rgba(255, 255, 255, 0.5);
-  animation: scrollBounce 2s ease-in-out infinite;
-}
 
 /* ── Loading Overlay ── */
 .hero-loading-overlay {

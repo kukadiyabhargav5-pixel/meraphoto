@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useState, useCallback } from 'react';
 import { useDashboard } from './DashboardContext';
-import { Calendar, Image as ImageIcon, Users, Heart, UsersRound, RefreshCw, ExternalLink, Settings, Camera, TrendingUp, ArrowUpRight, Sparkles, Clock, Lock, CreditCard } from 'lucide-react';
+import { Calendar, Image as ImageIcon, Users, Heart, UsersRound, RefreshCw, ExternalLink, Settings, Camera, TrendingUp, ArrowUpRight, Sparkles, Clock, Lock, CreditCard, Zap } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
@@ -40,7 +40,7 @@ function AnimatedCount({ value }: { value: number }) {
 export default function DashboardOverview() {
   const router = useRouter();
   const context = useDashboard();
-  const { user } = useAuth();
+  const { user, studio: authStudio } = useAuth();
   const [stats, setStats] = useState<Stats>({ events: 0, media: 0, visitors: 0, teamMembers: 0, customers: 0 });
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -148,86 +148,102 @@ export default function DashboardOverview() {
   ];
 
   const quickLinks = [
-    { label: 'Plans & Billing', href: '/dashboard/plans-billing', icon: CreditCard, accent: '#f59e0b', highlight: true },
-    { label: 'Create Event', href: '/dashboard/create-event', icon: Calendar, accent: '#6366f1' },
-    { label: 'Studio Settings', href: '/dashboard/studio-settings', icon: Settings, accent: '#64748b' },
-    { label: 'Studio Branding', href: '/dashboard/studio-branding', icon: Sparkles, accent: '#c5a880' },
-    { label: 'Quotation', href: '/dashboard/quotation', icon: ExternalLink, accent: '#10b981' },
+    { label: 'Plans & Billing', subtitle: 'Upgrade & manage plans', href: '/dashboard/plans-billing', icon: CreditCard, accent: '#c5a880', highlight: true },
+    { label: 'Create Event', subtitle: 'New photo gallery', href: '/dashboard/create-event', icon: Calendar, accent: '#6366f1' },
+    { label: 'Studio Settings', subtitle: 'Studio preferences', href: '/dashboard/studio-settings', icon: Settings, accent: '#64748b' },
+    { label: 'Studio Branding', subtitle: 'Watermark & logo', href: '/dashboard/studio-branding', icon: Sparkles, accent: '#c5a880' },
+    { label: 'Quotation', subtitle: 'Invoices & quotes', href: '/dashboard/quotation', icon: ExternalLink, accent: '#10b981' },
   ];
 
   return (
-    <div className="p-3 xs:p-4 lg:p-8 max-w-7xl mx-auto pb-16">
+    <div className="p-3 xs:p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto pb-32 sm:pb-24">
 
       {/* ═══ Welcome Banner ═══ */}
       <motion.div
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="relative overflow-hidden rounded-2xl sm:rounded-3xl mb-6 sm:mb-8"
-        style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' }}
+        className="relative overflow-hidden rounded-2xl sm:rounded-3xl mb-6 sm:mb-8 border border-white/10 shadow-xl"
+        style={{ background: 'linear-gradient(135deg, #0b0f19 0%, #161e2e 50%, #0b0f19 100%)' }}
       >
-        {/* Orbs */}
-        <div className="absolute top-0 right-0 w-80 h-80 rounded-full opacity-20 pointer-events-none"
+        {/* Subtle Ambient Orbs */}
+        <div className="absolute top-0 right-0 w-80 h-80 rounded-full opacity-15 pointer-events-none"
           style={{ background: 'radial-gradient(circle, #c5a880 0%, transparent 70%)' }} />
         <div className="absolute -bottom-20 -left-20 w-60 h-60 rounded-full opacity-10 pointer-events-none"
           style={{ background: 'radial-gradient(circle, #6366f1 0%, transparent 70%)' }} />
 
-        <div className="relative z-10 p-4 xs:p-6 lg:p-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shadow-lg shrink-0"
-              style={{ background: 'linear-gradient(135deg, #c5a880, #a07c4c)' }}>
-              <Camera className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
-            </div>
-            <div>
-              <motion.h1
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.2 }}
-                className="text-lg xs:text-xl lg:text-2xl font-black text-white tracking-tight flex items-center gap-2 flex-wrap"
-              >
-                {greeting}, <span className="text-[#c5a880]">{user?.name || stats.studioName || 'Studio'}</span>
-                {isSuperAdmin && (
-                  <span className="text-[11px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2.5 py-0.5 rounded-full">
-                    👑 VIP Admin
+        <div className="relative z-10 p-4 sm:p-6 lg:p-7 flex flex-col gap-4 sm:gap-5">
+          {/* Top Row: User info on Left + Refresh icon button on Right */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="w-11 h-11 sm:w-13 sm:h-13 rounded-2xl flex items-center justify-center shrink-0 shadow-md border border-[#c5a880]/30"
+                style={{ background: 'linear-gradient(135deg, rgba(197,168,128,0.25), rgba(160,124,76,0.1))' }}>
+                <Camera className="w-5 h-5 sm:w-6 sm:h-6 text-[#c5a880]" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  {greeting}
+                </div>
+                <motion.h1
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="text-base sm:text-xl lg:text-2xl font-black text-white tracking-tight flex items-center gap-2 flex-wrap leading-snug"
+                >
+                  <span className="truncate">{user?.name || stats.studioName || 'Studio'}</span>
+                  {isSuperAdmin && (
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full shrink-0">
+                      👑 VIP Admin
+                    </span>
+                  )}
+                </motion.h1>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                  <span className="text-[11px] font-medium text-slate-400 truncate">
+                    {stats.studioName || 'Studio'} • {isSuperAdmin ? 'Unlimited Access' : 'Dashboard'}
                   </span>
-                )}
-              </motion.h1>
-              <div className="flex items-center gap-2 mt-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs font-medium text-slate-400">
-                  {stats.studioName || 'Super Admin Studio'} • {isSuperAdmin ? 'Unlimited Free Admin Access' : 'Dashboard'}
-                </span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap w-full sm:w-auto">
-            <Link
-              href="/dashboard/plans-billing"
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl
-                bg-gradient-to-r from-amber-400 via-[#c5a880] to-amber-500 text-slate-950 text-xs font-black
-                shadow-lg shadow-amber-500/30 hover:shadow-xl hover:shadow-amber-500/50 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer min-h-[44px] border border-amber-300/60"
-            >
-              <CreditCard className="w-4 h-4 text-slate-950" />
-              <span>Plans & Billing</span>
-            </Link>
+            {/* Quick Refresh Icon Button on Top-Right */}
             <button
               onClick={() => fetchStats(true)}
               disabled={refreshing}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-white/10 border border-white/10
-                text-white text-xs font-bold hover:bg-white/20 transition-all disabled:opacity-50 backdrop-blur-sm cursor-pointer min-h-[44px]"
+              title="Refresh Stats"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/5 hover:bg-white/10 active:scale-95 border border-white/10
+                text-slate-300 hover:text-white transition-all disabled:opacity-50 flex items-center justify-center shrink-0 cursor-pointer shadow-xs"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-[#c5a880]' : ''}`} />
             </button>
+          </div>
+
+          {/* Bottom Row: Two Balanced Equal-Height Action Buttons */}
+          <div className="grid grid-cols-2 gap-2.5 sm:flex sm:items-center sm:gap-3 w-full">
+            <Link
+              href="/dashboard/plans-billing"
+              className="flex-1 flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 rounded-xl
+                bg-gradient-to-r from-[#c5a880] via-[#d4bc97] to-[#b59a72] text-[#09090b] text-xs font-black
+                shadow-[0_4px_14px_rgba(197,168,128,0.25)] hover:shadow-[0_6px_20px_rgba(197,168,128,0.35)]
+                hover:brightness-105 active:scale-[0.98] transition-all cursor-pointer h-[42px] border border-[#e3d8c8]/40"
+            >
+              <CreditCard className="w-4 h-4 text-[#09090b] shrink-0" />
+              <span className="truncate">Plans & Billing</span>
+            </Link>
             <button
               onClick={() => handleBlockClick('/dashboard/studio-settings')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl
-                ${(isBasicPlan || isStartupPlan) ? 'bg-slate-800 text-slate-400 opacity-60 border border-slate-700' : 'bg-gradient-to-r from-[#c5a880] to-[#a07c4c] text-white shadow-lg shadow-[#c5a880]/20 hover:shadow-xl hover:shadow-[#c5a880]/30 hover:-translate-y-0.5'}
-                text-xs font-black transition-all cursor-pointer min-h-[44px]`}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 rounded-xl
+                ${(isBasicPlan || isStartupPlan)
+                  ? 'bg-slate-800/80 text-slate-400 border border-slate-700/80'
+                  : 'bg-white/8 hover:bg-white/15 border border-white/15 text-white hover:border-[#c5a880]/50 hover:text-[#c5a880]'}
+                text-xs font-black transition-all cursor-pointer h-[42px] active:scale-[0.98] shadow-xs`}
             >
-              {(isBasicPlan || isStartupPlan) ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <Settings className="w-3.5 h-3.5" />}
-              <span>Manage Studio</span>
+              {(isBasicPlan || isStartupPlan) ? (
+                <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              ) : (
+                <Settings className="w-4 h-4 text-[#c5a880] shrink-0" />
+              )}
+              <span className="truncate">Manage Studio</span>
             </button>
           </div>
         </div>
@@ -346,10 +362,10 @@ export default function DashboardOverview() {
 
         <AnimatePresence>
           {loading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="bg-white rounded-2xl border border-slate-100 p-5 h-[120px] animate-pulse">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 mb-3" />
+                <div key={i} className={`bg-white rounded-2xl border border-slate-100 p-3.5 sm:p-5 h-[110px] sm:h-[125px] animate-pulse ${i === 4 ? 'col-span-2 sm:col-span-1' : 'col-span-1'}`}>
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 mb-2.5" />
                   <div className="h-2 w-14 bg-slate-100 rounded mb-2" />
                   <div className="h-5 w-10 bg-slate-100 rounded" />
                 </div>
@@ -360,49 +376,51 @@ export default function DashboardOverview() {
               initial="hidden"
               animate="show"
               variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07 } } }}
-              className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
+              className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5"
             >
-              {statCards.map((card) => (
+              {statCards.map((card, idx) => (
                 <motion.div
                   key={card.id}
                   variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } } }}
                   onClick={() => handleBlockClick(card.link)}
-                  className="bg-white rounded-2xl border border-slate-100 p-3 sm:p-5 relative overflow-hidden cursor-pointer
-                    hover:border-slate-200 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-1
-                    transition-all duration-300 group"
+                  className={`bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-5 relative overflow-hidden cursor-pointer
+                    hover:border-slate-300 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-0.5 active:scale-[0.98]
+                    transition-all duration-300 group shadow-xs ${idx === 4 ? 'col-span-2 sm:col-span-1' : 'col-span-1'}`}
                 >
                   {/* Hover glow */}
                   <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full opacity-0 group-hover:opacity-100
-                    transition-opacity duration-500 blur-2xl"
+                    transition-opacity duration-500 blur-2xl pointer-events-none"
                     style={{ background: card.color }} />
 
-                  <div className="relative z-10">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 transition-transform duration-300 group-hover:scale-110"
-                      style={{ background: card.bg }}>
-                      <card.icon className="w-5 h-5" style={{ color: card.color }} />
+                  <div className="relative z-10 flex flex-col justify-between h-full min-h-[92px] sm:min-h-[105px]">
+                    <div className="flex items-center justify-between mb-2 sm:mb-3">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110 shrink-0 shadow-xs"
+                        style={{ background: card.bg }}>
+                        <card.icon className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: card.color }} />
+                      </div>
+                      
+                      {/* Arrow or Lock Badge */}
+                      <div>
+                        {(isBasicPlan || (isStartupPlan && !allowedStartupLinks.some(r => card.link === r || card.link.startsWith(`${r}/`)))) ? (
+                          <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600">
+                            <Lock className="w-3.5 h-3.5" />
+                          </div>
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-slate-700 group-hover:bg-slate-100 transition-all opacity-60 group-hover:opacity-100">
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center justify-between">
-                      <span>{card.label}</span>
-                      {(isBasicPlan || (isStartupPlan && !allowedStartupLinks.some(r => card.link === r || card.link.startsWith(`${r}/`)))) && (
-                        <Lock className="w-3 h-3 text-amber-500/70" />
-                      )}
-                    </div>
-                    <div className="text-xl xs:text-2xl font-black text-slate-900 tracking-tight flex items-baseline gap-1">
-                      <AnimatedCount value={card.value} />
-                    </div>
-                  </div>
 
-                  {/* Arrow or Lock Badge */}
-                  <div className="absolute top-4 right-4">
-                    {(isBasicPlan || (isStartupPlan && !allowedStartupLinks.some(r => card.link === r || card.link.startsWith(`${r}/`)))) ? (
-                      <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600">
-                        <Lock className="w-3.5 h-3.5" />
+                    <div>
+                      <div className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-wider mb-0.5">
+                        {card.label}
                       </div>
-                    ) : (
-                      <div className="opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0">
-                        <ArrowUpRight className="w-4 h-4 text-slate-400" />
+                      <div className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-baseline gap-1">
+                        <AnimatedCount value={card.value} />
                       </div>
-                    )}
+                    </div>
                   </div>
                 </motion.div>
               ))}
@@ -422,7 +440,7 @@ export default function DashboardOverview() {
           <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Quick Actions</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-3.5">
           {quickLinks.map((ql, i) => {
             const isQLLocked = (isBasicPlan && !ql.highlight) || 
                                (isStartupPlan && !allowedStartupLinks.some(r => ql.href === r || ql.href.startsWith(`${r}/`)));
@@ -433,43 +451,62 @@ export default function DashboardOverview() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.35 + i * 0.06 }}
                 onClick={() => handleBlockClick(ql.href)}
-                className={`rounded-2xl p-4 sm:p-5 flex items-center gap-3 sm:gap-3.5 cursor-pointer
-                  transition-all duration-300 group ${
+                className={`rounded-2xl p-3.5 sm:p-4 flex items-center gap-3 sm:gap-3.5 cursor-pointer
+                  transition-all duration-300 group active:scale-[0.98] ${
                     ql.highlight
-                      ? 'bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-white border-2 border-amber-400/60 shadow-md shadow-amber-500/10 hover:shadow-xl hover:shadow-amber-500/25 hover:-translate-y-1'
+                      ? 'bg-gradient-to-br from-[#fcf9f5] via-white to-[#faf5ec] border border-[#c5a880]/60 ring-1 ring-[#c5a880]/20 shadow-[0_4px_16px_rgba(197,168,128,0.12)] hover:border-[#c5a880] hover:ring-[#c5a880]/40 hover:shadow-[0_8px_24px_rgba(197,168,128,0.22)] hover:-translate-y-0.5'
                       : isQLLocked
-                        ? 'bg-slate-50/70 border border-slate-200/60 opacity-60 hover:opacity-80'
-                        : 'bg-white border border-slate-100 hover:border-slate-200 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-0.5'
+                        ? 'bg-slate-50/70 border border-slate-200/60 opacity-60 hover:opacity-85 hover:bg-slate-50'
+                        : 'bg-white border border-slate-200/80 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-0.5 shadow-xs'
                   }`}
               >
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 ${
-                  ql.highlight ? 'bg-amber-500/20 text-amber-600 shadow-sm' : ''
-                }`}
-                  style={!ql.highlight ? { background: `${ql.accent}12` } : {}}>
-                  <ql.icon className="w-5 h-5" style={{ color: ql.accent }} />
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105 shadow-xs ${
+                    ql.highlight
+                      ? 'bg-[#c5a880]/15 text-[#9e7b4f] border border-[#c5a880]/30'
+                      : 'border border-slate-100'
+                  }`}
+                  style={!ql.highlight ? { background: `${ql.accent}12` } : {}}
+                >
+                  <ql.icon
+                    className="w-5 h-5 transition-transform duration-300 group-hover:scale-110"
+                    style={{ color: ql.highlight ? '#9e7b4f' : ql.accent }}
+                  />
                 </div>
+
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors flex items-center gap-1.5 truncate">
-                    <span>{ql.label}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors truncate">
+                      {ql.label}
+                    </span>
                     {ql.highlight && (
-                      <span className="text-[9px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-400 to-[#c5a880] text-slate-950 px-1.5 py-0.5 rounded shadow-xs">
+                      <span className="text-[9px] font-black uppercase tracking-wider bg-gradient-to-r from-[#c5a880] via-[#b89565] to-[#9a7b4f] text-white px-2 py-0.5 rounded-full shadow-xs shrink-0 leading-tight">
                         HOT
                       </span>
                     )}
-                    {isQLLocked && !ql.highlight && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
+                    {isQLLocked && !ql.highlight && (
+                      <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    )}
                   </div>
-                  <div className="text-[10px] font-medium text-slate-400 truncate">
-                    {ql.highlight ? 'Upgrade or manage plans' : (isQLLocked ? 'Click to upgrade plan' : `Go to ${ql.label.toLowerCase()}`)}
+                  <div className="text-[11px] font-medium text-slate-400 group-hover:text-slate-500 transition-colors truncate mt-0.5">
+                    {isQLLocked && !ql.highlight
+                      ? 'Click to upgrade plan'
+                      : (ql.subtitle || `Go to ${ql.label.toLowerCase()}`)}
                   </div>
                 </div>
+
                 {isQLLocked && !ql.highlight ? (
                   <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0 ml-auto group-hover:bg-amber-500/20 transition-colors">
                     <ArrowUpRight className="w-3.5 h-3.5" />
                   </div>
                 ) : (
-                  <ArrowUpRight className={`w-4 h-4 ml-auto transition-all ${
-                    ql.highlight ? 'text-amber-500 opacity-100 group-hover:translate-x-0.5' : 'text-slate-300 opacity-0 group-hover:opacity-100'
-                  }`} />
+                  <ArrowUpRight
+                    className={`w-4 h-4 ml-auto shrink-0 transition-all ${
+                      ql.highlight
+                        ? 'text-[#c5a880] opacity-100 group-hover:text-[#9e7b4f] group-hover:translate-x-0.5 group-hover:-translate-y-0.5'
+                        : 'text-slate-300 opacity-0 group-hover:opacity-100 group-hover:text-slate-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5'
+                    }`}
+                  />
                 )}
               </motion.div>
             );

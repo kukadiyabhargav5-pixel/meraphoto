@@ -620,4 +620,26 @@ main, .page-content {
   object-position: center !important;
 }
 
+/* ============================================================
+   TURBO HIGH-SPEED UPLOAD ENGINE ANIMATIONS
+   ============================================================ */
+@keyframes turbo-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+@keyframes stream-pulse {
+  0%, 100% { height: 4px; opacity: 0.35; transform: scaleY(0.7); }
+  50% { height: 16px; opacity: 1; transform: scaleY(1.3); }
+}
+
+.animate-turbo-shimmer {
+  animation: turbo-shimmer 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.stream-bar {
+  animation: stream-pulse 0.75s ease-in-out infinite;
+}
+
+
 
