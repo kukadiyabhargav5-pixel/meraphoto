@@ -504,6 +504,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
     password: '',
     customWatermark: false,
     addToPortfolio: false,
+    allowDownload: true,
     coverImageUrl: '',
     watermarkType: 'LOGO',
     watermarkText: '',
@@ -537,6 +538,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
         password: '',
         customWatermark: !!event.watermark?.isActive,
         addToPortfolio: !!event.addToPortfolio,
+        allowDownload: event.allowDownload !== undefined ? !!event.allowDownload : true,
         coverImageUrl: event.coverImageUrl || '',
         watermarkType: event.watermark?.type || 'LOGO',
         watermarkText: event.watermark?.text || '',
@@ -1030,7 +1032,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                         <span className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider">
                           {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
                             ? '⚡ Upload Complete'
-                            : '⚡ R2 Turbo Stream Active (32 Threads)'}
+                            : '⚡ Turbo Cloud Upload (32 Threads)'}
                         </span>
                         <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-mono font-bold border border-emerald-200">
                           GIGABIT
@@ -1038,8 +1040,8 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                       </div>
                       <p className="text-[11px] text-slate-500 font-medium">
                         {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
-                          ? `All ${uploadProgress.total} files successfully secured on Cloudflare R2`
-                          : `Streaming ${uploadProgress.current} of ${uploadProgress.total} files directly to Cloudflare R2...`}
+                          ? `All ${uploadProgress.total} photos successfully saved in your gallery`
+                          : `Uploading ${uploadProgress.current} of ${uploadProgress.total} photos to your gallery...`}
                       </p>
                     </div>
                   </div>
@@ -1275,7 +1277,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                             All Files Uploaded!
                           </h3>
                           <p className="text-xs font-medium text-slate-500 mb-5 max-w-sm">
-                            All <span className="text-slate-900 font-bold font-mono">{uploadProgress.total.toLocaleString()}</span> files were successfully streamed to Cloudflare R2 and synced with your event gallery.
+                            All <span className="text-slate-900 font-bold font-mono">{uploadProgress.total.toLocaleString()}</span> files were successfully uploaded and synced with your event gallery.
                           </p>
 
                           {/* Completed Green Loading Patti */}
@@ -1314,7 +1316,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                               32 Parallel Streams
                             </div>
                             <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono text-[9px] font-bold">
-                              R2 DIRECT
+                              TURBO CLOUD
                             </span>
                           </div>
 
@@ -1359,7 +1361,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                             Uploading Photos &amp; Media
                           </h3>
                           <p className="text-[11px] font-medium text-slate-500 mb-4">
-                            Direct high-speed streaming to Cloudflare R2
+                            High-speed secure upload to your event gallery
                           </p>
 
                           {/* ── LOADING PATTI (Progress Strip) ── */}
@@ -2142,6 +2144,47 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                     } catch (err) {
                       toast.error("Failed to save portfolio status.");
                       setFormData({...formData, addToPortfolio: !newValue});
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Album Photo Download On/Off Toggle */}
+              <div className="flex items-center justify-between py-4 border-t border-slate-100">
+                <div className="flex items-center gap-2">
+                  <span className="w-4 h-4 rounded border border-[#c5a880] text-[#c5a880] flex items-center justify-center text-[10px] font-black">D</span>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-700 uppercase">Album Photo Download</span>
+                    <span className="text-[10px] text-slate-400">
+                      {formData.allowDownload ? 'Download button ON in album' : 'Download button OFF (Disabled)'}
+                    </span>
+                  </div>
+                  {saving && <Loader2 className="h-3 w-3 animate-spin text-slate-400 ml-2" />}
+                </div>
+                <div 
+                  className={`toggle-switch ${saving ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                  data-active={formData.allowDownload}
+                  onClick={async () => {
+                    if (saving) return;
+                    const newValue = !formData.allowDownload;
+                    
+                    setFormData({...formData, allowDownload: newValue});
+                    setSaving(true);
+                    
+                    try {
+                      await apiClient.patch(`/event/${eventId}/download-status`, { 
+                        allowDownload: newValue 
+                      });
+                      
+                      if (event) {
+                        setEvent({...event, allowDownload: newValue});
+                      }
+                      toast.success(newValue ? 'Photo downloads enabled for album' : 'Photo downloads disabled for album');
+                    } catch (err) {
+                      toast.error("Failed to update download setting.");
+                      setFormData({...formData, allowDownload: !newValue});
                     } finally {
                       setSaving(false);
                     }

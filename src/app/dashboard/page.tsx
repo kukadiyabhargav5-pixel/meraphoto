@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useState, useCallback } from 'react';
 import { useDashboard } from './DashboardContext';
-import { Calendar, Image as ImageIcon, Users, Heart, UsersRound, RefreshCw, ExternalLink, Settings, Camera, TrendingUp, ArrowUpRight, Sparkles, Clock, Lock, CreditCard, Zap } from 'lucide-react';
+import { Calendar, Image as ImageIcon, Users, Heart, UsersRound, RefreshCw, ExternalLink, Settings, Camera, TrendingUp, ArrowUpRight, Sparkles, Clock, Lock, CreditCard, Zap, User } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
@@ -41,16 +41,41 @@ export default function DashboardOverview() {
   const router = useRouter();
   const context = useDashboard();
   const { user, studio: authStudio } = useAuth();
-  const [stats, setStats] = useState<Stats>({ events: 0, media: 0, visitors: 0, teamMembers: 0, customers: 0 });
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<Stats>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mara_overview_stats');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return { events: 0, media: 0, visitors: 0, teamMembers: 0, customers: 0 };
+  });
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !localStorage.getItem('mara_overview_stats');
+    }
+    return true;
+  });
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Aggressive prefetch for instant 0.5s navigation
+  useEffect(() => {
+    router.prefetch('/dashboard/plans-billing');
+    router.prefetch('/dashboard/profile');
+    router.prefetch('/dashboard/events');
+    router.prefetch('/dashboard/create-event');
+    router.prefetch('/dashboard/quotation');
+    router.prefetch('/dashboard/team');
+    router.prefetch('/dashboard/customers');
+    router.prefetch('/dashboard/gallery-visitors');
+  }, [router]);
 
   const fetchStats = useCallback(async (isManual = false) => {
     try {
       if (isManual) setRefreshing(true);
       const res = await apiClient.get('/dashboard/stats');
-      setStats({
+      const newStats = {
         events: res.data.events || 0,
         media: res.data.media || 0,
         visitors: res.data.visitors || 0,
@@ -58,7 +83,11 @@ export default function DashboardOverview() {
         customers: res.data.customers || 0,
         studioName: res.data.studioName,
         subscriptionPlan: res.data.subscriptionPlan
-      });
+      };
+      setStats(newStats);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mara_overview_stats', JSON.stringify(newStats));
+      }
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Failed to fetch stats:', err);
@@ -150,8 +179,7 @@ export default function DashboardOverview() {
   const quickLinks = [
     { label: 'Plans & Billing', subtitle: 'Upgrade & manage plans', href: '/dashboard/plans-billing', icon: CreditCard, accent: '#c5a880', highlight: true },
     { label: 'Create Event', subtitle: 'New photo gallery', href: '/dashboard/create-event', icon: Calendar, accent: '#6366f1' },
-    { label: 'Studio Settings', subtitle: 'Studio preferences', href: '/dashboard/studio-settings', icon: Settings, accent: '#64748b' },
-    { label: 'Studio Branding', subtitle: 'Watermark & logo', href: '/dashboard/studio-branding', icon: Sparkles, accent: '#c5a880' },
+    { label: 'Profile & Studio', subtitle: 'Account & logo branding', href: '/dashboard/profile', icon: User, accent: '#c5a880' },
     { label: 'Quotation', subtitle: 'Invoices & quotes', href: '/dashboard/quotation', icon: ExternalLink, accent: '#10b981' },
   ];
 
@@ -222,6 +250,8 @@ export default function DashboardOverview() {
           <div className="grid grid-cols-2 gap-2.5 sm:flex sm:items-center sm:gap-3 w-full">
             <Link
               href="/dashboard/plans-billing"
+              prefetch={true}
+              onMouseEnter={() => router.prefetch('/dashboard/plans-billing')}
               className="flex-1 flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 rounded-xl
                 bg-gradient-to-r from-[#c5a880] via-[#d4bc97] to-[#b59a72] text-[#09090b] text-xs font-black
                 shadow-[0_4px_14px_rgba(197,168,128,0.25)] hover:shadow-[0_6px_20px_rgba(197,168,128,0.35)]
@@ -230,21 +260,17 @@ export default function DashboardOverview() {
               <CreditCard className="w-4 h-4 text-[#09090b] shrink-0" />
               <span className="truncate">Plans & Billing</span>
             </Link>
-            <button
-              onClick={() => handleBlockClick('/dashboard/studio-settings')}
-              className={`flex-1 flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 rounded-xl
-                ${(isBasicPlan || isStartupPlan)
-                  ? 'bg-slate-800/80 text-slate-400 border border-slate-700/80'
-                  : 'bg-white/8 hover:bg-white/15 border border-white/15 text-white hover:border-[#c5a880]/50 hover:text-[#c5a880]'}
-                text-xs font-black transition-all cursor-pointer h-[42px] active:scale-[0.98] shadow-xs`}
+            <Link
+              href="/dashboard/profile"
+              prefetch={true}
+              onMouseEnter={() => router.prefetch('/dashboard/profile')}
+              className="flex-1 flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 rounded-xl
+                bg-white/8 hover:bg-white/15 border border-white/15 text-white hover:border-[#c5a880]/50 hover:text-[#c5a880]
+                text-xs font-black transition-all cursor-pointer h-[42px] active:scale-[0.98] shadow-xs"
             >
-              {(isBasicPlan || isStartupPlan) ? (
-                <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              ) : (
-                <Settings className="w-4 h-4 text-[#c5a880] shrink-0" />
-              )}
-              <span className="truncate">Manage Studio</span>
-            </button>
+              <User className="w-4 h-4 text-[#c5a880] shrink-0" />
+              <span className="truncate">Studio & Profile</span>
+            </Link>
           </div>
         </div>
       </motion.div>

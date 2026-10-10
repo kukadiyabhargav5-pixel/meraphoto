@@ -18,6 +18,12 @@ export default function LoginPage() {
   const { login, googleLogin, isAuthenticated, loading: authLoading } = useAuth();
   const router = useRouter();
 
+  // Prefetch targets
+  useEffect(() => {
+    router.prefetch('/dashboard');
+    router.prefetch('/admin-choice');
+  }, [router]);
+
   // Redirect to dashboard if already logged in
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
@@ -64,21 +70,27 @@ export default function LoginPage() {
         localStorage.removeItem('rememberedEmail');
       }
       
-      toast.success('Login successful!');
+      toast.success('Login successful! Entering dashboard...');
       
       const userStr = localStorage.getItem('user');
+      let targetPath = '/dashboard';
       if (userStr) {
-        const userObj = JSON.parse(userStr);
-        if (userObj.role === 'SUPER_ADMIN') {
-          router.push('/admin-choice');
-          return;
-        }
+        try {
+          const userObj = JSON.parse(userStr);
+          if (userObj.role === 'SUPER_ADMIN') {
+            targetPath = '/admin-choice';
+          }
+        } catch (e) {}
       }
       
-      router.push('/dashboard');
+      router.replace(targetPath);
+      setTimeout(() => {
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith(targetPath)) {
+          window.location.href = targetPath;
+        }
+      }, 350);
     } catch (err: any) {
       toast.error(err?.response?.data?.error || 'Login failed. Please check your credentials.');
-    } finally {
       setLoading(false);
     }
   };
@@ -93,7 +105,14 @@ export default function LoginPage() {
     );
   }
 
-  if (isAuthenticated) return null;
+  if (isAuthenticated && !authLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-64px)] min-h-[calc(100dvh-64px)] bg-[#faf9f6]">
+        <div className="w-10 h-10 border-4 border-[#c5a880] border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-xs font-bold text-slate-600 uppercase tracking-wider font-poppins">Entering Dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <PublicWrapper>

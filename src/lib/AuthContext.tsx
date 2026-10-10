@@ -64,7 +64,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
     return null;
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const saved = localStorage.getItem('user');
+        if (token && saved) return false;
+      } catch {}
+    }
+    return true;
+  });
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const isAuthenticated = !!user;
@@ -93,15 +102,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(null);
         setStudio(null);
       }
-    } catch (err) {
-      // Token is invalid or expired
-      console.error('Auth check failed:', err);
-      setUser(null);
-      setStudio(null);
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
-      localStorage.removeItem('studio');
+    } catch (err: any) {
+      console.warn('Auth check status/warning:', err?.message);
+      // Only clear credentials if backend explicitly rejected auth (401 / 403)
+      if (err?.response?.status === 401 || err?.response?.status === 403) {
+        setUser(null);
+        setStudio(null);
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+        localStorage.removeItem('studio');
+      } else {
+        // Cold start, server offline or network blip: preserve existing local user session
+        console.log('[AuthContext] Preserving active session during backend wake-up / network retry.');
+      }
     } finally {
       setLoading(false);
     }
@@ -122,9 +136,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (data.studio) {
       localStorage.setItem('studio', JSON.stringify(data.studio));
     }
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('app_initial_ready', 'true');
+    }
 
     setUser(data.user);
     setStudio(data.studio || null);
+    setLoading(false);
   };
 
   const googleLogin = async (credential?: string, accessToken?: string) => {
@@ -138,9 +156,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (data.studio) {
       localStorage.setItem('studio', JSON.stringify(data.studio));
     }
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('app_initial_ready', 'true');
+    }
 
     setUser(data.user);
     setStudio(data.studio || null);
+    setLoading(false);
   };
 
   const register = async (formData: any) => {
@@ -154,9 +176,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (data.studio) {
       localStorage.setItem('studio', JSON.stringify(data.studio));
     }
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('app_initial_ready', 'true');
+    }
 
     setUser(data.user);
     setStudio(data.studio || null);
+    setLoading(false);
+    return data;
   };
 
   const logout = async () => {

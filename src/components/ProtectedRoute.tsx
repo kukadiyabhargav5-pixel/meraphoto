@@ -18,7 +18,7 @@ export default function ProtectedRoute({
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
-      router.replace('/auth/login');
+      router.replace('/login');
     } else if (!loading && isAuthenticated && allowedRoles && user && !allowedRoles.includes(user.role)) {
       router.replace('/dashboard');
     }

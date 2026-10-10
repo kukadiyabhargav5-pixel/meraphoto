@@ -8,6 +8,7 @@ import confetti from 'canvas-confetti';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { apiClient } from '../../../../lib/api';
+import toast from 'react-hot-toast';
 
 const dbName = 'MeraPhotoDB';
 const storeName = 'media_files';
@@ -225,6 +226,10 @@ export default function EventPhotosPage() {
   // --- DOWNLOAD FLOW ---
   const handleDownloadClick = () => {
     if (!event) return;
+    if (event.allowDownload === false) {
+      toast.error('Photo downloads have been disabled by the studio for this album.');
+      return;
+    }
     if (event.accessType === 'PUBLIC') {
       startBulkDownload();
     } else if (event.accessType === 'PASSWORD') {
@@ -772,13 +777,24 @@ export default function EventPhotosPage() {
               </>
             )}
 
-            <button
-              onClick={handleDownloadClick}
-              className="flex-1 bg-[#FF6B00] hover:bg-[#E05E00] text-white shadow-xl shadow-orange-500/20 rounded-xl sm:rounded-2xl py-3 px-2.5 sm:px-4 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer min-h-[44px]"
-            >
-              <Download className="h-4 w-4" />
-              <span>Download</span>
-            </button>
+            {event?.allowDownload !== false ? (
+              <button
+                onClick={handleDownloadClick}
+                className="flex-1 bg-[#FF6B00] hover:bg-[#E05E00] text-white shadow-xl shadow-orange-500/20 rounded-xl sm:rounded-2xl py-3 px-2.5 sm:px-4 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer min-h-[44px]"
+              >
+                <Download className="h-4 w-4" />
+                <span>Download</span>
+              </button>
+            ) : (
+              <button
+                disabled
+                title="Photo downloads have been disabled by the studio for this album"
+                className="flex-1 bg-slate-200 text-slate-400 cursor-not-allowed rounded-xl sm:rounded-2xl py-3 px-2.5 sm:px-4 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 min-h-[44px] opacity-70"
+              >
+                <Download className="h-4 w-4 text-slate-400" />
+                <span>Download Disabled</span>
+              </button>
+            )}
           </div>
         </div>
       )}

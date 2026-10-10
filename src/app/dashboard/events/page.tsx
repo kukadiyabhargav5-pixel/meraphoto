@@ -5,9 +5,22 @@ import { Plus, Calendar, Image as ImageIcon, Video, Loader2, Sparkles, Crown, Ar
 import { apiClient } from '@/lib/api';
 
 export default function EventsManagementPage() {
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<any[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mara_cached_events');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return [];
+  });
   const [credits, setCredits] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !localStorage.getItem('mara_cached_events');
+    }
+    return true;
+  });
   const [searchQuery, setSearchQuery] = useState('');
 
   // Helper to calculate exact live days left out of 30 days based on event date or creation date
@@ -50,6 +63,9 @@ export default function EventsManagementPage() {
             return timeB - timeA;
           });
           setEvents(sorted);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('mara_cached_events', JSON.stringify(sorted));
+          }
         }
         if (credRes.status === 'fulfilled' && credRes.value.data?.credits) {
           setCredits(credRes.value.data.credits);

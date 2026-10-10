@@ -85,6 +85,7 @@ export default function CreateEventPage() {
   const [watermarkHeight, setWatermarkHeight] = useState(20);
   const [watermarkOpacity, setWatermarkOpacity] = useState(50);
   const [addToPortfolio, setAddToPortfolio] = useState(false);
+  const [allowDownload, setAllowDownload] = useState(true);
 
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -357,6 +358,7 @@ export default function CreateEventPage() {
         days: totalDays > 1 ? eventDays : [],
         coverImageUrl: coverImage,
         addToPortfolio,
+        allowDownload,
         watermark: {
           isActive: customWatermark,
           type: watermarkType,
@@ -1323,6 +1325,24 @@ export default function CreateEventPage() {
                         className="toggle-switch cursor-pointer shrink-0" 
                         data-active={addToPortfolio}
                         onClick={() => setAddToPortfolio(!addToPortfolio)}
+                      />
+                    </div>
+
+                    {/* Album Download Toggle */}
+                    <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                        <span className="w-8 h-8 rounded-xl bg-[#c5a880]/15 border border-[#c5a880]/30 flex items-center justify-center text-xs font-black text-[#8f7048] shrink-0">
+                          D
+                        </span>
+                        <div className="min-w-0">
+                          <h4 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider truncate">Allow Album Photo Downloads</h4>
+                          <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium">Enable or disable download button for guests in this album</p>
+                        </div>
+                      </div>
+                      <div 
+                        className="toggle-switch cursor-pointer shrink-0" 
+                        data-active={allowDownload}
+                        onClick={() => setAllowDownload(!allowDownload)}
                       />
                     </div>
 

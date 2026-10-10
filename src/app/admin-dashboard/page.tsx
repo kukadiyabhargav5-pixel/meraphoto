@@ -171,11 +171,11 @@ export default function AdminDashboardPage() {
       actionText: 'Open Billing'
     },
     {
-      title: 'Studio Branding & Watermark',
-      desc: 'Upload transparent watermark and configure studio themes.',
-      href: '/admin-dashboard/studio-branding',
+      title: 'Studio Profile & Branding',
+      desc: 'Manage studio profile, R2 logo and brand identity.',
+      href: '/dashboard/profile',
       icon: Sparkles,
-      actionText: 'Branding'
+      actionText: 'Studio Profile'
     },
     {
       title: 'Payment QR Codes',

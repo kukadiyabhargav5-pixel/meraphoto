@@ -27,6 +27,30 @@ export const DashboardProvider = ({ children }: { children: React.ReactNode }) =
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
+  // User-scoped cache key for instant loading without cross-user leakage
+  const cacheKey = user?.id ? `mara_dashboard_cache_${user.id}` : null;
+
+  // Instant hydration from secure user cache
+  useEffect(() => {
+    if (typeof window === 'undefined' || !cacheKey) return;
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed.customers) && parsed.customers.length > 0) setCustomers(parsed.customers);
+        if (Array.isArray(parsed.team) && parsed.team.length > 0) setTeam(parsed.team);
+        if (Array.isArray(parsed.bookings) && parsed.bookings.length > 0) setBookings(parsed.bookings);
+        if (Array.isArray(parsed.quotations) && parsed.quotations.length > 0) setQuotations(parsed.quotations);
+        if (Array.isArray(parsed.bills) && parsed.bills.length > 0) setBills(parsed.bills);
+        if (Array.isArray(parsed.shoots) && parsed.shoots.length > 0) setShoots(parsed.shoots);
+        if (Array.isArray(parsed.portfolios) && parsed.portfolios.length > 0) setPortfolios(parsed.portfolios);
+        if (Array.isArray(parsed.eventCovers) && parsed.eventCovers.length > 0) setEventCovers(parsed.eventCovers);
+      }
+    } catch (e) {
+      console.warn('Dashboard cache hydration error:', e);
+    }
+  }, [cacheKey]);
+
   // Keep user in sync with auth context
   useEffect(() => {
     if (user) {
@@ -165,6 +189,25 @@ export const DashboardProvider = ({ children }: { children: React.ReactNode }) =
           }
           if (coverRes.status === 'fulfilled' && coverRes.value.data?.covers) {
             setEventCovers(coverRes.value.data.covers);
+          }
+
+          // Persist fresh user-scoped dashboard data for instant zero-latency loading on refresh
+          if (cacheKey && typeof window !== 'undefined') {
+            try {
+              localStorage.setItem(
+                cacheKey,
+                JSON.stringify({
+                  customers: custRes.status === 'fulfilled' ? custRes.value.data : [],
+                  team: teamRes.status === 'fulfilled' ? teamRes.value.data : [],
+                  bookings: bookRes.status === 'fulfilled' ? bookRes.value.data : [],
+                  quotations: quoteRes.status === 'fulfilled' ? quoteRes.value.data : [],
+                  bills: billRes.status === 'fulfilled' ? billRes.value.data : [],
+                  shoots: shootRes.status === 'fulfilled' ? shootRes.value.data : [],
+                  portfolios: portfolioRes.status === 'fulfilled' ? portfolioRes.value.data?.portfolios : [],
+                  eventCovers: coverRes.status === 'fulfilled' ? coverRes.value.data?.covers : [],
+                })
+              );
+            } catch {}
           }
         } catch (err) {
           console.error('Error fetching dashboard bulk data:', err);

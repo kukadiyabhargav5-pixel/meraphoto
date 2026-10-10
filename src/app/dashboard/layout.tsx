@@ -12,7 +12,6 @@ import {
 import { DashboardProvider, useDashboard } from './DashboardContext';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import { useAuth } from '../../lib/AuthContext';
-import ChatbotWidget from '../../components/ChatbotWidget';
 import toast from 'react-hot-toast';
 
 const NAV_SECTIONS = [
@@ -43,15 +42,13 @@ const NAV_SECTIONS = [
     links: [
       { path: '/payment-qr', label: 'Payment QR', icon: QrCode },
       { path: '/calendar', label: 'Calendar', icon: Calendar },
-      { path: '/profile', label: 'Profile', icon: User },
+      { path: '/profile', label: 'Profile & Studio Settings', icon: User },
     ],
   },
   {
     category: 'System',
     links: [
       { path: '/queries', label: 'Queries', icon: HelpCircle },
-      { path: '/studio-settings', label: 'Studio Settings', icon: Settings },
-      { path: '/studio-branding', label: 'Studio Branding', icon: Settings },
       { path: '/plans-billing', label: 'Plans & Billing', icon: CreditCard },
       { path: '/support-help', label: 'Support Help', icon: HelpCircle },
     ],
@@ -197,6 +194,9 @@ function SidebarContent({
               <Link
                 key={path || 'overview'}
                 prefetch={!isLocked}
+                onMouseEnter={() => {
+                  if (!isLocked) router.prefetch(href);
+                }}
                 href={isLocked ? `${basePrefix}/plans-billing` : href}
                 className={linkClass(href, isPlansBilling)}
                 onClick={(e) => handleLinkClick(e, href)}
@@ -214,6 +214,10 @@ function SidebarContent({
             const isLocked = !isRouteAllowed(qrHref);
             return (
               <Link
+                prefetch={!isLocked}
+                onMouseEnter={() => {
+                  if (!isLocked) router.prefetch(qrHref);
+                }}
                 href={isLocked ? `${basePrefix}/plans-billing` : qrHref}
                 className={linkClass(qrHref)}
                 onClick={(e) => handleLinkClick(e, qrHref)}
@@ -453,7 +457,7 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <Link href={basePrefix} className="flex-1 h-full flex items-center justify-center overflow-hidden px-2 py-1 max-w-[140px] mx-auto">
+          <Link href={basePrefix} prefetch={true} className="flex-1 h-full flex items-center justify-center overflow-hidden px-2 py-1 max-w-[140px] mx-auto">
             <img
               src={logoState}
               alt="Studio Logo"
@@ -463,6 +467,7 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
           </Link>
           <Link
             href={`${basePrefix}/plans-billing`}
+            prefetch={true}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-[#c5a880]/25 to-amber-500/15 border border-amber-400/50 text-amber-300 text-[11px] font-extrabold hover:text-white transition-all shadow-xs shrink-0 cursor-pointer"
           >
             <CreditCard className="w-3.5 h-3.5 text-amber-400" />
@@ -474,9 +479,6 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
         <div className="flex-1 overflow-y-auto bg-[#f8f7f4]">
           {children}
         </div>
-        
-        {/* AI Chatbot Widget */}
-        <ChatbotWidget />
       </div>
 
     </div>
