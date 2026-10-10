@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useDashboard } from '../DashboardContext';
 import { useAuth } from '@/lib/AuthContext';
-import { apiClient } from '@/lib/api';
+import { apiClient, resolveMediaUrl } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 const InstagramIcon = ({ className }: { className?: string }) => (
@@ -70,7 +70,7 @@ export default function UnifiedProfilePage() {
       setCustomDomain(currentStudio.customDomain || currentStudio.websiteLink || '');
       setInstagramUrl(currentStudio.instagramUrl || '');
       setFacebookUrl(currentStudio.facebookUrl || '');
-      setLogoUrl(currentStudio.logoUrl || '');
+      setLogoUrl(resolveMediaUrl(currentStudio.logoUrl || ''));
     }
   }, [sessionUser, authUser, studio, authStudio]);
 
@@ -103,7 +103,7 @@ export default function UnifiedProfilePage() {
       });
 
       if (res.data?.logoUrl) {
-        const newUrl = res.data.logoUrl;
+        const newUrl = resolveMediaUrl(res.data.logoUrl);
         setLogoUrl(newUrl);
 
         if (res.data?.studio) {
@@ -207,7 +207,7 @@ export default function UnifiedProfilePage() {
         <div className="flex items-center gap-4">
           <div className="relative group w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-[#c5a880] bg-[#fbf9f6] flex items-center justify-center shrink-0 shadow-sm">
             {logoUrl ? (
-              <img src={logoUrl} alt="Studio Logo" className="w-full h-full object-contain p-1" />
+              <img src={resolveMediaUrl(logoUrl)} alt="Studio Logo" className="w-full h-full object-contain p-1" onError={() => setLogoUrl('')} />
             ) : (
               <Building className="w-8 h-8 text-[#c5a880]/70" />
             )}
@@ -464,7 +464,7 @@ export default function UnifiedProfilePage() {
             <div className="flex flex-col items-center justify-center p-8 rounded-2xl border-2 border-dashed border-slate-200 bg-[#fbf9f6] min-h-[220px]">
               {logoUrl ? (
                 <div className="relative group max-w-[260px] max-h-[160px] p-4 bg-white rounded-xl shadow-md border border-slate-200 flex items-center justify-center">
-                  <img src={logoUrl} alt="Studio Logo" className="max-h-28 max-w-full object-contain" />
+                  <img src={resolveMediaUrl(logoUrl)} alt="Studio Logo" className="max-h-28 max-w-full object-contain" onError={() => setLogoUrl('')} />
                 </div>
               ) : (
                 <div className="flex flex-col items-center text-center gap-2">

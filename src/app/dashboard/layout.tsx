@@ -12,6 +12,7 @@ import {
 import { DashboardProvider, useDashboard } from './DashboardContext';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import { useAuth } from '../../lib/AuthContext';
+import { resolveMediaUrl } from '../../lib/api';
 import toast from 'react-hot-toast';
 
 const NAV_SECTIONS = [
@@ -69,17 +70,17 @@ function SidebarContent({
   const router = useRouter();
   const { studio } = useDashboard();
   const { studio: authStudio } = useAuth();
-  const [logoState, setLogoState] = useState<string>(studio?.logoUrl || authStudio?.logoUrl || '/logo.png');
+  const [logoState, setLogoState] = useState<string>(() => resolveMediaUrl(studio?.logoUrl || authStudio?.logoUrl, '/logo.png'));
 
   useEffect(() => {
-    if (studio?.logoUrl) setLogoState(studio.logoUrl);
-    else if (authStudio?.logoUrl) setLogoState(authStudio.logoUrl);
+    const raw = studio?.logoUrl || authStudio?.logoUrl;
+    setLogoState(resolveMediaUrl(raw, '/logo.png'));
   }, [studio?.logoUrl, authStudio?.logoUrl]);
 
   useEffect(() => {
     const handleLogoUpdated = (e: any) => {
       if (e?.detail?.logoUrl) {
-        setLogoState(e.detail.logoUrl);
+        setLogoState(resolveMediaUrl(e.detail.logoUrl, '/logo.png'));
       }
     };
     window.addEventListener('studio_logo_updated', handleLogoUpdated);
@@ -175,8 +176,11 @@ function SidebarContent({
       <div className="flex items-center justify-center w-full py-4 mb-4 px-2 shrink-0 h-16 max-h-16 overflow-hidden">
         <Link href={basePrefix} className="cursor-pointer flex items-center justify-center h-full max-w-[150px]" onClick={onLinkClick}>
           <img
-            src={logoState}
+            src={resolveMediaUrl(logoState, '/logo.png')}
             alt="Studio Logo"
+            onError={() => {
+              if (logoState !== '/logo.png') setLogoState('/logo.png');
+            }}
             style={{ maxHeight: '42px', maxWidth: '140px', height: '42px', width: 'auto' }}
             className={`max-h-10 h-10 w-auto max-w-[140px] object-contain shrink-0 ${logoState === '/logo.png' ? 'filter invert' : ''}`}
           />
@@ -279,17 +283,17 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
   const { user, logout, studio: authStudio } = useAuth();
   const { studio } = useDashboard();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [logoState, setLogoState] = useState<string>(studio?.logoUrl || authStudio?.logoUrl || '/logo.png');
+  const [logoState, setLogoState] = useState<string>(() => resolveMediaUrl(studio?.logoUrl || authStudio?.logoUrl, '/logo.png'));
 
   useEffect(() => {
-    if (studio?.logoUrl) setLogoState(studio.logoUrl);
-    else if (authStudio?.logoUrl) setLogoState(authStudio.logoUrl);
+    const raw = studio?.logoUrl || authStudio?.logoUrl;
+    setLogoState(resolveMediaUrl(raw, '/logo.png'));
   }, [studio?.logoUrl, authStudio?.logoUrl]);
 
   useEffect(() => {
     const handleLogoUpdated = (e: any) => {
       if (e?.detail?.logoUrl) {
-        setLogoState(e.detail.logoUrl);
+        setLogoState(resolveMediaUrl(e.detail.logoUrl, '/logo.png'));
       }
     };
     window.addEventListener('studio_logo_updated', handleLogoUpdated);
@@ -459,8 +463,11 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
           </button>
           <Link href={basePrefix} prefetch={true} className="flex-1 h-full flex items-center justify-center overflow-hidden px-2 py-1 max-w-[140px] mx-auto">
             <img
-              src={logoState}
+              src={resolveMediaUrl(logoState, '/logo.png')}
               alt="Studio Logo"
+              onError={() => {
+                if (logoState !== '/logo.png') setLogoState('/logo.png');
+              }}
               style={{ maxHeight: '32px', maxWidth: '120px', height: '32px', width: 'auto' }}
               className={`max-h-8 h-8 w-auto max-w-[120px] object-contain shrink-0 ${logoState === '/logo.png' ? 'filter invert' : ''}`}
             />

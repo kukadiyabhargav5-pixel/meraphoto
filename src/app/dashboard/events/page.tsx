@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Plus, Calendar, Image as ImageIcon, Video, Loader2, Sparkles, Crown, ArrowRight, Search, Clock } from 'lucide-react';
-import { apiClient } from '@/lib/api';
+import { apiClient, resolveMediaUrl } from '@/lib/api';
 
 export default function EventsManagementPage() {
   const [events, setEvents] = useState<any[]>(() => {
@@ -180,7 +180,7 @@ export default function EventsManagementPage() {
                     <div className="relative w-full aspect-[16/9] overflow-hidden bg-slate-950">
                       {event.coverImageUrl ? (
                         <img 
-                          src={event.coverImageUrl} 
+                          src={resolveMediaUrl(event.coverImageUrl)} 
                           alt={event.name} 
                           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
                         />

@@ -221,3 +221,48 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
+
+/**
+ * Resolves any media, logo, or cover URL into a reliable, working browser URL.
+ * Automatically fixes:
+ * 1. Broken Cloudflare R2 subdomain URLs (e.g. pub-xxx.r2.dev) -> /api/media/file/:key
+ * 2. Stale localhost:5000 / 127.0.0.1:5000 URLs -> /api/media/file/:key
+ * 3. Relative R2 keys (e.g. "branding/assets/...", "studios/...") -> /api/media/file/:key
+ * 4. Empty/null -> fallback placeholder or empty string
+ */
+export const resolveMediaUrl = (url?: string | null, fallback: string = ''): string => {
+  if (!url || typeof url !== 'string' || !url.trim()) return fallback;
+  const trimmed = url.trim();
+
+  // If data URI or blob URI (e.g. local file preview), return as-is
+  if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+    return trimmed;
+  }
+
+  // Cloudflare R2 dev bucket URL (401 unauthorized if visited directly)
+  if (trimmed.includes('.r2.dev/')) {
+    const key = trimmed.split('.r2.dev/')[1];
+    return `/api/media/file/${key.replace(/^\/+/, '')}`;
+  }
+
+  // Localhost development URLs saved in DB
+  if (trimmed.includes('localhost:5000') || trimmed.includes('127.0.0.1:5000')) {
+    if (trimmed.includes('/api/media/file/')) {
+      const key = trimmed.split('/api/media/file/')[1];
+      return `/api/media/file/${key.replace(/^\/+/, '')}`;
+    }
+    return trimmed.replace(/^https?:\/\/(localhost|127\.0\.0\.1):5000/, '');
+  }
+
+  // Relative R2 storage keys
+  if (
+    trimmed.startsWith('branding/') ||
+    trimmed.startsWith('studios/') ||
+    trimmed.startsWith('events/') ||
+    trimmed.startsWith('mara-photo/')
+  ) {
+    return `/api/media/file/${trimmed}`;
+  }
+
+  return trimmed;
+};
