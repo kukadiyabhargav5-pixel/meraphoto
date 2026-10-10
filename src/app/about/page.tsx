@@ -99,6 +99,40 @@ export default function Page() {
           </div>
         </section>
 
+        {/* Creator & Founder Spotlight Section */}
+        <section className="py-16 sm:py-20 bg-gradient-to-b from-white via-[#faf9f6] to-[#f5f2eb] border-b border-[#e3d8c8]/30">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center font-poppins">
+            <span className="inline-block px-4 py-1.5 bg-[#f5f2eb] text-[#c5a880] border border-[#c5a880]/20 text-[11px] font-black uppercase tracking-widest rounded-full mb-4 shadow-xs">
+              Founder & Engineering
+            </span>
+            <h2 className="font-serif-luxury text-2xl sm:text-4xl font-light text-[#09090b] leading-snug mb-6">
+              Crafted with Innovation & <span className="italic text-[#c5a880]">Vision</span>
+            </h2>
+
+            <div className="bg-white border border-[#c5a880]/30 rounded-3xl p-6 sm:p-10 shadow-lg relative overflow-hidden text-center">
+              <div className="absolute top-0 right-0 w-48 h-48 bg-[#c5a880]/10 rounded-full blur-2xl pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#09090b]/5 rounded-full blur-2xl pointer-events-none" />
+
+              <p className="text-sm sm:text-base text-slate-700 leading-relaxed font-medium mb-6 max-w-2xl mx-auto">
+                This website is made and engineered by <strong className="text-[#09090b] font-bold">Bhargav Kukadiya</strong>, tech company <strong className="text-[#c5a880] font-bold">Techaarambh</strong>, and the founder of <strong className="text-[#09090b] font-bold">Bhartiglooms</strong>. Dedicated to building state-of-the-art digital infrastructure, high-performance web applications, and seamless cloud solutions.
+              </p>
+
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                <a
+                  href="https://bhartiglooms.in"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-[#09090b] text-[#c5a880] hover:bg-[#c5a880] hover:text-[#09090b] text-xs font-bold uppercase tracking-wider transition-all duration-300 shadow-md hover:-translate-y-0.5"
+                >
+                  <Globe className="w-4 h-4" />
+                  Visit bhartiglooms.in
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Call To Action Banner */}
         <section className="bg-[#09090b] py-16 sm:py-24 text-white relative overflow-hidden">
           <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
