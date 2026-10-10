@@ -11,6 +11,7 @@ import {
   Users, Users2, FileText, QrCode, User, BookOpen, Receipt, FileSpreadsheet, Briefcase
 } from 'lucide-react';
 import CustomDatePicker from '../../../components/CustomDatePicker';
+import toast from 'react-hot-toast';
 
 
 export default function BillPage() {
@@ -112,8 +113,10 @@ export default function BillPage() {
         await apiClient.delete(`/dashboard/bills/${bill._id}`);
         setBills(bills.filter((b: any) => b._id !== bill._id));
         setSuccessMsg('Invoice deleted successfully');
+        toast.success('Invoice deleted successfully');
       } catch (err) {
         setErrorMsg('Failed to delete invoice');
+        toast.error('Failed to delete invoice');
       }
     }
   };
@@ -367,19 +370,22 @@ export default function BillPage() {
   }, 0);
 
   const handleSaveInvoice = async (shouldPrint: boolean) => {
-    if (!newBillClient) {
+    if (!newBillClient.trim()) {
       setErrorMsg('Please enter client name');
+      toast.error('Please enter client name');
       return;
     }
 
-    if (!newBillGst) {
+    if (!newBillGst.trim()) {
       setErrorMsg('Please enter 15-digit GST Number');
+      toast.error('Please enter 15-digit GST Number');
       return;
     }
 
     const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-    if (!gstRegex.test(newBillGst)) {
+    if (!gstRegex.test(newBillGst.trim())) {
       setErrorMsg('Invalid GST Number format. It must be 15 characters (e.g. 24AAAAA0000A1Z5)');
+      toast.error('Invalid GST Number format. It must be 15 characters');
       return;
     }
 
@@ -389,13 +395,13 @@ export default function BillPage() {
     
     try {
       const reqBody = {
-        clientName: newBillClient,
-        clientEmail: newBillEmail,
-        clientMobile: newBillMobile,
+        clientName: newBillClient.trim(),
+        clientEmail: newBillEmail.trim(),
+        clientMobile: newBillMobile.trim(),
         gstNumber: newBillGst ? newBillGst.trim().toUpperCase() : undefined,
-        eventName: newBillEventName,
+        eventName: newBillEventName.trim(),
         eventDate: newEventDate ? newEventDate : undefined,
-        invoiceNo: `INV-2026-${String(bills.length + 101).padStart(3, '0')}`,
+        invoiceNo: editingBill?.invoiceNo || `INV-2026-${String(bills.length + 101).padStart(3, '0')}`,
         amount: totalVal,
         advance: advVal,
         tokenPaymentDate: newTokenPaymentDate ? newTokenPaymentDate : undefined,
@@ -413,205 +419,411 @@ export default function BillPage() {
         setBills([res.data, ...bills]);
       }
       
+      const successText = billSubView === 'edit' ? 'Invoice updated successfully!' : 'GST Invoice created successfully!';
+      setSuccessMsg(successText);
+      toast.success(successText);
+
       if (shouldPrint) {
         openPrintWindow(reqBody);
-        setSuccessMsg(billSubView === 'edit' ? 'Invoice updated successfully!' : 'GST Invoice created successfully!');
-        resetForm();
-      } else {
-        setSuccessMsg(billSubView === 'edit' ? 'Invoice updated successfully!' : 'GST Invoice created successfully!');
-        resetForm();
       }
+      resetForm();
     } catch (err) {
       console.error(err);
-      setErrorMsg(billSubView === 'edit' ? 'Failed to update invoice' : 'Failed to create invoice');
+      const errText = billSubView === 'edit' ? 'Failed to update invoice' : 'Failed to create invoice';
+      setErrorMsg(errText);
+      toast.error(errText);
     }
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8">
-      <div className="flex flex-col gap-6 font-poppins text-left">
-            {billSubView === 'list' ? (
-              <>
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-3.5 sm:p-6 md:p-8">
+      <div className="max-w-7xl mx-auto flex flex-col gap-5 sm:gap-6 font-poppins text-left">
+        {billSubView === 'list' ? (
+          <>
+            {/* Top Bar Header */}
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-[#c5a880]/15 border border-[#c5a880]/30 flex items-center justify-center text-[#9c7c56] shrink-0 shadow-2xs">
+                    <Receipt className="w-5 h-5 text-[#9c7c56]" />
+                  </div>
                   <div>
-                    <h1 className="text-2xl font-extrabold text-slate-900">Invoices & Billing Log</h1>
-                    <p className="text-xs text-slate-450 mt-1 font-semibold">Generate gst-compliant invoices, track due balances, and log client payouts.</p>
+                    <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+                      Invoices & Billing Log
+                    </h1>
+                    <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                      Generate GST-compliant invoices, track due balances, and log client payouts.
+                    </p>
                   </div>
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
-                    <div className="relative w-full sm:w-auto">
-                      <select
-                        value={filterStatus}
-                        onChange={(e) => setFilterStatus(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880] shadow-sm transition-colors cursor-pointer"
-                      >
-                        <option value="All">All Status</option>
-                        <option value="Pending">Pending</option>
-                        <option value="Paid">Paid</option>
-                        <option value="Overdue">Overdue</option>
-                      </select>
-                    </div>
-                    <div className="relative w-full sm:w-auto">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <input 
-                        type="text" 
-                        placeholder="Search bills..."
-                        className="w-full sm:w-56 bg-white border border-slate-200 rounded-xl px-4 py-2.5 pl-9 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880] pr-8 shadow-sm transition-colors"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                      />
-                      {searchQuery && (
-                        <button 
-                          onClick={() => setSearchQuery('')}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-400 focus:outline-none cursor-pointer"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                    <button onClick={() => setBillSubView('add')} className="bg-[#c5a880] hover:bg-white text-[#09090b] px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shrink-0 w-full sm:w-auto">
-                      <Receipt className="h-4 w-4" /> Create Invoice
+                </div>
+              </div>
+
+              {/* Controls: Filter, Search, Create Invoice */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full lg:w-auto">
+                {/* Status Filter */}
+                <div className="relative w-full sm:w-40 shrink-0">
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="w-full bg-white border border-slate-200 hover:border-[#c5a880] rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 shadow-2xs transition-all cursor-pointer"
+                  >
+                    <option value="All">All Statuses</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Paid">Paid</option>
+                    <option value="Overdue">Overdue</option>
+                  </select>
+                </div>
+
+                {/* Search */}
+                <div className="relative w-full sm:w-56 md:w-64">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search by client, invoice..."
+                    className="w-full bg-white border border-slate-200 hover:border-[#c5a880] rounded-xl px-4 py-2.5 pl-10 pr-8 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 shadow-2xs transition-all"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer p-0.5 rounded-full hover:bg-slate-100"
+                    >
+                      <X className="h-3.5 w-3.5" />
                     </button>
-                  </div>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <div className="bg-white/40 border border-amber-200 p-5 rounded-2xl shadow-sm flex flex-col justify-center">
-                    <p className="text-xs font-bold text-amber-600 uppercase tracking-widest mb-1">Pending Amount</p>
-                    <p className="text-2xl font-black text-slate-900">₹{pendingAmount.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-white/40 border border-emerald-200 p-5 rounded-2xl shadow-sm flex flex-col justify-center">
-                    <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">Paid Amount (Received)</p>
-                    <p className="text-2xl font-black text-slate-900">₹{paidAmount.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-white/40 border border-rose-200 p-5 rounded-2xl shadow-sm flex flex-col justify-center">
-                    <p className="text-xs font-bold text-rose-600 uppercase tracking-widest mb-1">Overdue Amount</p>
-                    <p className="text-2xl font-black text-slate-900">₹{overdueAmount.toLocaleString()}</p>
-                  </div>
-                </div>
+                {/* Create Invoice Primary Button */}
+                <button
+                  onClick={() => setBillSubView('add')}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#c5a880] hover:bg-[#b69970] text-slate-900 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all cursor-pointer shrink-0"
+                >
+                  <Plus className="w-4 h-4 stroke-[3]" />
+                  <span>Create Invoice</span>
+                </button>
+              </div>
+            </div>
 
-                <div className="bg-white/30 border border-slate-200 rounded-2xl overflow-hidden shadow-md">
-                  {/* Desktop Table */}
-                  <div className="hidden md:block overflow-x-auto w-full">
-                    <table className="w-full text-center border-collapse text-xs whitespace-nowrap">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-white/[0.03] text-slate-350 uppercase tracking-wider font-black">
-                        <th className="p-4 text-center">Invoice ID</th>
-                        <th className="p-4 text-center">Billed Client</th>
-                        <th className="p-4 text-center">Issue Date</th>
-                        <th className="p-4 text-center">Total Amount</th>
-                        <th className="p-4 text-slate-900 text-center">Token Paid</th>
-                        <th className="p-4 text-rose-450 text-center">Balance Left</th>
-                        <th className="p-4 text-center">Status</th>
-                        <th className="p-4 text-center">Actions</th>
+            {/* Financial Overview Metrics Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              <div className="bg-amber-50/70 border border-amber-200/90 p-4 sm:p-5 rounded-2xl shadow-2xs flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] sm:text-xs font-bold text-amber-700 uppercase tracking-wider">Pending Balance</p>
+                  <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1 truncate">
+                    ₹{pendingAmount.toLocaleString('en-IN')}
+                  </p>
+                </div>
+                <div className="w-11 h-11 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-700 flex items-center justify-center shrink-0">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="bg-emerald-50/70 border border-emerald-200/90 p-4 sm:p-5 rounded-2xl shadow-2xs flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] sm:text-xs font-bold text-emerald-700 uppercase tracking-wider">Total Received</p>
+                  <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1 truncate">
+                    ₹{paidAmount.toLocaleString('en-IN')}
+                  </p>
+                </div>
+                <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 flex items-center justify-center shrink-0">
+                  <CheckCircle className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="bg-rose-50/70 border border-rose-200/90 p-4 sm:p-5 rounded-2xl shadow-2xs flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] sm:text-xs font-bold text-rose-700 uppercase tracking-wider">Overdue Balance</p>
+                  <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1 truncate">
+                    ₹{overdueAmount.toLocaleString('en-IN')}
+                  </p>
+                </div>
+                <div className="w-11 h-11 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-700 flex items-center justify-center shrink-0">
+                  <Shield className="w-5 h-5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Invoices List / Cards Container */}
+            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto w-full">
+                <table className="w-full text-center border-collapse text-xs whitespace-nowrap">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50/80 text-slate-600 uppercase tracking-wider font-extrabold text-[11px]">
+                      <th className="p-4 text-center">Invoice ID</th>
+                      <th className="p-4 text-left">Billed Client</th>
+                      <th className="p-4 text-center">Issue Date</th>
+                      <th className="p-4 text-right">Total Amount</th>
+                      <th className="p-4 text-right">Token Paid</th>
+                      <th className="p-4 text-right">Balance Due</th>
+                      <th className="p-4 text-center">Status</th>
+                      <th className="p-4 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {filteredBills.map((invoice: any, i: number) => (
+                      <tr key={invoice._id || i} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="p-4 font-mono font-bold text-[#9c7c56] text-center">
+                          {invoice.invoiceNo || invoice.id || `INV-${i + 1}`}
+                        </td>
+                        <td className="p-4 text-left">
+                          <div className="font-extrabold text-slate-900">{invoice.clientName || invoice.client}</div>
+                          {invoice.eventName && (
+                            <div className="text-[11px] text-slate-400 font-medium truncate max-w-[200px]">
+                              {invoice.eventName}
+                            </div>
+                          )}
+                          {invoice.gstNumber && (
+                            <div className="text-[10px] font-mono font-semibold text-slate-400 mt-0.5">
+                              GST: {invoice.gstNumber}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-4 font-semibold text-slate-600 text-center">
+                          {(invoice.issueDate || invoice.date)?.split('T')[0].split('-').reverse().join('/') || '—'}
+                        </td>
+                        <td className="p-4 font-black text-slate-900 text-right">
+                          ₹{(invoice.amount || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="p-4 font-bold text-emerald-600 text-right">
+                          ₹{(invoice.advance || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="p-4 font-black text-rose-600 text-right">
+                          ₹{(invoice.balance || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="p-4 text-center">
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 ${
+                            invoice.status === 'Paid'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : invoice.status === 'Overdue'
+                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              invoice.status === 'Paid' ? 'bg-emerald-500' : invoice.status === 'Overdue' ? 'bg-rose-500' : 'bg-amber-500'
+                            }`} />
+                            {invoice.status || 'Pending'}
+                          </span>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handlePrintExisting(invoice)}
+                              className="p-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg transition-all shadow-2xs active:scale-95 cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                              title="Print Invoice"
+                            >
+                              <Printer className="w-3.5 h-3.5 text-white" />
+                              <span className="hidden xl:inline">Print</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEdit(invoice)}
+                              className="p-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-900 rounded-lg transition-all border border-amber-300/60 shadow-2xs active:scale-95 cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                              title="Edit Invoice"
+                            >
+                              <Edit className="w-3.5 h-3.5 text-amber-800" />
+                              <span className="hidden xl:inline">Edit</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(invoice)}
+                              className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-all border border-rose-200 shadow-2xs active:scale-95 cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                              title="Delete Invoice"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                              <span className="hidden xl:inline">Delete</span>
+                            </button>
+                          </div>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 text-slate-700">
-                      {filteredBills.map((invoice: any, i: number) => (
-                        <tr key={i} className="hover:bg-white/[0.01] transition-colors">
-                          <td className="p-4 font-mono font-bold text-[#c5a880] text-center">{invoice.invoiceNo || invoice.id}</td>
-                          <td className="p-4 font-bold text-slate-900 text-center">{invoice.clientName || invoice.client}</td>
-                          <td className="p-4 font-semibold text-slate-600 text-center">{(invoice.issueDate || invoice.date)?.split('T')[0].split('-').reverse().join('/')}</td>
-                          <td className="p-4 font-black text-slate-900 text-center">₹{invoice.amount?.toLocaleString()}</td>
-                          <td className="p-4 font-bold text-[#c5a880] text-center">₹{(invoice.advance || 0).toLocaleString()}</td>
-                          <td className="p-4 font-black text-rose-400 text-center">₹{(invoice.balance || 0).toLocaleString()}</td>
-                          <td className="p-4 text-center">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${invoice.status === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10' : invoice.status === 'Overdue' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/10' : 'bg-amber-500/10 text-amber-400 border border-amber-500/10'}`}>
-                              {invoice.status}
-                            </span>
-                          </td>
-                          <td className="p-4 text-center flex justify-center gap-2">
-                            <button onClick={() => handlePrintExisting(invoice)} className="p-1.5 bg-slate-100 text-slate-400 hover:text-slate-700 hover:bg-white rounded-lg transition-colors border border-slate-200 shadow-sm" title="Print Invoice">
-                              <Printer className="w-4 h-4" />
-                            </button>
-                            <button onClick={() => handleEdit(invoice)} className="p-1.5 bg-slate-100 text-slate-400 hover:text-[#c5a880] hover:bg-white rounded-lg transition-colors border border-slate-200 shadow-sm" title="Edit Invoice">
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button onClick={() => handleDelete(invoice)} className="p-1.5 bg-rose-50 text-rose-500 hover:text-rose-600 hover:bg-white rounded-lg transition-colors border border-rose-200 shadow-sm" title="Delete Invoice">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                      {filteredBills.length === 0 && (
-                        <tr>
-                          <td colSpan={8} className="p-8 text-center text-slate-400 font-bold">
-                            No invoices found.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                  </div>
+                    ))}
+                    {filteredBills.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="p-12 text-center text-slate-400 font-bold">
+                          <Receipt className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                          <p className="text-sm font-bold text-slate-500">No invoices found</p>
+                          <p className="text-xs text-slate-400 mt-1">Try changing search keywords or create a new invoice.</p>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
 
-                  {/* Mobile Card Layout */}
-                  <div className="md:hidden flex flex-col gap-3 p-3">
-                    {filteredBills.length === 0 ? (
-                      <div className="p-8 text-center text-slate-400 font-bold">No invoices found.</div>
+              {/* Mobile Cards View */}
+              <div className="md:hidden flex flex-col gap-3 p-3 sm:p-4 bg-[#faf9f6]">
+                {filteredBills.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 font-bold bg-white rounded-2xl border border-slate-200 shadow-2xs">
+                    <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-amber-500/10 border border-[#c5a880]/30 flex items-center justify-center text-[#9c7c56]">
+                      <Receipt className="w-6 h-6" />
+                    </div>
+                    <p className="text-sm font-black text-slate-800">No invoices found</p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+                      {searchQuery || filterStatus !== 'All'
+                        ? 'Try changing your search keywords or status filter.'
+                        : 'Tap "Create Invoice" below to generate your first client bill.'}
+                    </p>
+                    {searchQuery || filterStatus !== 'All' ? (
+                      <button
+                        type="button"
+                        onClick={() => { setSearchQuery(''); setFilterStatus('All'); }}
+                        className="mt-3 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl border border-slate-200 cursor-pointer transition-all active:scale-95"
+                      >
+                        Reset Filters
+                      </button>
                     ) : (
-                      filteredBills.map((invoice: any, i: number) => (
-                        <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="font-mono font-bold text-[#c5a880] text-sm">{invoice.invoiceNo || invoice.id}</span>
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${invoice.status === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10' : invoice.status === 'Overdue' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/10' : 'bg-amber-500/10 text-amber-400 border border-amber-500/10'}`}>
-                              {invoice.status}
-                            </span>
-                          </div>
-                          
-                          <div>
-                            <div className="font-bold text-slate-900">{invoice.clientName || invoice.client}</div>
-                            <div className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
-                              Issue: {(invoice.issueDate || invoice.date)?.split('T')[0].split('-').reverse().join('/')}
-                            </div>
-                          </div>
-
-                          <div className="bg-slate-50 rounded-lg p-3 space-y-2">
-                            <div className="flex justify-between items-center text-xs">
-                              <span className="text-slate-500 font-bold">Total Amount</span>
-                              <span className="font-black text-slate-900">₹{invoice.amount?.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-xs">
-                              <span className="text-slate-500 font-bold">Token Paid</span>
-                              <span className="font-bold text-[#c5a880]">₹{(invoice.advance || 0).toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-200 mt-2">
-                              <span className="text-slate-500 font-bold">Balance Left</span>
-                              <span className="font-black text-rose-500">₹{(invoice.balance || 0).toLocaleString()}</span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
-                            <button onClick={() => handlePrintExisting(invoice)} className="p-2 text-slate-400 hover:text-slate-700 bg-slate-50 rounded-lg border border-slate-200">
-                              <Printer className="w-4 h-4" />
-                            </button>
-                            <button onClick={() => handleEdit(invoice)} className="p-2 text-slate-400 hover:text-[#c5a880] bg-slate-50 rounded-lg border border-slate-200">
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button onClick={() => handleDelete(invoice)} className="p-2 text-rose-400 hover:text-rose-500 bg-rose-50 rounded-lg border border-rose-100">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      ))
+                      <button
+                        type="button"
+                        onClick={() => setBillSubView('add')}
+                        className="mt-3 inline-flex items-center gap-1.5 px-4 py-2.5 bg-[#c5a880] hover:bg-[#b69970] text-slate-900 text-xs font-extrabold rounded-xl cursor-pointer transition-all shadow-md active:scale-95"
+                      >
+                        <Plus className="w-4 h-4 stroke-[3]" />
+                        <span>Create Invoice</span>
+                      </button>
                     )}
                   </div>
-                </div>
-              </>
-            ) : (
-              <div className="w-full relative">
-                <button onClick={resetForm} className="absolute top-0 left-0 inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-slate-900 hover:text-slate-700 text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer z-10">
-                  <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
-                  <span>Back to Bills</span>
-                </button>
-                <div className="max-w-2xl mx-auto w-full flex flex-col gap-6 pt-14">
-                  <div className="flex items-center justify-center">
-                    <h1 className="text-3xl font-extrabold text-slate-900 text-center">{billSubView === 'edit' ? 'Edit GST Invoice' : 'Create GST Invoice'}</h1>
-                  </div>
-                <form onSubmit={(e) => { e.preventDefault(); handleSaveInvoice(false); }} className=" bg-[#f8f7f4] text-slate-900 border border-slate-200 p-8 rounded-2xl flex flex-col gap-4 text-left shadow-sm">
-                  
-                  {/* Select Event */}
-                  {billSubView !== 'edit' && (
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Select Event</label>
+                ) : (
+                  filteredBills.map((invoice: any, i: number) => (
+                    <div
+                      key={invoice._id || i}
+                      className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3.5 shadow-2xs hover:border-[#c5a880]/50 transition-colors"
+                    >
+                      {/* Top Row: Invoice ID + Status */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono font-bold text-xs text-[#9c7c56] bg-amber-500/10 px-2.5 py-1 rounded-lg border border-[#c5a880]/30">
+                          {invoice.invoiceNo || invoice.id || `INV-${i + 1}`}
+                        </span>
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 ${
+                          invoice.status === 'Paid'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : invoice.status === 'Overdue'
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            invoice.status === 'Paid' ? 'bg-emerald-500' : invoice.status === 'Overdue' ? 'bg-rose-500' : 'bg-amber-500'
+                          }`} />
+                          {invoice.status || 'Pending'}
+                        </span>
+                      </div>
+
+                      {/* Client Details */}
+                      <div>
+                        <h3 className="font-extrabold text-base text-slate-900 leading-snug">
+                          {invoice.clientName || invoice.client || 'Unnamed Client'}
+                        </h3>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-500 font-medium">
+                          {invoice.eventName && (
+                            <span className="flex items-center gap-1 text-slate-700 font-semibold">
+                              <Briefcase className="w-3.5 h-3.5 text-[#c5a880]" />
+                              {invoice.eventName}
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1 text-slate-500">
+                            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                            {(invoice.issueDate || invoice.date)?.split('T')[0].split('-').reverse().join('/') || 'No date'}
+                          </span>
+                        </div>
+                        {invoice.gstNumber && (
+                          <div className="mt-1.5 inline-block text-[10px] font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                            GSTIN: {invoice.gstNumber}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Figures Breakdown Grid */}
+                      <div className="grid grid-cols-3 gap-2 bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total</span>
+                          <span className="text-xs sm:text-sm font-black text-slate-900 mt-0.5">
+                            ₹{(invoice.amount || 0).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <div className="flex flex-col border-x border-slate-200">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Token</span>
+                          <span className="text-xs sm:text-sm font-bold text-emerald-600 mt-0.5">
+                            ₹{(invoice.advance || 0).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Balance</span>
+                          <span className="text-xs sm:text-sm font-black text-rose-600 mt-0.5">
+                            ₹{(invoice.balance || 0).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Mobile Actions: 3 Clear Touch-Friendly Buttons with Distinct Styling */}
+                      <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => handlePrintExisting(invoice)}
+                          className="py-2.5 px-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-xs cursor-pointer"
+                        >
+                          <Printer className="w-3.5 h-3.5 text-white" />
+                          <span>Print</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(invoice)}
+                          className="py-2.5 px-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-900 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 active:scale-95 transition-all border border-amber-300/60 shadow-2xs cursor-pointer"
+                        >
+                          <Edit className="w-3.5 h-3.5 text-amber-800" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(invoice)}
+                          className="py-2.5 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 active:scale-95 transition-all border border-rose-200 shadow-2xs cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          /* Create / Edit Form SubView */
+          <div className="w-full max-w-3xl mx-auto flex flex-col gap-4 sm:gap-6">
+            {/* Top Navigation Bar */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 gap-3">
+              <button
+                type="button"
+                onClick={resetForm}
+                className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold rounded-xl border border-slate-200 shadow-2xs active:scale-95 transition-all cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4 text-slate-600" />
+                <span>Back to Bills</span>
+              </button>
+              <span className="text-[11px] font-extrabold text-[#9c7c56] bg-amber-500/10 px-3 py-1 rounded-full border border-[#c5a880]/30 uppercase tracking-wider">
+                {billSubView === 'edit' ? 'Editing Invoice' : 'New Invoice'}
+              </span>
+            </div>
+
+            {/* Form Card */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 md:p-8 shadow-xs">
+              <div className="mb-6">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+                  {billSubView === 'edit' ? 'Edit GST Invoice' : 'Create GST Invoice'}
+                </h2>
+                <p className="text-xs text-slate-500 font-medium mt-1">
+                  Fill in the client and payment details below to generate a formatted GST invoice.
+                </p>
+              </div>
+
+              <form onSubmit={(e) => { e.preventDefault(); handleSaveInvoice(false); }} className="space-y-4 sm:space-y-5">
+                {/* Select Event (if creating new) */}
+                {billSubView !== 'edit' && (
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Auto-fill from Existing Event
+                    </label>
                     <select
                       value={selectedEventCodeForBill}
                       onChange={(e) => {
@@ -627,134 +839,240 @@ export default function BillPage() {
                           setNewEventDate(ev.date ? ev.date.split('T')[0] : '');
                         }
                       }}
-                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]"
+                      className="w-full bg-[#faf9f6] border border-slate-200 hover:border-[#c5a880] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 transition-all cursor-pointer"
                     >
-                      <option className="bg-[#f8f7f4] text-slate-900" value="">Select Event...</option>
+                      <option value="">Select an Event to Auto-Fill (Optional)...</option>
                       {eventsData.map((ev) => (
-                        <option className="bg-[#f8f7f4] text-slate-900" key={ev._id} value={ev._id}>{ev.name} ({ev.clientName})</option>
+                        <option key={ev._id} value={ev._id}>
+                          {ev.name} {ev.clientName ? `(${ev.clientName})` : ''}
+                        </option>
                       ))}
                     </select>
                   </div>
-                  )}
+                )}
 
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Client Name</label>
-                    <input type="text" required value={newBillClient} onChange={(e) => setNewBillClient(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
+                {/* Client Name */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                    <span>Client Full Name <span className="text-rose-500">*</span></span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newBillClient}
+                    onChange={(e) => setNewBillClient(e.target.value)}
+                    className="w-full bg-white border border-slate-200 hover:border-[#c5a880] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 shadow-2xs transition-all"
+                  />
+                </div>
+
+                {/* Client Email, Mobile & GST */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Client Email
+                    </label>
+                    <input
+                      type="email"
+                      value={newBillEmail}
+                      onChange={(e) => setNewBillEmail(e.target.value)}
+                      className="w-full bg-white border border-slate-200 hover:border-[#c5a880] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 shadow-2xs transition-all"
+                    />
                   </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Client Email</label>
-                      <input type="email" value={newBillEmail} onChange={(e) => setNewBillEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Client Mobile
+                    </label>
+                    <input
+                      type="tel"
+                      value={newBillMobile}
+                      onChange={(e) => setNewBillMobile(e.target.value)}
+                      className="w-full bg-white border border-slate-200 hover:border-[#c5a880] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 shadow-2xs transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                        GST Number <span className="text-rose-500">*</span>
+                      </label>
+                      <span className={`text-[10px] font-mono font-bold ${newBillGst.length === 15 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        {newBillGst.length}/15
+                      </span>
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Client Mobile</label>
-                      <input type="tel" value={newBillMobile} onChange={(e) => setNewBillMobile(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex justify-between items-center">
-                        <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
-                          GST Number <span className="text-rose-500">*</span>
-                        </label>
-                        <span className={`text-[9px] font-mono font-bold ${newBillGst.length === 15 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                          {newBillGst.length}/15
-                        </span>
-                      </div>
-                      <input 
-                        type="text" 
+                    <input
+                      type="text"
+                      required
+                      maxLength={15}
+                      value={newBillGst}
+                      onChange={(e) => handleGstChange(e.target.value)}
+                      className={`w-full bg-white border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none uppercase font-mono font-bold tracking-wider shadow-2xs transition-all ${
+                        newBillGst.length === 15
+                          ? 'border-emerald-400 focus:border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20'
+                          : 'border-slate-200 focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                {/* Event Name & Event Date */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Event Name
+                    </label>
+                    <input
+                      type="text"
+                      value={newBillEventName}
+                      onChange={(e) => setNewBillEventName(e.target.value)}
+                      className="w-full bg-white border border-slate-200 hover:border-[#c5a880] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 shadow-2xs transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Event Date
+                    </label>
+                    <CustomDatePicker
+                      type="date"
+                      value={newEventDate}
+                      onChange={(val) => setNewEventDate(val)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]"
+                    />
+                  </div>
+                </div>
+
+                {/* Invoice Date & Total Amount */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Invoice Date <span className="text-rose-500">*</span>
+                    </label>
+                    <CustomDatePicker
+                      type="date"
+                      required
+                      value={newBillDate}
+                      onChange={(val) => setNewBillDate(val)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Total Amount (INR) <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm">₹</span>
+                      <input
+                        type="number"
                         required
-                        maxLength={15}
-                        placeholder="e.g. 24AAAAA0000A1Z5" 
-                        value={newBillGst} 
-                        onChange={(e) => handleGstChange(e.target.value)} 
-                        className={`w-full bg-white border rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none uppercase font-mono font-bold tracking-wider placeholder:normal-case placeholder:font-normal placeholder:tracking-normal placeholder:text-slate-300 ${
-                          newBillGst.length === 15 
-                            ? 'border-emerald-400 focus:border-emerald-500 bg-emerald-50/10' 
-                            : 'border-slate-200 focus:border-[#c5a880]'
-                        }`} 
+                        value={newBillAmount}
+                        onChange={(e) => setNewBillAmount(e.target.value)}
+                        className="w-full bg-white border border-slate-200 hover:border-[#c5a880] rounded-xl pl-8 pr-3.5 py-2.5 text-xs sm:text-sm font-black text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 shadow-2xs transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </div>
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Event Name</label>
-                      <input type="text" value={newBillEventName} onChange={(e) => setNewBillEventName(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Event Date</label>
-                      <CustomDatePicker type="date" value={newEventDate} onChange={(val) => setNewEventDate(val)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
+                {/* Token Paid, Token Date, Payment Method */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Advance / Token Paid (INR)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm">₹</span>
+                      <input
+                        type="number"
+                        value={newBillAdvance}
+                        onChange={(e) => setNewBillAdvance(e.target.value)}
+                        className="w-full bg-white border border-slate-200 hover:border-[#c5a880] rounded-xl pl-8 pr-3.5 py-2.5 text-xs sm:text-sm font-bold text-emerald-600 focus:outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 shadow-2xs transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
                     </div>
                   </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Token Date
+                    </label>
+                    <CustomDatePicker
+                      type="date"
+                      value={newTokenPaymentDate}
+                      onChange={(val) => setNewTokenPaymentDate(val)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#c5a880]"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Payment Method
+                    </label>
+                    <select
+                      value={newPaymentMethod}
+                      onChange={(e) => setNewPaymentMethod(e.target.value)}
+                      className="w-full bg-white border border-slate-200 hover:border-[#c5a880] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 shadow-2xs transition-all cursor-pointer"
+                    >
+                      <option value="Cash">Cash</option>
+                      <option value="Online">Online / UPI</option>
+                      <option value="Bank Transfer">Bank Transfer (NEFT/RTGS)</option>
+                      <option value="Cheque">Cheque</option>
+                    </select>
+                  </div>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Invoice Date</label>
-                      <CustomDatePicker type="date" required value={newBillDate} onChange={(val) => setNewBillDate(val)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Total Amount (INR)</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
-                        <input type="number" required value={newBillAmount} onChange={(e) => setNewBillAmount(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg pl-7 pr-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                      </div>
+                {/* Balance Left & Status */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Balance Due (Auto Calculated)
+                    </label>
+                    <div className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold text-slate-700 flex items-center justify-between shadow-2xs">
+                      <span>Remaining:</span>
+                      <span className="font-mono font-black text-sm sm:text-base text-rose-600">
+                        ₹{(Math.max(0, (parseFloat(newBillAmount) || 0) - (parseFloat(newBillAdvance) || 0))).toLocaleString('en-IN')}
+                      </span>
                     </div>
                   </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Token / Advance Paid (INR)</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
-                        <input type="number" value={newBillAdvance} onChange={(e) => setNewBillAdvance(e.target.value)}  className="w-full bg-white border border-slate-200 rounded-lg pl-7 pr-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Token Date</label>
-                      <CustomDatePicker type="date" value={newTokenPaymentDate} onChange={(val) => setNewTokenPaymentDate(val)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]" />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Method</label>
-                      <select value={newPaymentMethod} onChange={(e) => setNewPaymentMethod(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]">
-                        <option value="Cash">Cash</option>
-                        <option value="Online">Online</option>
-                      </select>
-                    </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Invoice Status
+                    </label>
+                    <select
+                      value={newBillStatus}
+                      onChange={(e) => setNewBillStatus(e.target.value)}
+                      className="w-full bg-white border border-slate-200 hover:border-[#c5a880] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 shadow-2xs transition-all cursor-pointer"
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="Paid">Paid</option>
+                      <option value="Overdue">Overdue</option>
+                    </select>
                   </div>
-                  
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Balance Left / Due (Auto)</label>
-                      <div className="w-full bg-white/50 border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-350 font-bold font-mono">
-                        ₹{(Math.max(0, (parseFloat(newBillAmount) || 0) - (parseFloat(newBillAdvance) || 0))).toLocaleString()}
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Invoice status</label>
-                      <select value={newBillStatus} onChange={(e) => setNewBillStatus(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#c5a880]">
-                        <option className="bg-[#f8f7f4] text-slate-900" value="Pending">Pending</option>
-                        <option className="bg-[#f8f7f4] text-slate-900" value="Paid">Paid</option>
-                        <option className="bg-[#f8f7f4] text-slate-900" value="Overdue">Overdue</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="flex gap-4 mt-3">
-                    <button type="submit" className="flex-1 bg-slate-900 hover:bg-slate-800 text-slate-900 font-bold py-3.5 rounded-lg text-xs cursor-pointer transition-colors shadow-md">
-                      Save Invoice
-                    </button>
-                    <button type="button" onClick={() => handleSaveInvoice(true)} className="flex-1 bg-[#c5a880] hover:bg-[#b09672] text-[#09090b] font-bold py-3.5 rounded-lg text-xs cursor-pointer transition-colors shadow-md">
-                      Save & Print Invoice
-                    </button>
-                  </div>
-                </form>
-              </div>
-              </div>
-            )}
+                </div>
 
-            {/* Print layout removed as it's now handled by popup window */}
-
-
+                {/* Action Buttons: Stacking on Mobile, High-Contrast Colors */}
+                <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="order-3 sm:order-1 py-3.5 px-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs sm:text-sm cursor-pointer transition-all active:scale-95 text-center"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="order-1 sm:order-2 flex-1 bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3.5 px-5 rounded-xl text-xs sm:text-sm cursor-pointer transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle className="w-4 h-4 text-emerald-400" />
+                    <span>Save Invoice</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSaveInvoice(true)}
+                    className="order-2 sm:order-3 flex-1 bg-[#c5a880] hover:bg-[#b69970] text-slate-900 font-black py-3.5 px-5 rounded-xl text-xs sm:text-sm cursor-pointer transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <Printer className="w-4 h-4 text-slate-900" />
+                    <span>Save & Print Invoice</span>
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
+        )}
+      </div>
     </div>
   );
 }

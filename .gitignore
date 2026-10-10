@@ -41,4 +41,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-.vercel
+# temp scripts
+scratch/
+*.pyc
+__pycache__/
+mongo_log.txt
+build_errors.txt

@@ -5,37 +5,28 @@ import { Plus, Calendar, Image as ImageIcon, Video, Loader2, Sparkles, Crown, Ar
 import { apiClient } from '@/lib/api';
 
 export default function EventsManagementPage() {
-  const [events, setEvents] = useState<any[]>([]);
-  const [credits, setCredits] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-
-  useEffect(() => {
-    const fetchEvents = async () => {
+  const [events, setEvents] = useState<any[]>(() => {
+    if (typeof window !== 'undefined') {
       try {
-        const [eventRes, credRes] = await Promise.allSettled([
-          apiClient.get('/event/my'),
-          apiClient.get('/studio/credits')
-        ]);
-        
-        if (eventRes.status === 'fulfilled' && eventRes.value.data?.events) {
-          setEvents([...eventRes.value.data.events].reverse());
-        }
-        if (credRes.status === 'fulfilled' && credRes.value.data?.credits) {
-          setCredits(credRes.value.data.credits);
-        }
-      } catch (error) {
-        console.error('Failed to fetch events:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchEvents();
-  }, []);
+        const cached = localStorage.getItem('mara_cached_events');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return [];
+  });
+  const [credits, setCredits] = useState<any>(null);
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !localStorage.getItem('mara_cached_events');
+    }
+    return true;
+  });
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Helper to calculate exact live days left out of 30 days based on event date or creation date
   const getDaysLeft = (event: any) => {
-    const baseDateStr = event.date || event.createdAt;
+    if (typeof event?.daysLeft === 'number') return event.daysLeft;
+    const baseDateStr = event?.date || event?.createdAt;
     if (!baseDateStr) return 30;
 
     const baseDate = new Date(baseDateStr);
@@ -50,6 +41,43 @@ export default function EventsManagementPage() {
     const remaining = 30 - diffDays;
     return Math.max(0, remaining);
   };
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const [eventRes, credRes] = await Promise.allSettled([
+          apiClient.get('/event/my'),
+          apiClient.get('/studio/credits')
+        ]);
+        
+        if (eventRes.status === 'fulfilled' && eventRes.value.data?.events) {
+          const rawEvents: any[] = eventRes.value.data.events;
+          const sorted = [...rawEvents].sort((a, b) => {
+            const daysA = typeof a.daysLeft === 'number' ? a.daysLeft : getDaysLeft(a);
+            const daysB = typeof b.daysLeft === 'number' ? b.daysLeft : getDaysLeft(b);
+            if (daysB !== daysA) {
+              return daysB - daysA; // Descending: 30, 18, 13, 12, ... 0
+            }
+            const timeA = new Date(a.createdAt || a.date || 0).getTime();
+            const timeB = new Date(b.createdAt || b.date || 0).getTime();
+            return timeB - timeA;
+          });
+          setEvents(sorted);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('mara_cached_events', JSON.stringify(sorted));
+          }
+        }
+        if (credRes.status === 'fulfilled' && credRes.value.data?.credits) {
+          setCredits(credRes.value.data.credits);
+        }
+      } catch (error) {
+        console.error('Failed to fetch events:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEvents();
+  }, []);
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-3 xs:p-4 md:p-8 font-poppins">
@@ -148,13 +176,13 @@ export default function EventsManagementPage() {
               ).map((event, idx) => (
                 <Link key={event._id || idx} href={`/dashboard/events/${event.code || event.eventCode || event._id}`}>
                   <div className="group bg-white rounded-2xl overflow-hidden border border-slate-200 hover:border-[#c5a880] transition-all duration-300 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] flex flex-col h-full cursor-pointer">
-                    {/* Image Section */}
-                    <div className="relative h-48 w-full overflow-hidden bg-slate-50">
+                    {/* Image Section - 1920 × 1080 px (16:9) Aspect Box */}
+                    <div className="relative w-full aspect-[16/9] overflow-hidden bg-slate-950">
                       {event.coverImageUrl ? (
                         <img 
                           src={event.coverImageUrl} 
                           alt={event.name} 
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
                         />
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center text-slate-300">

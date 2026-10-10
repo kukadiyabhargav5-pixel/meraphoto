@@ -13,6 +13,7 @@ import {
   ChevronLeft, Eye, Heart, Image as ImageIcon, Video
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import toast from 'react-hot-toast';
 
 const dbName = 'MeraPhotoDB';
 const storeName = 'media_files';
@@ -88,6 +89,7 @@ export default function DedicatedFaceScanPage() {
   const [matchedPhotos, setMatchedPhotos] = useState<any[]>([]);
   const [searchStats, setSearchStats] = useState<{ totalSearched: number; message: string } | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [searchSessionId, setSearchSessionId] = useState<string>('');
 
   // Download & Lightbox
   const [downloadingZip, setDownloadingZip] = useState(false);
@@ -253,29 +255,39 @@ export default function DedicatedFaceScanPage() {
 
       let stream: MediaStream | null = null;
 
-      // Prioritize front selfie camera
+      // Prioritize high-quality camera with portrait and fallback options
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: targetFacing,
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: 1080 },
+            height: { ideal: 1440 },
           },
           audio: false,
         });
       } catch (e1) {
-        console.warn('Constrained getUserMedia failed, trying basic facingMode:', e1);
         try {
           stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: targetFacing },
+            video: {
+              facingMode: targetFacing,
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
             audio: false,
           });
         } catch (e2) {
-          console.warn('FacingMode failed, trying generic video:', e2);
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false,
-          });
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: targetFacing },
+              audio: false,
+            });
+          } catch (e3) {
+            console.warn('FacingMode failed, trying generic video:', e3);
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false,
+            });
+          }
         }
       }
 
@@ -391,6 +403,9 @@ export default function DedicatedFaceScanPage() {
 
       const matches = res.data.matches || [];
       setMatchedPhotos(matches);
+      if (res.data.searchSessionId) {
+        setSearchSessionId(res.data.searchSessionId);
+      }
       setSearchStats({
         totalSearched: res.data.totalSearched || 0,
         message: res.data.message || '',
@@ -581,6 +596,7 @@ export default function DedicatedFaceScanPage() {
   const resetScanner = () => {
     setHasSearched(false);
     setMatchedPhotos([]);
+    setSearchSessionId('');
     setSelfieFile(null);
     if (selfiePreview) URL.revokeObjectURL(selfiePreview);
     setSelfiePreview(null);
@@ -593,15 +609,67 @@ export default function DedicatedFaceScanPage() {
     }
   };
 
-  // ── Bulk Download Matched Photos ─────────────
+  // ── Bulk Download Matched Photos as ZIP ─────────────
   const downloadAllMatched = async () => {
-    if (matchedPhotos.length === 0 || downloadingZip) return;
-    setDownloadingZip(true);
-    setDownloadProgress(0);
+    const targetEvent = event || eventRef.current;
+    if (targetEvent?.allowDownload === false) {
+      toast.error('Photo downloads have been disabled by the studio for this album.');
+      return;
+    }
 
+    setDownloadingZip(true);
+    setDownloadProgress(10);
+
+    // Priority 1: Stream original full-res photos directly from R2 via backend ZIP endpoint
+    if (searchSessionId && targetEvent?._id) {
+      try {
+        setDownloadProgress(25);
+        const res = await apiClient.post(
+          '/face-scan/download-zip',
+          {
+            albumId: targetEvent._id,
+            eventId: targetEvent._id,
+            searchSessionId,
+          },
+          {
+            responseType: 'blob',
+            timeout: 180000,
+            onDownloadProgress: (progressEvent) => {
+              if (progressEvent.total) {
+                const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                setDownloadProgress(Math.min(95, Math.max(30, percent)));
+              }
+            },
+          }
+        );
+
+        setDownloadProgress(98);
+        const blob = new Blob([res.data], { type: 'application/zip' });
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = 'face-scan-matching-photos.zip';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+
+        setDownloadProgress(100);
+        setTimeout(() => {
+          setDownloadingZip(false);
+          setDownloadProgress(0);
+        }, 600);
+        return;
+      } catch (backendZipErr) {
+        console.warn('Backend streaming ZIP failed, falling back to client-side packager:', backendZipErr);
+      }
+    }
+
+    // Priority 2: Client-side packaging fallback
     try {
+      setDownloadProgress(30);
       const zip = new JSZip();
-      const folderName = `${event?.name || 'My'}_Photos`;
+      const folderName = `${targetEvent?.name || 'My'}_Photos`;
       const imgFolder = zip.folder(folderName) || zip;
 
       for (let i = 0; i < matchedPhotos.length; i++) {
@@ -619,15 +687,15 @@ export default function DedicatedFaceScanPage() {
           console.warn('Failed to fetch image for zip:', fetchErr);
         }
 
-        setDownloadProgress(Math.round(((i + 1) / matchedPhotos.length) * 60));
+        setDownloadProgress(30 + Math.round(((i + 1) / matchedPhotos.length) * 45));
       }
 
-      setDownloadProgress(75);
+      setDownloadProgress(80);
       const zipBlob = await zip.generateAsync({ type: 'blob' }, (metadata) => {
-        setDownloadProgress(75 + Math.round(metadata.percent * 0.25));
+        setDownloadProgress(80 + Math.round(metadata.percent * 0.19));
       });
 
-      saveAs(zipBlob, `${event?.name?.replace(/\s+/g, '_') || 'Event'}_My_Photos.zip`);
+      saveAs(zipBlob, 'face-scan-matching-photos.zip');
     } catch (err) {
       console.error('Download zip failed:', err);
     } finally {
@@ -905,7 +973,23 @@ export default function DedicatedFaceScanPage() {
                           const v = e.currentTarget;
                           if (v.videoWidth > 0) setCameraReady(true);
                         }}
-                        className={`absolute inset-0 w-full h-full object-cover ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
+                        className={`scanner-live-video ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          minWidth: '100%',
+                          minHeight: '100%',
+                          maxWidth: '100%',
+                          maxHeight: '100%',
+                          objectFit: 'cover',
+                          objectPosition: 'center',
+                          transform: cameraFacing === 'user' ? 'scaleX(-1)' : 'none',
+                          WebkitTransform: cameraFacing === 'user' ? 'scaleX(-1)' : 'none',
+                          zIndex: 1,
+                        }}
                       />
 
                       {/* Viewfinder States: Selfie Preview vs Starting vs Inactive */}
@@ -954,8 +1038,8 @@ export default function DedicatedFaceScanPage() {
                       <div className="absolute bottom-3 right-3 w-4 h-4 sm:w-5 sm:h-5 border-b-2 border-r-2 border-[#c5a880] rounded-br pointer-events-none z-10 opacity-80" />
 
                       {/* Oval Face Guide with Animated Laser */}
-                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        <div className="w-36 sm:w-52 h-48 sm:h-64 rounded-[48%] border-2 border-[#c5a880] border-dashed shadow-[0_0_0_9999px_rgba(0,0,0,0.55)] group-hover:scale-105 transition-transform duration-500" />
+                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
+                        <div className="w-36 sm:w-52 h-48 sm:h-64 rounded-[48%] border-2 border-[#c5a880] border-dashed shadow-[0_0_0_9999px_rgba(0,0,0,0.30)] group-hover:scale-105 transition-transform duration-500" />
                         <div className="absolute w-36 sm:w-52 h-0.5 bg-gradient-to-r from-transparent via-[#c5a880] to-transparent animate-scan-laser shadow-[0_0_12px_rgba(197,168,128,0.7)]" />
                       </div>
 
@@ -1184,24 +1268,36 @@ export default function DedicatedFaceScanPage() {
               {/* Action Buttons */}
               <div className="mt-5 sm:mt-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2.5 sm:gap-3.5 w-full">
                 {matchedPhotos.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={downloadAllMatched}
-                    disabled={downloadingZip}
-                    className="w-full sm:w-auto bg-[#c5a880] hover:bg-[#b09672] active:scale-95 text-slate-950 font-black px-6 py-3.5 rounded-xl text-xs sm:text-sm shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[46px]"
-                  >
-                    {downloadingZip ? (
-                      <>
-                        <Loader className="w-4 h-4 animate-spin text-slate-950" />
-                        <span>Creating ZIP ({downloadProgress}%)...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Download className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-                        <span>Download All Photos (ZIP)</span>
-                      </>
-                    )}
-                  </button>
+                  event?.allowDownload !== false ? (
+                    <button
+                      type="button"
+                      onClick={downloadAllMatched}
+                      disabled={downloadingZip}
+                      className="w-full sm:w-auto bg-[#c5a880] hover:bg-[#b09672] active:scale-95 text-slate-950 font-black px-6 py-3.5 rounded-xl text-xs sm:text-sm shadow-[0_4px_18px_rgba(197,168,128,0.35)] flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[46px]"
+                    >
+                      {downloadingZip ? (
+                        <>
+                          <Loader className="w-4 h-4 animate-spin text-slate-950" />
+                          <span>Streaming ZIP ({downloadProgress}%)...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                          <span>Download {matchedPhotos.length} Matching Photos (.ZIP)</span>
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      title="Photo downloads have been disabled by the studio for this album"
+                      className="w-full sm:w-auto bg-slate-200 text-slate-400 font-bold px-6 py-3.5 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 cursor-not-allowed opacity-75 min-h-[46px]"
+                    >
+                      <Download className="w-4 h-4 text-slate-400 stroke-[2.5]" />
+                      <span>Download Disabled by Studio</span>
+                    </button>
+                  )
                 )}
 
                 <button
@@ -1306,15 +1402,17 @@ export default function DedicatedFaceScanPage() {
                             <span className="text-xs sm:text-sm font-black text-white drop-shadow-md">
                               Photo #{index + 1}
                             </span>
-                            <a
-                              href={imgSrc}
-                              download
-                              onClick={(e) => e.stopPropagation()}
-                              className="pointer-events-auto w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white hover:bg-[#c5a880] text-slate-900 hover:text-white flex items-center justify-center transition-all duration-300 shadow-xl hover:scale-110 active:scale-95 cursor-pointer"
-                              title="Download Photo"
-                            >
-                              <Download className="w-4 h-4 sm:w-5 sm:h-5" />
-                            </a>
+                            {event?.allowDownload !== false && (
+                              <a
+                                href={imgSrc}
+                                download
+                                onClick={(e) => e.stopPropagation()}
+                                className="pointer-events-auto w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white hover:bg-[#c5a880] text-slate-900 hover:text-white flex items-center justify-center transition-all duration-300 shadow-xl hover:scale-110 active:scale-95 cursor-pointer"
+                                title="Download Photo"
+                              >
+                                <Download className="w-4 h-4 sm:w-5 sm:h-5" />
+                              </a>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1355,14 +1453,16 @@ export default function DedicatedFaceScanPage() {
               AI Matched Photo ({matchedPhotos.findIndex(p => p._id === selectedPhoto._id) + 1} / {matchedPhotos.length})
             </span>
             <div className="flex items-center gap-2 sm:gap-3">
-              <a
-                href={resolveMediaUrl(selectedPhoto)}
-                download
-                className="bg-white/10 hover:bg-white/20 border border-white/15 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors min-h-[40px]"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Download</span>
-              </a>
+              {event?.allowDownload !== false && (
+                <a
+                  href={resolveMediaUrl(selectedPhoto)}
+                  download
+                  className="bg-white/10 hover:bg-white/20 border border-white/15 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors min-h-[40px]"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download</span>
+                </a>
+              )}
               <button
                 type="button"
                 onClick={() => setSelectedPhoto(null)}

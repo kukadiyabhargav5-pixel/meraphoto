@@ -14,7 +14,15 @@ export default function PortfoliosPage() {
         const res = await apiClient.get('/event/my');
         if (res.data && res.data.events) {
           const filtered = res.data.events.filter((e: any) => e.addToPortfolio === true);
-          setPortfolioEvents(filtered.reverse());
+          filtered.sort((a: any, b: any) => {
+            const daysA = typeof a.daysLeft === 'number' ? a.daysLeft : 0;
+            const daysB = typeof b.daysLeft === 'number' ? b.daysLeft : 0;
+            if (daysB !== daysA) return daysB - daysA;
+            const timeA = new Date(a.createdAt || a.date || 0).getTime();
+            const timeB = new Date(b.createdAt || b.date || 0).getTime();
+            return timeB - timeA;
+          });
+          setPortfolioEvents(filtered);
         }
       } catch (error) {
         console.error('Failed to fetch events:', error);

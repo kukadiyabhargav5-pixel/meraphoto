@@ -6,11 +6,11 @@ import { motion } from 'framer-motion';
 import { apiClient } from '@/lib/api';
 import toast from 'react-hot-toast';
 
-const containerVariants = {
+const containerVariants: any = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.04 } },
 };
-const itemVariants = {
+const itemVariants: any = {
   hidden: { opacity: 0, y: 16 },
   show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.4, 0, 0.2, 1] } },
 };
@@ -176,7 +176,7 @@ function DetailRow({ icon, label, value }: { icon: React.ReactNode, label: strin
   return (
     <div className="flex items-start gap-4">
       <div className="mt-1 w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 shrink-0">
-        {React.cloneElement(icon as React.ReactElement, { className: 'w-4 h-4' })}
+        {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-4 h-4' })}
       </div>
       <div>
         <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-0.5">{label}</div>

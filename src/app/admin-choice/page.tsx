@@ -22,15 +22,23 @@ export default function AdminChoicePage() {
 
   if (loading || !isAuthenticated || user?.role !== 'SUPER_ADMIN') {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#faf9f6' }}>
-        <div className="animate-spin" style={{ width: '32px', height: '32px', border: '3px solid #e3d8c8', borderTopColor: '#c5a880', borderRadius: '50%' }} />
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#faf9f6] p-4 overscroll-none select-none">
+        <div className="flex flex-col items-center justify-center text-center">
+          <div className="relative flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 mb-4">
+            <div className="absolute inset-0 rounded-full bg-[#c5a880]/15 blur-md animate-pulse" />
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full border-[3px] border-[#e3d8c8] border-t-[#c5a880] animate-spin" />
+          </div>
+          <p className="text-xs sm:text-sm font-bold tracking-widest uppercase text-slate-500 font-sans">
+            Loading...
+          </p>
+        </div>
       </div>
     );
   }
 
   const handleStudioChoice = () => {
-    toast.success('Entering Studio Style (Unlimited Access)');
-    router.push('/dashboard');
+    toast.success('Entering Studio Style (Unlimited Admin Access)');
+    router.push('/admin-dashboard');
   };
 
   const handleAdminChoice = () => {

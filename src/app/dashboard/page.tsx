@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useState, useCallback } from 'react';
 import { useDashboard } from './DashboardContext';
-import { Calendar, Image as ImageIcon, Users, Heart, UsersRound, RefreshCw, ExternalLink, Settings, Camera, TrendingUp, ArrowUpRight, Sparkles, Clock, Lock } from 'lucide-react';
+import { Calendar, Image as ImageIcon, Users, Heart, UsersRound, RefreshCw, ExternalLink, Settings, Camera, TrendingUp, ArrowUpRight, Sparkles, Clock, Lock, CreditCard, Zap, User } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
@@ -40,17 +40,42 @@ function AnimatedCount({ value }: { value: number }) {
 export default function DashboardOverview() {
   const router = useRouter();
   const context = useDashboard();
-  const { user } = useAuth();
-  const [stats, setStats] = useState<Stats>({ events: 0, media: 0, visitors: 0, teamMembers: 0, customers: 0 });
-  const [loading, setLoading] = useState(true);
+  const { user, studio: authStudio } = useAuth();
+  const [stats, setStats] = useState<Stats>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mara_overview_stats');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return { events: 0, media: 0, visitors: 0, teamMembers: 0, customers: 0 };
+  });
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !localStorage.getItem('mara_overview_stats');
+    }
+    return true;
+  });
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Aggressive prefetch for instant 0.5s navigation
+  useEffect(() => {
+    router.prefetch('/dashboard/plans-billing');
+    router.prefetch('/dashboard/profile');
+    router.prefetch('/dashboard/events');
+    router.prefetch('/dashboard/create-event');
+    router.prefetch('/dashboard/quotation');
+    router.prefetch('/dashboard/team');
+    router.prefetch('/dashboard/customers');
+    router.prefetch('/dashboard/gallery-visitors');
+  }, [router]);
 
   const fetchStats = useCallback(async (isManual = false) => {
     try {
       if (isManual) setRefreshing(true);
       const res = await apiClient.get('/dashboard/stats');
-      setStats({
+      const newStats = {
         events: res.data.events || 0,
         media: res.data.media || 0,
         visitors: res.data.visitors || 0,
@@ -58,7 +83,11 @@ export default function DashboardOverview() {
         customers: res.data.customers || 0,
         studioName: res.data.studioName,
         subscriptionPlan: res.data.subscriptionPlan
-      });
+      };
+      setStats(newStats);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mara_overview_stats', JSON.stringify(newStats));
+      }
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Failed to fetch stats:', err);
@@ -83,13 +112,51 @@ export default function DashboardOverview() {
     return 'Good Evening';
   })();
 
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.email === 'maraphoto303@gmail.com';
+
+  useEffect(() => {
+    if (isSuperAdmin) {
+      router.replace('/admin-dashboard');
+    }
+  }, [isSuperAdmin, router]);
+
   const studio = context?.studio || authStudio;
-  const currentPlan = (stats.subscriptionPlan || studio?.subscriptionPlan || authStudio?.subscriptionPlan || 'BASIC').toUpperCase();
-  const isBasicPlan = currentPlan === 'BASIC' || currentPlan === 'STARTER';
+  const studioPlanKey = (stats.subscriptionPlan || studio?.subscriptionPlan || authStudio?.subscriptionPlan || '').toUpperCase();
+  const currentPlan = studioPlanKey || (isSuperAdmin ? 'PREMIUM' : 'BASIC');
+  const isBasicPlan = currentPlan === 'BASIC';
+  const isStartupPlan = currentPlan === 'STARTUP' || currentPlan === 'STARTER';
+
+  const allowedStartupLinks = [
+    '/dashboard/plans-billing',
+    '/dashboard/create-event',
+    '/dashboard/events',
+    '/dashboard/quotation',
+    '/dashboard/profile'
+  ];
 
   const handleBlockClick = (targetLink?: string) => {
+    if (isSuperAdmin) {
+      if (targetLink) router.push(targetLink);
+      return;
+    }
     if (isBasicPlan) {
+      if (targetLink && ['/dashboard', '/dashboard/plans-billing'].includes(targetLink)) {
+        router.push(targetLink);
+        return;
+      }
       toast.error('Please upgrade your plan from Basic to access this feature.', {
+        duration: 3500,
+        icon: '🔒'
+      });
+      router.push('/dashboard/plans-billing');
+      return;
+    }
+    if (isStartupPlan) {
+      if (targetLink && allowedStartupLinks.some(r => targetLink === r || targetLink.startsWith(`${r}/`))) {
+        router.push(targetLink);
+        return;
+      }
+      toast.error('Please upgrade to Standard or higher to unlock this feature.', {
         duration: 3500,
         icon: '🔒'
       });
@@ -110,75 +177,135 @@ export default function DashboardOverview() {
   ];
 
   const quickLinks = [
-    { label: 'Create Event', href: '/dashboard/create-event', icon: Calendar, accent: '#6366f1' },
-    { label: 'Studio Settings', href: '/dashboard/studio-settings', icon: Settings, accent: '#64748b' },
-    { label: 'Studio Branding', href: '/dashboard/studio-branding', icon: Sparkles, accent: '#c5a880' },
-    { label: 'Quotation', href: '/dashboard/quotation', icon: ExternalLink, accent: '#10b981' },
+    { label: 'Plans & Billing', subtitle: 'Upgrade & manage plans', href: '/dashboard/plans-billing', icon: CreditCard, accent: '#c5a880', highlight: true },
+    { label: 'Create Event', subtitle: 'New photo gallery', href: '/dashboard/create-event', icon: Calendar, accent: '#6366f1' },
+    { label: 'Profile & Studio', subtitle: 'Account & logo branding', href: '/dashboard/profile', icon: User, accent: '#c5a880' },
+    { label: 'Quotation', subtitle: 'Invoices & quotes', href: '/dashboard/quotation', icon: ExternalLink, accent: '#10b981' },
   ];
 
   return (
-    <div className="p-3 xs:p-4 lg:p-8 max-w-7xl mx-auto pb-16">
+    <div className="p-3 xs:p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto pb-32 sm:pb-24">
 
       {/* ═══ Welcome Banner ═══ */}
       <motion.div
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="relative overflow-hidden rounded-2xl sm:rounded-3xl mb-6 sm:mb-8"
-        style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' }}
+        className="relative overflow-hidden rounded-2xl sm:rounded-3xl mb-6 sm:mb-8 border border-white/10 shadow-xl"
+        style={{ background: 'linear-gradient(135deg, #0b0f19 0%, #161e2e 50%, #0b0f19 100%)' }}
       >
-        {/* Orbs */}
-        <div className="absolute top-0 right-0 w-80 h-80 rounded-full opacity-20 pointer-events-none"
+        {/* Subtle Ambient Orbs */}
+        <div className="absolute top-0 right-0 w-80 h-80 rounded-full opacity-15 pointer-events-none"
           style={{ background: 'radial-gradient(circle, #c5a880 0%, transparent 70%)' }} />
         <div className="absolute -bottom-20 -left-20 w-60 h-60 rounded-full opacity-10 pointer-events-none"
           style={{ background: 'radial-gradient(circle, #6366f1 0%, transparent 70%)' }} />
 
-        <div className="relative z-10 p-4 xs:p-6 lg:p-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shadow-lg shrink-0"
-              style={{ background: 'linear-gradient(135deg, #c5a880, #a07c4c)' }}>
-              <Camera className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
-            </div>
-            <div>
-              <motion.h1
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.2 }}
-                className="text-lg xs:text-xl lg:text-2xl font-black text-white tracking-tight"
-              >
-                {greeting}, <span className="text-[#c5a880]">{user?.name || stats.studioName || 'Studio'}</span>
-              </motion.h1>
-              <div className="flex items-center gap-2 mt-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs font-medium text-slate-400">
-                  {stats.studioName || 'Your Studio'} • Dashboard
-                </span>
+        <div className="relative z-10 p-4 sm:p-6 lg:p-7 flex flex-col gap-4 sm:gap-5">
+          {/* Top Row: User info on Left + Refresh icon button on Right */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="w-11 h-11 sm:w-13 sm:h-13 rounded-2xl flex items-center justify-center shrink-0 shadow-md border border-[#c5a880]/30"
+                style={{ background: 'linear-gradient(135deg, rgba(197,168,128,0.25), rgba(160,124,76,0.1))' }}>
+                <Camera className="w-5 h-5 sm:w-6 sm:h-6 text-[#c5a880]" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  {greeting}
+                </div>
+                <motion.h1
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="text-base sm:text-xl lg:text-2xl font-black text-white tracking-tight flex items-center gap-2 flex-wrap leading-snug"
+                >
+                  <span className="truncate">{user?.name || stats.studioName || 'Studio'}</span>
+                  {isSuperAdmin && (
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full shrink-0">
+                      👑 VIP Admin
+                    </span>
+                  )}
+                </motion.h1>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                  <span className="text-[11px] font-medium text-slate-400 truncate">
+                    {stats.studioName || 'Studio'} • {isSuperAdmin ? 'Unlimited Access' : 'Dashboard'}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap w-full sm:w-auto">
+            {/* Quick Refresh Icon Button on Top-Right */}
             <button
               onClick={() => fetchStats(true)}
               disabled={refreshing}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-white/10 border border-white/10
-                text-white text-xs font-bold hover:bg-white/20 transition-all disabled:opacity-50 backdrop-blur-sm cursor-pointer min-h-[44px]"
+              title="Refresh Stats"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/5 hover:bg-white/10 active:scale-95 border border-white/10
+                text-slate-300 hover:text-white transition-all disabled:opacity-50 flex items-center justify-center shrink-0 cursor-pointer shadow-xs"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-[#c5a880]' : ''}`} />
             </button>
-            <button
-              onClick={() => handleBlockClick('/dashboard/studio-settings')}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl
-                bg-gradient-to-r from-[#c5a880] to-[#a07c4c] text-white text-xs font-black
-                shadow-lg shadow-[#c5a880]/20 hover:shadow-xl hover:shadow-[#c5a880]/30 hover:-translate-y-0.5 transition-all cursor-pointer min-h-[44px]"
+          </div>
+
+          {/* Bottom Row: Two Balanced Equal-Height Action Buttons */}
+          <div className="grid grid-cols-2 gap-2.5 sm:flex sm:items-center sm:gap-3 w-full">
+            <Link
+              href="/dashboard/plans-billing"
+              prefetch={true}
+              onMouseEnter={() => router.prefetch('/dashboard/plans-billing')}
+              className="flex-1 flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 rounded-xl
+                bg-gradient-to-r from-[#c5a880] via-[#d4bc97] to-[#b59a72] text-[#09090b] text-xs font-black
+                shadow-[0_4px_14px_rgba(197,168,128,0.25)] hover:shadow-[0_6px_20px_rgba(197,168,128,0.35)]
+                hover:brightness-105 active:scale-[0.98] transition-all cursor-pointer h-[42px] border border-[#e3d8c8]/40"
             >
-              {isBasicPlan ? <Lock className="w-3.5 h-3.5" /> : <Settings className="w-3.5 h-3.5" />}
-              <span>{isBasicPlan ? 'Upgrade Plan' : 'Manage Studio'}</span>
-            </button>
+              <CreditCard className="w-4 h-4 text-[#09090b] shrink-0" />
+              <span className="truncate">Plans & Billing</span>
+            </Link>
+            <Link
+              href="/dashboard/profile"
+              prefetch={true}
+              onMouseEnter={() => router.prefetch('/dashboard/profile')}
+              className="flex-1 flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 rounded-xl
+                bg-white/8 hover:bg-white/15 border border-white/15 text-white hover:border-[#c5a880]/50 hover:text-[#c5a880]
+                text-xs font-black transition-all cursor-pointer h-[42px] active:scale-[0.98] shadow-xs"
+            >
+              <User className="w-4 h-4 text-[#c5a880] shrink-0" />
+              <span className="truncate">Studio & Profile</span>
+            </Link>
           </div>
         </div>
       </motion.div>
+
+      {/* ═══ Super Admin VIP Banner ═══ */}
+      {isSuperAdmin && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-[#c5a880]/10 to-amber-500/10 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-600 shrink-0 text-xl font-black">
+              👑
+            </div>
+            <div>
+              <div className="text-sm font-black text-slate-900 flex items-center gap-2">
+                Super Admin VIP Access • 100% Free Lifetime
+                <span className="text-[10px] uppercase font-black tracking-wider bg-emerald-500/20 text-emerald-800 px-2.5 py-0.5 rounded-full">
+                  Unlimited Mode Active
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Unlimited photos & videos upload, zero storage limits, watermark removal, custom branding, AI face engine, and all enterprise facilities are fully unlocked.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/create-event"
+            className="shrink-0 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-black shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            + Create Unlimited Event
+          </Link>
+        </motion.div>
+      )}
 
       {/* ═══ Basic Plan Upgrade Banner ═══ */}
       {isBasicPlan && (
@@ -196,11 +323,11 @@ export default function DashboardOverview() {
               <div className="text-sm font-black text-slate-900 flex items-center gap-2">
                 Active Plan: BASIC
                 <span className="text-[10px] uppercase font-black tracking-wider bg-amber-500/20 text-amber-800 px-2.5 py-0.5 rounded-full">
-                  Limited Access
+                  Free Limited Access
                 </span>
               </div>
               <p className="text-xs text-slate-600 mt-0.5">
-                Your studio is on the Basic Plan. Click any block or button below to upgrade your plan and unlock Events, Face Recognition, Team, and Invoicing.
+                Your studio is on the Basic Free Plan. All dashboard tools are locked. Click below to upgrade to Startup, Standard, Essential, or Premium.
               </p>
             </div>
           </div>
@@ -209,6 +336,39 @@ export default function DashboardOverview() {
             className="shrink-0 px-4 py-2 rounded-xl bg-gradient-to-r from-[#c5a880] to-[#a07c4c] text-white text-xs font-black shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 group-hover:translate-x-0.5 cursor-pointer"
           >
             Upgrade Studio Plan <ArrowUpRight className="w-4 h-4" />
+          </button>
+        </motion.div>
+      )}
+
+      {/* ═══ Startup Plan Upgrade Banner ═══ */}
+      {isStartupPlan && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={() => handleBlockClick()}
+          className="mb-8 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-transparent border border-blue-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/10 transition-all group"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-600 shrink-0">
+              <Zap className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-sm font-black text-slate-900 flex items-center gap-2">
+                Active Plan: STARTUP (₹3,999/yr)
+                <span className="text-[10px] uppercase font-black tracking-wider bg-blue-500/20 text-blue-800 px-2.5 py-0.5 rounded-full">
+                  50k Photos & 10 Videos
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Create Event, Manage Events, Quotations, and Profile are unlocked. Upgrade to Standard (₹7,999) to unlock ALL dashboard features!
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleBlockClick(); }}
+            className="shrink-0 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-black shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 group-hover:translate-x-0.5 cursor-pointer"
+          >
+            Upgrade to Standard <ArrowUpRight className="w-4 h-4" />
           </button>
         </motion.div>
       )}
@@ -228,10 +388,10 @@ export default function DashboardOverview() {
 
         <AnimatePresence>
           {loading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="bg-white rounded-2xl border border-slate-100 p-5 h-[120px] animate-pulse">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 mb-3" />
+                <div key={i} className={`bg-white rounded-2xl border border-slate-100 p-3.5 sm:p-5 h-[110px] sm:h-[125px] animate-pulse ${i === 4 ? 'col-span-2 sm:col-span-1' : 'col-span-1'}`}>
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 mb-2.5" />
                   <div className="h-2 w-14 bg-slate-100 rounded mb-2" />
                   <div className="h-5 w-10 bg-slate-100 rounded" />
                 </div>
@@ -242,47 +402,51 @@ export default function DashboardOverview() {
               initial="hidden"
               animate="show"
               variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07 } } }}
-              className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
+              className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5"
             >
-              {statCards.map((card) => (
+              {statCards.map((card, idx) => (
                 <motion.div
                   key={card.id}
                   variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } } }}
                   onClick={() => handleBlockClick(card.link)}
-                  className="bg-white rounded-2xl border border-slate-100 p-3 sm:p-5 relative overflow-hidden cursor-pointer
-                    hover:border-slate-200 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-1
-                    transition-all duration-300 group"
+                  className={`bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-5 relative overflow-hidden cursor-pointer
+                    hover:border-slate-300 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-0.5 active:scale-[0.98]
+                    transition-all duration-300 group shadow-xs ${idx === 4 ? 'col-span-2 sm:col-span-1' : 'col-span-1'}`}
                 >
                   {/* Hover glow */}
                   <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full opacity-0 group-hover:opacity-100
-                    transition-opacity duration-500 blur-2xl"
+                    transition-opacity duration-500 blur-2xl pointer-events-none"
                     style={{ background: card.color }} />
 
-                  <div className="relative z-10">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 transition-transform duration-300 group-hover:scale-110"
-                      style={{ background: card.bg }}>
-                      <card.icon className="w-5 h-5" style={{ color: card.color }} />
+                  <div className="relative z-10 flex flex-col justify-between h-full min-h-[92px] sm:min-h-[105px]">
+                    <div className="flex items-center justify-between mb-2 sm:mb-3">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110 shrink-0 shadow-xs"
+                        style={{ background: card.bg }}>
+                        <card.icon className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: card.color }} />
+                      </div>
+                      
+                      {/* Arrow or Lock Badge */}
+                      <div>
+                        {(isBasicPlan || (isStartupPlan && !allowedStartupLinks.some(r => card.link === r || card.link.startsWith(`${r}/`)))) ? (
+                          <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600">
+                            <Lock className="w-3.5 h-3.5" />
+                          </div>
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-slate-700 group-hover:bg-slate-100 transition-all opacity-60 group-hover:opacity-100">
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center justify-between">
-                      <span>{card.label}</span>
-                      {isBasicPlan && <Lock className="w-3 h-3 text-amber-500/70" />}
-                    </div>
-                    <div className="text-xl xs:text-2xl font-black text-slate-900 tracking-tight flex items-baseline gap-1">
-                      <AnimatedCount value={card.value} />
-                    </div>
-                  </div>
 
-                  {/* Arrow or Lock Badge */}
-                  <div className="absolute top-4 right-4">
-                    {isBasicPlan ? (
-                      <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600">
-                        <Lock className="w-3.5 h-3.5" />
+                    <div>
+                      <div className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-wider mb-0.5">
+                        {card.label}
                       </div>
-                    ) : (
-                      <div className="opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0">
-                        <ArrowUpRight className="w-4 h-4 text-slate-400" />
+                      <div className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-baseline gap-1">
+                        <AnimatedCount value={card.value} />
                       </div>
-                    )}
+                    </div>
                   </div>
                 </motion.div>
               ))}
@@ -302,40 +466,77 @@ export default function DashboardOverview() {
           <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Quick Actions</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {quickLinks.map((ql, i) => (
-            <motion.div
-              key={ql.href}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.35 + i * 0.06 }}
-              onClick={() => handleBlockClick(ql.href)}
-              className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5 flex items-center gap-3 sm:gap-3.5 cursor-pointer
-                hover:border-slate-200 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-0.5
-                transition-all duration-300 group"
-            >
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110"
-                style={{ background: `${ql.accent}12` }}>
-                <ql.icon className="w-5 h-5" style={{ color: ql.accent }} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors flex items-center gap-1.5 truncate">
-                  <span>{ql.label}</span>
-                  {isBasicPlan && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-3.5">
+          {quickLinks.map((ql, i) => {
+            const isQLLocked = (isBasicPlan && !ql.highlight) || 
+                               (isStartupPlan && !allowedStartupLinks.some(r => ql.href === r || ql.href.startsWith(`${r}/`)));
+            return (
+              <motion.div
+                key={ql.href}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35 + i * 0.06 }}
+                onClick={() => handleBlockClick(ql.href)}
+                className={`rounded-2xl p-3.5 sm:p-4 flex items-center gap-3 sm:gap-3.5 cursor-pointer
+                  transition-all duration-300 group active:scale-[0.98] ${
+                    ql.highlight
+                      ? 'bg-gradient-to-br from-[#fcf9f5] via-white to-[#faf5ec] border border-[#c5a880]/60 ring-1 ring-[#c5a880]/20 shadow-[0_4px_16px_rgba(197,168,128,0.12)] hover:border-[#c5a880] hover:ring-[#c5a880]/40 hover:shadow-[0_8px_24px_rgba(197,168,128,0.22)] hover:-translate-y-0.5'
+                      : isQLLocked
+                        ? 'bg-slate-50/70 border border-slate-200/60 opacity-60 hover:opacity-85 hover:bg-slate-50'
+                        : 'bg-white border border-slate-200/80 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-0.5 shadow-xs'
+                  }`}
+              >
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105 shadow-xs ${
+                    ql.highlight
+                      ? 'bg-[#c5a880]/15 text-[#9e7b4f] border border-[#c5a880]/30'
+                      : 'border border-slate-100'
+                  }`}
+                  style={!ql.highlight ? { background: `${ql.accent}12` } : {}}
+                >
+                  <ql.icon
+                    className="w-5 h-5 transition-transform duration-300 group-hover:scale-110"
+                    style={{ color: ql.highlight ? '#9e7b4f' : ql.accent }}
+                  />
                 </div>
-                <div className="text-[10px] font-medium text-slate-400 truncate">
-                  {isBasicPlan ? 'Click to upgrade plan' : `Go to ${ql.label.toLowerCase()}`}
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors truncate">
+                      {ql.label}
+                    </span>
+                    {ql.highlight && (
+                      <span className="text-[9px] font-black uppercase tracking-wider bg-gradient-to-r from-[#c5a880] via-[#b89565] to-[#9a7b4f] text-white px-2 py-0.5 rounded-full shadow-xs shrink-0 leading-tight">
+                        HOT
+                      </span>
+                    )}
+                    {isQLLocked && !ql.highlight && (
+                      <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    )}
+                  </div>
+                  <div className="text-[11px] font-medium text-slate-400 group-hover:text-slate-500 transition-colors truncate mt-0.5">
+                    {isQLLocked && !ql.highlight
+                      ? 'Click to upgrade plan'
+                      : (ql.subtitle || `Go to ${ql.label.toLowerCase()}`)}
+                  </div>
                 </div>
-              </div>
-              {isBasicPlan ? (
-                <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0 ml-auto group-hover:bg-amber-500/20 transition-colors">
-                  <ArrowUpRight className="w-3.5 h-3.5" />
-                </div>
-              ) : (
-                <ArrowUpRight className="w-4 h-4 text-slate-300 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
-              )}
-            </motion.div>
-          ))}
+
+                {isQLLocked && !ql.highlight ? (
+                  <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0 ml-auto group-hover:bg-amber-500/20 transition-colors">
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </div>
+                ) : (
+                  <ArrowUpRight
+                    className={`w-4 h-4 ml-auto shrink-0 transition-all ${
+                      ql.highlight
+                        ? 'text-[#c5a880] opacity-100 group-hover:text-[#9e7b4f] group-hover:translate-x-0.5 group-hover:-translate-y-0.5'
+                        : 'text-slate-300 opacity-0 group-hover:opacity-100 group-hover:text-slate-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5'
+                    }`}
+                  />
+                )}
+              </motion.div>
+            );
+          })}
         </div>
       </motion.div>
 

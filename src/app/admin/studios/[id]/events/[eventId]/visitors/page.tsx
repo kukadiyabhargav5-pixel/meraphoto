@@ -6,11 +6,11 @@ import { motion } from 'framer-motion';
 import { apiClient } from '@/lib/api';
 import toast from 'react-hot-toast';
 
-const containerVariants = {
+const containerVariants: any = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.04 } },
 };
-const rowVariants = {
+const rowVariants: any = {
   hidden: { opacity: 0, x: -16 },
   show: { opacity: 1, x: 0, transition: { duration: 0.4, ease: [0.4, 0, 0.2, 1] } },
 };

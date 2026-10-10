@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Lock, Key, AlertCircle, Loader, ChevronLeft, ChevronRight, X, Camera, ScanFace, Download, UploadCloud, CheckCircle2, ImagePlus, Video, Sparkles, CheckCircle, RefreshCw, Check, ShieldCheck, Upload } from 'lucide-react';
+import { useParams } from 'next/navigation';
+import { Lock, Key, AlertCircle, Loader, ChevronLeft, ChevronRight, X, Camera, ScanFace, Download, UploadCloud, CheckCircle2, ImagePlus, Video, Sparkles, CheckCircle, RefreshCw, Check, ShieldCheck, Upload, Play } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { apiClient } from '../../../../lib/api';
+import toast from 'react-hot-toast';
 
 const dbName = 'MeraPhotoDB';
 const storeName = 'media_files';
@@ -171,7 +172,15 @@ export default function EventPhotosPage() {
       if (res.data.event.accessType === 'PASSWORD' || res.data.event.accessType === 'OTP') {
         setIsLocked(true);
       } else {
-        fetchPhotos(res.data.event._id);
+        if (res.data.media) {
+          const allMedia = res.data.media || [];
+          const valid = allMedia.filter((m: any) => m.processedStatus !== 'FAILED');
+          const finalMedia = valid.length > 0 ? valid : allMedia;
+          setMedia(finalMedia);
+          setFullMedia(finalMedia);
+        } else {
+          fetchPhotos(res.data.event._id);
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -217,6 +226,10 @@ export default function EventPhotosPage() {
   // --- DOWNLOAD FLOW ---
   const handleDownloadClick = () => {
     if (!event) return;
+    if (event.allowDownload === false) {
+      toast.error('Photo downloads have been disabled by the studio for this album.');
+      return;
+    }
     if (event.accessType === 'PUBLIC') {
       startBulkDownload();
     } else if (event.accessType === 'PASSWORD') {
@@ -700,7 +713,7 @@ export default function EventPhotosPage() {
                 className="max-h-7 sm:max-h-8 w-auto max-w-[100px] sm:max-w-[130px] object-contain rounded drop-shadow-xs" 
               />
             </div>
-            <span className="text-[11px] sm:text-xs font-extrabold text-[#c5a880] uppercase tracking-wider truncate max-w-[100px] sm:max-w-[130px]">
+            <span className="text-[11px] sm:text-xs font-extrabold text-[#c5a880] uppercase tracking-wider whitespace-nowrap">
               {event?.studioId?.name || 'Gallery'}
             </span>
             <span className="hidden sm:block h-4 w-px bg-slate-300" />
@@ -764,13 +777,24 @@ export default function EventPhotosPage() {
               </>
             )}
 
-            <button
-              onClick={handleDownloadClick}
-              className="flex-1 bg-[#FF6B00] hover:bg-[#E05E00] text-white shadow-xl shadow-orange-500/20 rounded-xl sm:rounded-2xl py-3 px-2.5 sm:px-4 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer min-h-[44px]"
-            >
-              <Download className="h-4 w-4" />
-              <span>Download</span>
-            </button>
+            {event?.allowDownload !== false ? (
+              <button
+                onClick={handleDownloadClick}
+                className="flex-1 bg-[#FF6B00] hover:bg-[#E05E00] text-white shadow-xl shadow-orange-500/20 rounded-xl sm:rounded-2xl py-3 px-2.5 sm:px-4 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer min-h-[44px]"
+              >
+                <Download className="h-4 w-4" />
+                <span>Download</span>
+              </button>
+            ) : (
+              <button
+                disabled
+                title="Photo downloads have been disabled by the studio for this album"
+                className="flex-1 bg-slate-200 text-slate-400 cursor-not-allowed rounded-xl sm:rounded-2xl py-3 px-2.5 sm:px-4 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 min-h-[44px] opacity-70"
+              >
+                <Download className="h-4 w-4 text-slate-400" />
+                <span>Download Disabled</span>
+              </button>
+            )}
           </div>
         </div>
       )}

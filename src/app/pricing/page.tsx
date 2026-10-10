@@ -8,58 +8,59 @@ import { Check } from 'lucide-react';
 export default function PricingPage() {
   const staticPlans = [
     {
-      name: 'Basic',
-      price: '3,500',
+      name: 'Startup',
+      price: '3,999',
       period: '/year',
       popular: false,
       desc: 'Store 50,000 photos & 10 videos',
       features: [
         'Store 50,000 photos',
         'Store 10 videos',
-        'Business Branding',
-        'Bulk Download',
-        'Web Mode'
+        'Create & Manage Events',
+        'Quotation Generator',
+        'Profile & Galleries'
       ]
     },
     {
       name: 'Standard',
-      price: '7,900',
+      price: '7,999',
       period: '/year',
       popular: true,
-      desc: 'Store 1,50,000 photos & 100 videos',
+      desc: 'Store 1,00,000 photos & 20 videos',
       features: [
-        'Store 1,50,000 photos',
-        'Store 100 videos',
-        'Watermarks',
-        '+ Basic Plan Feature'
+        'Store 1,00,000 photos',
+        'Store 20 videos',
+        'ALL Dashboard Tools Enabled',
+        'Bill & Invoice Generator',
+        'Lead Capture & Branding'
       ]
     },
     {
       name: 'Essential',
-      price: '15,900',
+      price: '12,999',
       period: '/year',
       popular: false,
-      desc: 'Store 3,00,000 photos & 200 videos',
+      desc: 'Store 1,50,000 photos & 50 videos',
       features: [
-        'Store 3,00,000 photos',
-        'Store 200 videos',
-        'View Client Favourites',
-        'Switch on/off Downloads',
-        'Portfolio Website',
-        '+ Standard Plan Feature'
+        'Store 1,50,000 photos',
+        'Store 50 videos',
+        'ALL Dashboard Tools Enabled',
+        'High-Speed Optimization',
+        'Priority 24/7 Support'
       ]
     },
     {
       name: 'Premium',
-      price: '31,900',
+      price: '19,999',
       period: '/year',
       popular: false,
-      desc: 'Store 7,50,000 photos & 500 videos',
+      desc: 'Store 3,00,000 photos & 100 videos',
       features: [
-        'Store 7,50,000 photos',
-        'Store 500 videos',
-        'Digital Album',
-        '+ Essential Plan Feature'
+        'Store 3,00,000 photos',
+        'Store 100 videos',
+        'ALL Dashboard Tools Enabled',
+        'AI Face Recognition Scanner',
+        'Dedicated VIP Account Manager'
       ]
     }
   ];
@@ -104,7 +105,7 @@ export default function PricingPage() {
                   <p className={`text-[11px] mt-1.5 font-medium ${plan.popular ? 'text-slate-400' : 'text-gray-450'}`}>{plan.desc}</p>
                   
                   <div className="flex items-baseline gap-1 mt-6 mb-4">
-                    <span className="text-3xl font-black font-serif-luxury">₹{plan.price}</span>
+                    <span className="text-3xl font-black font-serif-luxury">{plan.price === 'Free' ? 'Free' : `₹${plan.price}`}</span>
                     <span className={`text-[10px] font-bold uppercase tracking-wider ${plan.popular ? 'text-[#c5a880]' : 'text-gray-450'}`}>{plan.period}</span>
                   </div>
 

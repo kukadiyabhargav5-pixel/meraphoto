@@ -15,13 +15,6 @@ import {
 
 /* ─────────────── DATA ─────────────── */
 
-const stats = [
-  { value: '600+', label: 'Elite Photo Studios' },
-  { value: '8K+',  label: 'Luxury Events' },
-  { value: '7M+',  label: 'Moments Delivered' },
-  { value: '4.9★', label: 'Average Studio Rating' },
-];
-
 const howItWorks = [
   {
     step: '01',
@@ -55,41 +48,41 @@ const features = [
 const plans = [
   {
     name: 'Basic',
-    price: '₹3,500',
+    price: 'Free',
     period: '/year',
     desc: 'Store 50,000 photos & store 10 videos',
     highlight: false,
-    features: ['Store 50,000 photos', 'Store 10 videos', 'Business Branding', 'Bulk Download', 'Web Mode'],
+    features: [],
     cta: 'Choose Basic',
     href: '/signup',
   },
   {
     name: 'Standard',
-    price: '₹7,900',
+    price: '₹4,999',
     period: '/year',
-    desc: 'Store 1,50,000 photos & store 100 videos',
+    desc: 'Store 50,000 photos & store 20 videos',
     highlight: true,
-    features: ['Store 1,50,000 photos', 'Store 100 videos', 'Watermarks', 'Includes all Basic features'],
+    features: ['Store 50,000 photos', 'Store 20 videos', 'Watermarks', 'Includes all Basic features'],
     cta: 'Choose Standard',
     href: '/signup',
   },
   {
     name: 'Essential',
-    price: '₹15,900',
+    price: '₹9,999',
     period: '/year',
-    desc: 'Store 3,00,000 photos & store 200 videos',
+    desc: 'Store 1,50,000 photos & store 50 videos',
     highlight: false,
-    features: ['Store 3,00,000 photos', 'Store 200 videos', 'View Client Favourites', 'Switch on/off Downloads', 'Portfolio Website', 'Includes all Standard features'],
+    features: ['Store 1,50,000 photos', 'Store 50 videos', 'View Client Favourites', 'Switch on/off Downloads', 'Portfolio Website', 'Includes all Standard features'],
     cta: 'Choose Essential',
     href: '/signup',
   },
   {
     name: 'Premium',
-    price: '₹31,900',
+    price: '₹19,999',
     period: '/year',
-    desc: 'Store 7,50,000 photos & store 500 videos',
+    desc: 'Store 4,00,000 photos & store 100 videos',
     highlight: false,
-    features: ['Store 7,50,000 photos', 'Store 500 videos', 'Digital Album', 'Includes all Essential features'],
+    features: ['Store 4,00,000 photos', 'Store 100 videos', 'Digital Album', 'Includes all Essential features'],
     cta: 'Choose Premium',
     href: '/signup',
   },
@@ -215,62 +208,6 @@ export default function HomePage() {
       {/* ═══════════ INTERNAL CSS ═══════════ */}
       <style dangerouslySetInnerHTML={{__html: `
         /* Hero styles are in cinematic-hero.css */
-
-        /* ── STATS ── */
-        .stats-section {
-          background: #09090b;
-          border-top: 1px solid rgba(227,216,200,0.15);
-          padding: 40px 0;
-          position: relative;
-          overflow: hidden;
-        }
-        @media (min-width: 1024px) {
-          .stats-section { padding: 72px 0; }
-        }
-        .stats-grid {
-          max-width: 1280px;
-          margin: 0 auto;
-          padding: 0 16px;
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 16px;
-        }
-        @media (max-width: 375px) {
-          .stats-grid {
-            padding: 0 12px;
-            gap: 12px;
-          }
-        }
-        @media (min-width: 640px) {
-          .stats-grid { padding: 0 24px; gap: 24px; }
-        }
-        @media (min-width: 1024px) {
-          .stats-grid { grid-template-columns: repeat(4, 1fr); gap: 48px; }
-        }
-        .stat-item {
-          text-align: center;
-          border-right: none;
-        }
-        @media (min-width: 1024px) {
-          .stat-item { border-right: 1px solid rgba(227,216,200,0.1); }
-          .stat-item:last-child { border-right: none; }
-        }
-        .stat-value {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: clamp(1.4rem, 6vw, 3rem);
-          font-weight: 300;
-          color: #c5a880;
-          margin-bottom: 4px;
-          line-height: 1.15;
-        }
-        .stat-label {
-          font-size: clamp(8.5px, 2.2vw, 10px);
-          color: #9ca3af;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          line-height: 1.3;
-        }
 
         /* ── WORKFLOW ── */
         .workflow-section {
@@ -1023,16 +960,37 @@ export default function HomePage() {
         }
       `}} />
 
-      <main className="font-poppins">
+      <div className="font-poppins">
 
       {/* ── CINEMATIC HERO SECTION ── */}
       <CinematicHero />
 
-      {/* ── All content after hero: scrolls OVER the fixed hero canvas ── */}
-      <div style={{ position: 'relative', zIndex: 10, background: '#faf9f6' }}>
+      {/* ── HOW IT WORKS / WORKFLOW SECTION ── */}
+      <section className="workflow-section" id="workflow">
+        <div className="section-container" style={{ textAlign: 'center' }}>
+          <span className="section-badge">How It Works</span>
+          <h2 className="section-title">Three Simple Steps</h2>
+          <p className="section-desc">From camera to guest phone in seconds.</p>
+          <div className="workflow-grid">
+            {howItWorks.map((step) => {
+              const StepIcon = step.icon;
+              return (
+                <div key={step.step} className="workflow-card" style={{ textAlign: 'left' }}>
+                  <div className="workflow-step">{step.step}</div>
+                  <div className="workflow-icon">
+                    <StepIcon className="w-5 h-5" />
+                  </div>
+                  <h3>{step.title}</h3>
+                  <p>{step.desc}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
       {/* ── FEATURES ── */}
-      <section className="features-section">
+      <section className="features-section" id="features">
         <div className="section-container" style={{ textAlign: 'center' }}>
           <span className="section-badge">Platform Capabilities</span>
           <h2 className="section-title">Everything You Need</h2>
@@ -1214,8 +1172,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      </div>{/* end hero-content-wrapper */}
-      </main>
+      </div>
     </PublicWrapper>
   );
 }

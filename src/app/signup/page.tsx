@@ -22,7 +22,7 @@ import { useAuth } from '../../lib/AuthContext';
 import { apiClient } from '../../lib/api';
 import PublicWrapper from '../../components/PublicWrapper';
 import toast from 'react-hot-toast';
-import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
+import GoogleAuthButton from '../../components/GoogleAuthButton';
 
 export default function SignupPage() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -48,19 +48,28 @@ export default function SignupPage() {
 
   // UI state
   const [loading, setLoading] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
   const [emailExists, setEmailExists] = useState(false);
   const [emailChecking, setEmailChecking] = useState(false);
   const [isGoogleUser, setIsGoogleUser] = useState(false);
+  const [googleAccessToken, setGoogleAccessToken] = useState('');
   const [googleCredential, setGoogleCredential] = useState('');
 
   const { register, googleLogin, isAuthenticated, loading: authLoading } = useAuth();
   const router = useRouter();
 
+  // Instant prefetch for 0.5s page transitions
+  useEffect(() => {
+    router.prefetch('/dashboard');
+    router.prefetch('/dashboard/events');
+    router.prefetch('/dashboard/plans-billing');
+  }, [router]);
+
   const reqList = [
     { label: 'Starts with a Capital letter', valid: /^[A-Z]/.test(regPassword) },
     { label: 'Contains a lowercase letter', valid: /[a-z]/.test(regPassword) },
     { label: 'Contains a number', valid: /\d/.test(regPassword) },
-    { label: 'Contains a special character', valid: /[@$!%*?&#]/.test(regPassword) },
+    { label: 'Contains a special character', valid: /[@$!%*?&#_\-~+=/.,><:;^]/.test(regPassword) },
     { label: 'Minimum 6 characters', valid: regPassword.length >= 6 }
   ];
   const allPasswordValid = reqList.every(r => r.valid);
@@ -93,11 +102,14 @@ export default function SignupPage() {
     return () => clearTimeout(timer);
   }, [regEmail]);
 
+  const cleanPhone = regPhone.replace(/\D/g, '').slice(-10);
+  const isPhoneValid = /^[6-9]\d{9}$/.test(cleanPhone);
+
   const canProceedStep1 = () => {
     if (isGoogleUser) {
-      return regPhone && /^[6-9]\d{9}$/.test(regPhone);
+      return isPhoneValid;
     }
-    return regName && regEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail) && !emailExists && regPhone && /^[6-9]\d{9}$/.test(regPhone);
+    return regName.trim().length > 0 && regEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail) && !emailExists && isPhoneValid;
   };
 
   const canProceedStep2 = () => {
@@ -139,68 +151,66 @@ export default function SignupPage() {
         setLoading(false);
         return;
       }
-      const passwordRegex = /^[A-Z](?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&#]).{5,}$/;
+      const passwordRegex = /^[A-Z](?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&#_\-~+=/.,><:;^]).{5,}$/;
       if (!passwordRegex.test(regPassword)) {
-        toast.error('Password does not meet requirements.');
+        toast.error('Password must start with a Capital letter, contain numbers, small letters and a special character.');
         setLoading(false);
         return;
       }
     }
 
     try {
-      if (isGoogleUser && googleCredential) {
+      if (isGoogleUser && (googleAccessToken || googleCredential)) {
         if (googleLogin) {
-          await googleLogin(googleCredential);
+          setRedirecting(true);
+          await googleLogin(googleCredential || undefined, googleAccessToken || undefined);
           try {
             await apiClient.put('/auth/update-profile', {
-              phone: regPhone,
-              studioName: regStudioName,
-              websiteLink: regWebsite,
-              instagramUrl: regInstagram,
-              facebookUrl: regFacebook,
+              name: regName.trim(),
+              phone: cleanPhone,
+              studioName: regStudioName.trim(),
+              websiteLink: regWebsite.trim(),
+              instagramUrl: regInstagram.trim(),
+              facebookUrl: regFacebook.trim(),
               logoUrl: regLogo,
               password: regPassword || undefined,
             });
           } catch (updateErr) {
             console.warn('Profile update after Google signup:', updateErr);
           }
-          toast.success('Account created successfully!');
-          router.push('/dashboard');
+          toast.success('Account created successfully! Redirecting...');
+          router.replace('/dashboard');
+          setTimeout(() => {
+            if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/dashboard')) {
+              window.location.href = '/dashboard';
+            }
+          }, 350);
         }
       } else {
+        setRedirecting(true);
         await register({
-          name: regName,
-          email: regEmail,
+          name: regName.trim(),
+          email: regEmail.trim().toLowerCase(),
           password: regPassword,
-          phone: regPhone,
-          studioName: regStudioName,
-          websiteLink: regWebsite,
-          instagramUrl: regInstagram,
-          facebookUrl: regFacebook,
+          phone: cleanPhone,
+          studioName: regStudioName.trim(),
+          websiteLink: regWebsite.trim(),
+          instagramUrl: regInstagram.trim(),
+          facebookUrl: regFacebook.trim(),
           logoUrl: regLogo,
         });
-        toast.success('Registration successful!');
-        router.push('/dashboard');
+        toast.success('Registration successful! Opening dashboard...');
+        router.replace('/dashboard');
+        setTimeout(() => {
+          if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/dashboard')) {
+            window.location.href = '/dashboard';
+          }
+        }, 350);
       }
     } catch (err: any) {
+      setRedirecting(false);
       toast.error(err?.response?.data?.error || 'Registration failed.');
-    } finally {
       setLoading(false);
-    }
-  };
-
-  const handleGoogleSuccess = async (credentialResponse: any) => {
-    if (!credentialResponse.credential) return;
-    try {
-      const payload = JSON.parse(atob(credentialResponse.credential.split('.')[1]));
-      setRegName(payload.name || '');
-      setRegEmail(payload.email || '');
-      setIsGoogleUser(true);
-      setGoogleCredential(credentialResponse.credential);
-      goToStep(1);
-      toast.success('Google account connected! Please complete your profile.');
-    } catch (err: any) {
-      toast.error('Google sign-up failed.');
     }
   };
 
@@ -225,7 +235,14 @@ export default function SignupPage() {
     );
   }
 
-  if (isAuthenticated) return null;
+  if (redirecting || (isAuthenticated && !authLoading)) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-64px)] min-h-[calc(100dvh-64px)] bg-[#faf9f6]">
+        <div className="w-10 h-10 border-4 border-[#c5a880] border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-xs font-bold text-slate-600 uppercase tracking-wider font-poppins">Opening Your Studio Dashboard...</p>
+      </div>
+    );
+  }
 
   const stepLabels = ['Personal', 'Studio', 'Security'];
 
@@ -234,7 +251,7 @@ export default function SignupPage() {
     in: { x: 0, opacity: 1 },
     out: (direction: 'next' | 'prev') => ({ x: direction === 'next' ? -40 : 40, opacity: 0 })
   };
-  const transition = { type: 'tween', ease: 'anticipate', duration: 0.4 };
+  const transition: any = { type: 'tween', ease: 'anticipate', duration: 0.4 };
 
   return (
     <PublicWrapper>
@@ -518,18 +535,19 @@ export default function SignupPage() {
                 <div className="flex-1 h-px bg-slate-200"></div>
               </div>
               
-              <div className="flex justify-center w-full max-w-full overflow-hidden">
-                 <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || 'dummy-client-id'}>
-                   <GoogleLogin
-                     onSuccess={handleGoogleSuccess}
-                     onError={() => toast.error('Google Sign-In failed')}
-                     theme="outline"
-                     size="large"
-                     text="continue_with"
-                     shape="pill"
-                     width={240}
-                   />
-                 </GoogleOAuthProvider>
+              <div className="w-full">
+                <GoogleAuthButton
+                  text="Sign up with Google"
+                  disabled={loading}
+                  onSuccess={async ({ accessToken, email, name }) => {
+                    setRegName(name || '');
+                    setRegEmail(email || '');
+                    setIsGoogleUser(true);
+                    setGoogleAccessToken(accessToken);
+                    goToStep(1);
+                    toast.success('Google account connected! Please complete your profile.');
+                  }}
+                />
               </div>
             </motion.div>
           )}

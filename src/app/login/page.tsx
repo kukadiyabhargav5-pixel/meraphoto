@@ -7,7 +7,7 @@ import { Eye, EyeOff, Loader, ArrowRight, Mail, Lock } from 'lucide-react';
 import { useAuth } from '../../lib/AuthContext';
 import PublicWrapper from '../../components/PublicWrapper';
 import toast from 'react-hot-toast';
-import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
+import GoogleAuthButton from '../../components/GoogleAuthButton';
 
 export default function LoginPage() {
   const [loginEmail, setLoginEmail] = useState('');
@@ -17,6 +17,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const { login, googleLogin, isAuthenticated, loading: authLoading } = useAuth();
   const router = useRouter();
+
+  // Prefetch targets
+  useEffect(() => {
+    router.prefetch('/dashboard');
+    router.prefetch('/admin-choice');
+  }, [router]);
 
   // Redirect to dashboard if already logged in
   useEffect(() => {
@@ -64,42 +70,31 @@ export default function LoginPage() {
         localStorage.removeItem('rememberedEmail');
       }
       
-      toast.success('Login successful!');
+      toast.success('Login successful! Entering dashboard...');
       
       const userStr = localStorage.getItem('user');
+      let targetPath = '/dashboard';
       if (userStr) {
-        const userObj = JSON.parse(userStr);
-        if (userObj.role === 'SUPER_ADMIN') {
-          router.push('/admin-choice');
-          return;
-        }
+        try {
+          const userObj = JSON.parse(userStr);
+          if (userObj.role === 'SUPER_ADMIN') {
+            targetPath = '/admin-choice';
+          }
+        } catch (e) {}
       }
       
-      router.push('/dashboard');
+      router.replace(targetPath);
+      setTimeout(() => {
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith(targetPath)) {
+          window.location.href = targetPath;
+        }
+      }, 350);
     } catch (err: any) {
       toast.error(err?.response?.data?.error || 'Login failed. Please check your credentials.');
-    } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleSuccess = async (credentialResponse: any) => {
-    if (!credentialResponse.credential) return;
-    try {
-      setLoading(true);
-      if (googleLogin) {
-        await googleLogin(credentialResponse.credential);
-        toast.success('Google login successful!');
-        router.push('/dashboard');
-      } else {
-         toast.error("Google login method not implemented in AuthContext.");
-      }
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Google login failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Don't render login page if already authenticated
   if (authLoading) {
@@ -110,7 +105,14 @@ export default function LoginPage() {
     );
   }
 
-  if (isAuthenticated) return null;
+  if (isAuthenticated && !authLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-64px)] min-h-[calc(100dvh-64px)] bg-[#faf9f6]">
+        <div className="w-10 h-10 border-4 border-[#c5a880] border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-xs font-bold text-slate-600 uppercase tracking-wider font-poppins">Entering Dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <PublicWrapper>
@@ -188,18 +190,25 @@ export default function LoginPage() {
             <div className="flex-1 h-px bg-slate-200"></div>
           </div>
           
-          <div className="flex justify-center w-full max-w-full overflow-hidden">
-             <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || 'dummy-client-id'}>
-               <GoogleLogin
-                 onSuccess={handleGoogleSuccess}
-                 onError={() => toast.error('Google Sign-In failed')}
-                 theme="outline"
-                 size="large"
-                 text="continue_with"
-                 shape="pill"
-                 width={240}
-               />
-             </GoogleOAuthProvider>
+          <div className="w-full">
+            <GoogleAuthButton
+              text="Continue with Google"
+              disabled={loading}
+              onSuccess={async ({ accessToken }) => {
+                setLoading(true);
+                try {
+                  if (googleLogin) {
+                    await googleLogin(undefined, accessToken);
+                    toast.success('Google login successful!');
+                    router.push('/dashboard');
+                  }
+                } catch (err: any) {
+                  toast.error(err?.response?.data?.error || 'Google login failed.');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+            />
           </div>
 
           <div className="mt-6 sm:mt-8 text-center text-xs sm:text-[13px] font-semibold text-slate-500">

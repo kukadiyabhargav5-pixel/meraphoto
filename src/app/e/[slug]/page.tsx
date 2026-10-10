@@ -223,7 +223,11 @@ export default function ClientGallery() {
       if (res.data.event.accessType === 'PASSWORD' || res.data.event.accessType === 'OTP') {
         setIsLocked(true);
       } else {
-        fetchGalleryMedia(res.data.event._id);
+        if (res.data.media) {
+          setMedia(res.data.media);
+        } else {
+          fetchGalleryMedia(res.data.event._id);
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -235,9 +239,12 @@ export default function ClientGallery() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const guestStatus = localStorage.getItem(`mara_guest_${slug}`);
-      if (guestStatus === 'true') {
+      const guestRegistered = localStorage.getItem(`mara_guest_registered_${slug}`);
+      if (guestRegistered === 'true') {
         setIsGuest(true);
+      } else {
+        localStorage.removeItem(`mara_guest_${slug}`);
+        setIsGuest(false);
       }
     }
     fetchEventData();
@@ -324,22 +331,34 @@ export default function ClientGallery() {
   const handleGuestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setGuestError('');
-    setGuestSubmitting(true);
     
-    if (!guestName.trim() || !guestPhone.trim()) {
-      setGuestError('Name and Phone are required.');
-      setGuestSubmitting(false);
+    if (!guestName.trim()) {
+      setGuestError('Full Name is required.');
       return;
     }
 
+    const cleanPhone = guestPhone.trim().replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      setGuestError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
+    if (guestEmail.trim() && !/^\S+@\S+\.\S+$/.test(guestEmail.trim())) {
+      setGuestError('Please enter a valid email address or leave it empty.');
+      return;
+    }
+
+    setGuestSubmitting(true);
+
     try {
       await apiClient.post(`/visitors/event/code/${slug}`, {
-        name: guestName,
-        phone: guestPhone,
-        email: guestEmail
+        name: guestName.trim(),
+        phone: guestPhone.trim(),
+        email: guestEmail.trim()
       });
       
       localStorage.setItem(`mara_guest_${slug}`, 'true');
+      localStorage.setItem(`mara_guest_registered_${slug}`, 'true');
       setIsGuest(true);
     } catch (err: any) {
       console.error(err);
@@ -382,10 +401,16 @@ export default function ClientGallery() {
       let stream: MediaStream | null = null;
       try {
         stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } 
+          video: { facingMode: 'user', width: { ideal: 1080 }, height: { ideal: 1440 } } 
         });
       } catch {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } 
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
       }
       setWebcamStream(stream);
       if (videoRef.current) {
@@ -743,22 +768,10 @@ export default function ClientGallery() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col relative selection:bg-orange-500 selection:text-white">
-      {/* 2. Guest Sign-In Modal (Non-blocking) */}
+      {/* 2. Guest Sign-In Modal (Mandatory) */}
       {!isGuest && !isLocked && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 xs:p-4 sm:p-6 overflow-y-auto">
           <div className="w-full max-w-md bg-white border border-[#e5e7eb] p-5 xs:p-6 sm:p-10 rounded-2xl sm:rounded-3xl text-center shadow-2xl relative my-auto animate-in zoom-in-95 duration-200">
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem(`mara_guest_${slug}`, 'true');
-                }
-                setIsGuest(true);
-              }}
-              className="absolute top-3.5 right-3.5 text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition-colors cursor-pointer min-h-[36px] flex items-center justify-center"
-            >
-              Skip ✕
-            </button>
             <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#fdfbf9] border border-[#c5a880]/20 flex items-center justify-center mx-auto mb-4 sm:mb-6">
               <User className="h-6 w-6 text-[#c5a880]" />
             </div>
@@ -767,7 +780,9 @@ export default function ClientGallery() {
             
             <form onSubmit={handleGuestSubmit} className="flex flex-col gap-3.5 sm:gap-5 text-left">
               <div>
-                <label className="text-[11px] font-bold text-[#4b5563] mb-1.5 block uppercase tracking-wider">Full Name *</label>
+                <label className="text-[11px] font-bold text-[#4b5563] mb-1.5 block uppercase tracking-wider">
+                  Full Name <span className="text-rose-500">*</span>
+                </label>
                 <div className="relative">
                   <input 
                     type="text" 
@@ -781,13 +796,16 @@ export default function ClientGallery() {
               </div>
               
               <div>
-                <label className="text-[11px] font-bold text-[#4b5563] mb-1.5 block uppercase tracking-wider">Phone Number *</label>
+                <label className="text-[11px] font-bold text-[#4b5563] mb-1.5 block uppercase tracking-wider">
+                  Phone / Mobile Number <span className="text-rose-500">*</span>
+                </label>
                 <div className="relative">
                   <input 
                     type="tel" 
                     required
+                    maxLength={10}
                     value={guestPhone}
-                    onChange={(e) => setGuestPhone(e.target.value)}
+                    onChange={(e) => setGuestPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     className="w-full bg-[#fcfcfc] border border-[#e5e7eb] rounded-xl px-4 py-3 sm:py-3.5 pl-11 text-base sm:text-sm text-[#111827] focus:outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880] focus:bg-white transition-all shadow-sm"
                   />
                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#9ca3af]" />
@@ -795,7 +813,9 @@ export default function ClientGallery() {
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-[#4b5563] mb-1.5 block uppercase tracking-wider">Email Address (Optional)</label>
+                <label className="text-[11px] font-bold text-[#4b5563] mb-1.5 block uppercase tracking-wider">
+                  Email Address <span className="text-slate-400 font-normal lowercase">(optional)</span>
+                </label>
                 <div className="relative">
                   <input 
                     type="email" 
@@ -820,19 +840,6 @@ export default function ClientGallery() {
                 className="mt-3 sm:mt-5 bg-[#c5a880] hover:bg-[#b09672] active:scale-95 text-[#09090b] font-extrabold py-3.5 sm:py-4 rounded-xl text-sm transition-all shadow-[0_4px_14px_0_rgba(197,168,128,0.39)] w-full flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer min-h-[44px]"
               >
                 {guestSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Enter Gallery'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    localStorage.setItem(`mara_guest_${slug}`, 'true');
-                  }
-                  setIsGuest(true);
-                }}
-                className="mt-1 text-xs font-bold text-slate-500 hover:text-slate-900 underline text-center cursor-pointer py-2 min-h-[44px] flex items-center justify-center"
-              >
-                Skip and Browse Photos Directly
               </button>
             </form>
           </div>
@@ -861,7 +868,7 @@ export default function ClientGallery() {
               />
             </div>
             {event?.studioId?.name && (
-              <span className="font-extrabold text-[11px] sm:text-sm tracking-wider sm:tracking-widest text-[#c5a880] uppercase truncate max-w-[100px] xs:max-w-[140px] sm:max-w-[200px]">
+              <span className="font-extrabold text-xs sm:text-sm tracking-wider sm:tracking-widest text-[#c5a880] uppercase whitespace-nowrap">
                 {event?.studioId?.name}
               </span>
             )}
@@ -1563,7 +1570,7 @@ export default function ClientGallery() {
                     <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                       {webcamStream ? (
                         <>
-                          <div className="w-full rounded-3xl border-2 border-[#c5a880]/50 overflow-hidden bg-slate-950 relative shadow-[0_0_30px_rgba(197,168,128,0.25)] group">
+                          <div className="relative w-full aspect-[4/5] sm:aspect-[4/3] max-h-[50vh] sm:max-h-[420px] rounded-3xl border-2 border-[#c5a880]/50 overflow-hidden bg-slate-950 shadow-[0_0_30px_rgba(197,168,128,0.25)] group flex items-center justify-center">
                             <video 
                               ref={(node) => {
                                 (videoRef as any).current = node;
@@ -1575,7 +1582,23 @@ export default function ClientGallery() {
                               autoPlay 
                               playsInline 
                               muted 
-                              className="w-full h-auto max-h-[50vh] object-contain scale-x-[-1] opacity-90 transition-opacity duration-300 group-hover:opacity-100" 
+                              className="scanner-live-video"
+                              style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                height: '100%',
+                                minWidth: '100%',
+                                minHeight: '100%',
+                                maxWidth: '100%',
+                                maxHeight: '100%',
+                                objectFit: 'cover',
+                                objectPosition: 'center',
+                                transform: 'scaleX(-1)',
+                                WebkitTransform: 'scaleX(-1)',
+                                zIndex: 1,
+                              }}
                             />
                             
                             {/* Shutter flash effect */}
@@ -1584,14 +1607,14 @@ export default function ClientGallery() {
                             )}
 
                             {/* Face guide overlay */}
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                              <div className="w-40 sm:w-56 h-40 sm:h-56 border-2 border-[#c5a880] rounded-full border-dashed shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-500 group-hover:scale-105" />
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                              <div className="w-40 sm:w-56 h-48 sm:h-64 border-2 border-[#c5a880] rounded-[48%] border-dashed shadow-[0_0_0_9999px_rgba(0,0,0,0.30)] transition-all duration-500 group-hover:scale-105" />
                               {/* Scanning laser */}
                               <div className="absolute w-40 sm:w-56 h-0.5 bg-gradient-to-r from-transparent via-[#c5a880] to-transparent animate-scan-laser shadow-[0_0_12px_rgba(197,168,128,0.9)]" />
                             </div>
-                            <div className="absolute bottom-3 sm:bottom-6 left-0 right-0 text-center animate-pulse-soft">
+                            <div className="absolute bottom-3 sm:bottom-6 left-0 right-0 text-center animate-pulse-soft z-20">
                               <span className="text-[9px] sm:text-[10px] tracking-widest text-white font-mono font-bold bg-black/80 backdrop-blur-md px-3 sm:px-6 py-1 sm:py-2 rounded-full border border-white/20 shadow-lg">
-                                ALIGN FACE IN CIRCLE
+                                ALIGN FACE IN OVAL
                               </span>
                             </div>
                           </div>
@@ -1866,19 +1889,7 @@ export default function ClientGallery() {
         </div>
       )}
 
-      {/* ── Raise a Ticket Floating Button ── */}
-      {!isLocked && event && (
-        <button
-          onClick={() => setTicketModalOpen(true)}
-          className="fixed bottom-6 right-6 bg-[#c5a880] hover:bg-[#b09672] text-[#09090b] p-4 rounded-full shadow-[0_10px_25px_rgba(197,168,128,0.4)] transition-all z-40 hover:-translate-y-1 flex items-center justify-center group"
-          title="Raise a Ticket / Complaint"
-        >
-          <HelpCircle className="w-6 h-6" />
-          <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 group-hover:max-w-xs group-hover:opacity-100 group-hover:ml-2 font-bold text-sm transition-all duration-300">
-            Raise a Ticket
-          </span>
-        </button>
-      )}
+
 
       {/* ── Raise a Ticket Modal ── */}
       {ticketModalOpen && (

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
 import { apiClient } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Plus, X, Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRight, Edit2, Trash2, Camera, Video, Bell, AlertTriangle } from 'lucide-react';
+import { Plus, X, Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRight, Edit2, Trash2, Camera, Video, Bell, AlertTriangle, Loader } from 'lucide-react';
 import CustomDatePicker from '../../../components/CustomDatePicker';
 
 const EVENT_TYPES = [
@@ -818,7 +818,7 @@ export default function CalendarPage() {
             <div className="p-6 border-t border-slate-100 bg-[#f8f7f4] text-slate-900/50 flex justify-end">
               <button 
                 onClick={() => setViewingShoot(null)} 
-                className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-900 rounded-xl text-sm font-bold shadow-md transition-colors"
+                className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors cursor-pointer"
               >
                 Close Details
               </button>

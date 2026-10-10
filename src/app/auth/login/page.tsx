@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+import { Loader2 } from 'lucide-react';
 
 function RedirectContent() {
   const router = useRouter();
@@ -18,10 +19,15 @@ function RedirectContent() {
   }, [router, searchParams]);
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#faf9f6' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div className="animate-spin" style={{ width: '32px', height: '32px', border: '3px solid #e3d8c8', borderTopColor: '#c5a880', borderRadius: '50%', margin: '0 auto 16px' }} />
-        <p style={{ fontSize: '14px', color: '#6b7280', fontWeight: 600 }}>Redirecting...</p>
+    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#faf9f6] p-4 overscroll-none select-none">
+      <div className="flex flex-col items-center justify-center text-center">
+        <div className="relative flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 mb-4">
+          <div className="absolute inset-0 rounded-full bg-[#c5a880]/15 blur-md animate-pulse" />
+          <Loader2 className="w-10 h-10 sm:w-11 sm:h-11 text-[#c5a880] animate-spin relative z-10 stroke-[2.25]" />
+        </div>
+        <p className="text-xs sm:text-sm font-bold tracking-widest uppercase text-slate-500 font-sans">
+          Redirecting...
+        </p>
       </div>
     </div>
   );
@@ -30,8 +36,16 @@ function RedirectContent() {
 export default function AuthLoginRedirect() {
   return (
     <Suspense fallback={
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#faf9f6' }}>
-        <p style={{ fontSize: '14px', color: '#6b7280', fontWeight: 600 }}>Loading...</p>
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#faf9f6] p-4 overscroll-none select-none">
+        <div className="flex flex-col items-center justify-center text-center">
+          <div className="relative flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 mb-4">
+            <div className="absolute inset-0 rounded-full bg-[#c5a880]/15 blur-md animate-pulse" />
+            <Loader2 className="w-10 h-10 sm:w-11 sm:h-11 text-[#c5a880] animate-spin relative z-10 stroke-[2.25]" />
+          </div>
+          <p className="text-xs sm:text-sm font-bold tracking-widest uppercase text-slate-500 font-sans">
+            Loading...
+          </p>
+        </div>
       </div>
     }>
       <RedirectContent />

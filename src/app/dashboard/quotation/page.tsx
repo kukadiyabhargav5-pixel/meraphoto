@@ -589,7 +589,7 @@ export default function QuotationPage() {
                         status: newQuoteStatus || 'Pending'
                       };
                       
-                      let res;
+                      let res: any;
                       if (editingId) {
                         res = await apiClient.put(`/dashboard/quotations/${editingId}`, reqBody);
                         setQuotations(quotations.map((q: any) => (q._id || q.id) === editingId ? res.data : q));
