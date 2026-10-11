@@ -651,19 +651,39 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
               {event.name}
             </h1>
             {(() => {
-              const baseDateStr = event.date || event.createdAt;
-              if (!baseDateStr) return null;
-              const baseDate = new Date(baseDateStr);
+              let createdDate: Date;
+              if (event.createdAt) {
+                createdDate = new Date(event.createdAt);
+              } else if (event._id && typeof event._id === 'string' && event._id.length === 24) {
+                try {
+                  createdDate = new Date(parseInt(event._id.substring(0, 8), 16) * 1000);
+                } catch {
+                  createdDate = new Date(event.date || Date.now());
+                }
+              } else if (event.date) {
+                createdDate = new Date(event.date);
+              } else {
+                return null;
+              }
+
               const now = new Date();
               const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-              const baseMidnight = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()).getTime();
-              const diffDays = Math.floor((todayMidnight - baseMidnight) / (1000 * 60 * 60 * 24));
-              const days = diffDays <= 0 ? 30 : Math.max(0, 30 - diffDays);
+              const createdMidnight = new Date(createdDate.getFullYear(), createdDate.getMonth(), createdDate.getDate()).getTime();
+              const diffDays = Math.max(0, Math.floor((todayMidnight - createdMidnight) / (1000 * 60 * 60 * 24)));
+              const days = typeof event.daysLeft === 'number' ? event.daysLeft : Math.max(0, 30 - diffDays);
               const label = days === 0 ? 'Expires today' : `${days} ${days === 1 ? 'day' : 'days'} left`;
+              const isUrgent = days <= 1;
+              const isWarning = days <= 5;
               return (
-                <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200/80 shadow-xs shrink-0">
-                  <Clock className={`w-3.5 h-3.5 ${days <= 5 ? 'text-rose-500 animate-pulse' : 'text-[#c5a880]'}`} />
-                  <span>{label}</span>
+                <span className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold border shadow-xs shrink-0 transition-colors ${
+                  isUrgent
+                    ? 'bg-rose-50 text-rose-700 border-rose-300'
+                    : isWarning
+                    ? 'bg-amber-50 text-amber-800 border-amber-200/80'
+                    : 'bg-slate-50 text-slate-700 border-slate-200/80'
+                }`}>
+                  <Clock className={`w-3.5 h-3.5 ${isUrgent ? 'text-rose-600 animate-pulse' : isWarning ? 'text-amber-500' : 'text-[#c5a880]'}`} />
+                  <span className={isUrgent ? 'font-black tracking-tight' : ''}>{label}</span>
                 </span>
               );
             })()}
