@@ -672,22 +672,29 @@ export default function DedicatedFaceScanPage() {
       const folderName = `${targetEvent?.name || 'My'}_Photos`;
       const imgFolder = zip.folder(folderName) || zip;
 
-      for (let i = 0; i < matchedPhotos.length; i++) {
-        const item = matchedPhotos[i];
-        const url = resolveMediaUrl(item);
-        if (!url) continue;
+      const BATCH_SIZE = 4;
+      let completedCount = 0;
+      for (let i = 0; i < matchedPhotos.length; i += BATCH_SIZE) {
+        const batch = matchedPhotos.slice(i, i + BATCH_SIZE);
+        await Promise.all(
+          batch.map(async (item: any, bIdx: number) => {
+            const url = resolveMediaUrl(item);
+            if (!url) return;
 
-        try {
-          const resp = await fetch(url);
-          const blob = await resp.blob();
-          const ext = item.type === 'VIDEO' ? 'mp4' : 'jpg';
-          const filename = item.originalName || `photo_${i + 1}.${ext}`;
-          imgFolder.file(filename, blob);
-        } catch (fetchErr) {
-          console.warn('Failed to fetch image for zip:', fetchErr);
-        }
-
-        setDownloadProgress(30 + Math.round(((i + 1) / matchedPhotos.length) * 45));
+            try {
+              const resp = await fetch(url);
+              const blob = await resp.blob();
+              const ext = item.type === 'VIDEO' ? 'mp4' : 'jpg';
+              const filename = item.originalName || `photo_${i + bIdx + 1}.${ext}`;
+              imgFolder.file(filename, blob);
+            } catch (fetchErr) {
+              console.warn('Failed to fetch image for zip:', fetchErr);
+            } finally {
+              completedCount++;
+              setDownloadProgress(30 + Math.round((completedCount / matchedPhotos.length) * 45));
+            }
+          })
+        );
       }
 
       setDownloadProgress(80);

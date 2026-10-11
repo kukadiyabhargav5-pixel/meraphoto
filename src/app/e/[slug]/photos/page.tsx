@@ -279,12 +279,24 @@ export default function EventPhotosPage() {
 
       const zip = new JSZip();
       
-      for (let i = 0; i < downloads.length; i++) {
-        const item = downloads[i];
-        const response = await fetch(item.url);
-        const blob = await response.blob();
-        zip.file(item.filename || `photo_${i+1}.jpg`, blob);
-        setDownloadProgress(Math.round(((i + 1) / downloads.length) * 50));
+      const BATCH_SIZE = 4;
+      let completedCount = 0;
+      for (let i = 0; i < downloads.length; i += BATCH_SIZE) {
+        const batch = downloads.slice(i, i + BATCH_SIZE);
+        await Promise.all(
+          batch.map(async (item: any, bIdx: number) => {
+            try {
+              const response = await fetch(item.url);
+              const blob = await response.blob();
+              zip.file(item.filename || `photo_${i + bIdx + 1}.jpg`, blob);
+            } catch (err) {
+              console.warn('Failed to fetch photo for zip:', err);
+            } finally {
+              completedCount++;
+              setDownloadProgress(Math.round((completedCount / downloads.length) * 55));
+            }
+          })
+        );
       }
 
       setDownloadProgress(60);
