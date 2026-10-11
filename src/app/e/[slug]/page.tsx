@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import confetti from 'canvas-confetti';
 import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy, ZoomIn, Play, ShieldCheck, RefreshCw, ScanFace, ChevronRight, ChevronLeft, ChevronDown, LayoutGrid, Sliders, X, Download, Loader, Sparkles, CalendarDays, Lock, Key, AlertCircle, Search, HelpCircle, Send, CheckCircle, Globe } from 'lucide-react';
-import { apiClient } from '@/lib/api';
+import { apiClient, resolveMediaUrl as globalResolveMediaUrl } from '@/lib/api';
 import { MasonryPhotoAlbum, RowsPhotoAlbum } from "react-photo-album";
 import "react-photo-album/masonry.css";
 import "react-photo-album/rows.css";
@@ -131,18 +131,18 @@ export default function ClientGallery() {
   const resolveMediaUrl = (m: any, isThumbnail = false) => {
     if (!m) return '';
     if (m.type === 'VIDEO' && isThumbnail) {
-      if (m.thumbnailUrl && !m.thumbnailUrl.endsWith('.mp4')) return m.thumbnailUrl;
+      if (m.thumbnailUrl && !m.thumbnailUrl.endsWith('.mp4')) return globalResolveMediaUrl(m.thumbnailUrl);
       const base = m.compressedUrl || m.url || m.r2Url || '';
       if (base.includes('imagekit.io')) {
         return `${base}/ik-thumbnail.jpg`;
       }
-      return m.thumbnailUrl || base;
+      return globalResolveMediaUrl(m.thumbnailUrl || base);
     }
     if (isThumbnail && m.thumbnailUrl && !m.thumbnailUrl.endsWith('.mp4')) {
-      return m.thumbnailUrl;
+      return globalResolveMediaUrl(m.thumbnailUrl);
     }
-    const url = (isThumbnail && m.thumbnailUrl ? m.thumbnailUrl : null) || m.compressedUrl || m.thumbnailUrl || m.url || m.r2Url || '';
-    if (url.startsWith('localdb://')) {
+    const url = (isThumbnail && m.thumbnailUrl ? m.thumbnailUrl : null) || m.compressedUrl || m.thumbnailUrl || m.url || m.r2Url || m.r2Key || '';
+    if (typeof url === 'string' && url.startsWith('localdb://')) {
       const id = url.replace('localdb://', '');
       if (localUrls[id]) return localUrls[id];
       
@@ -154,7 +154,7 @@ export default function ClientGallery() {
       });
       return '';
     }
-    return url;
+    return globalResolveMediaUrl(url || m, isThumbnail);
   };
 
   // Lightbox / Detail view

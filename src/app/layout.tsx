@@ -49,6 +49,42 @@ export default function RootLayout({
         <link rel="icon" href="/studio-gold-icon.png" type="image/png" />
         <link rel="shortcut icon" href="/studio-gold-icon.png" type="image/png" />
         <link rel="apple-touch-icon" href="/studio-gold-icon.png" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                function shouldReload(err) {
+                  var msg = (err && (err.message || err.toString())) || '';
+                  return msg.indexOf("reading 'call'") !== -1 ||
+                         msg.indexOf("Cannot read properties of undefined (reading 'call')") !== -1 ||
+                         msg.indexOf("Loading chunk") !== -1 ||
+                         msg.indexOf("ChunkLoadError") !== -1;
+                }
+                window.addEventListener('error', function(e) {
+                  if (shouldReload(e && e.error ? e.error : e)) {
+                    var lock = sessionStorage.getItem('chunk_reload_lock');
+                    if (!lock) {
+                      sessionStorage.setItem('chunk_reload_lock', '1');
+                      window.location.reload();
+                    }
+                  }
+                });
+                window.addEventListener('unhandledrejection', function(e) {
+                  if (shouldReload(e && e.reason ? e.reason : e)) {
+                    var lock = sessionStorage.getItem('chunk_reload_lock');
+                    if (!lock) {
+                      sessionStorage.setItem('chunk_reload_lock', '1');
+                      window.location.reload();
+                    }
+                  }
+                });
+                setTimeout(function() {
+                  sessionStorage.removeItem('chunk_reload_lock');
+                }, 4000);
+              })();
+            `,
+          }}
+        />
       </head>
       <body className="min-h-full flex flex-col">
         {/* Global initial page loader */}

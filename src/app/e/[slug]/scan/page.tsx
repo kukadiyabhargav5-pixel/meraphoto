@@ -12,7 +12,7 @@ import {
   Loader, ZoomIn, Share2, Layers, CheckCircle2, ChevronRight,
   ChevronLeft, Eye, Heart, Image as ImageIcon, Video
 } from 'lucide-react';
-import { apiClient } from '@/lib/api';
+import { apiClient, resolveMediaUrl as globalResolveMediaUrl } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 const dbName = 'MeraPhotoDB';
@@ -154,16 +154,16 @@ export default function DedicatedFaceScanPage() {
   const resolveMediaUrl = useCallback((m: any, isThumbnail = false) => {
     if (!m) return '';
     if (m.type === 'VIDEO' && isThumbnail) {
-      if (m.thumbnailUrl && !m.thumbnailUrl.endsWith('.mp4')) return m.thumbnailUrl;
+      if (m.thumbnailUrl && !m.thumbnailUrl.endsWith('.mp4')) return globalResolveMediaUrl(m.thumbnailUrl);
       const base = m.compressedUrl || m.url || m.r2Url || '';
       if (base.includes('imagekit.io')) return `${base}/ik-thumbnail.jpg`;
-      return m.thumbnailUrl || base;
+      return globalResolveMediaUrl(m.thumbnailUrl || base);
     }
     if (isThumbnail && m.thumbnailUrl && !m.thumbnailUrl.endsWith('.mp4')) {
-      return m.thumbnailUrl;
+      return globalResolveMediaUrl(m.thumbnailUrl);
     }
-    const url = (isThumbnail && m.thumbnailUrl ? m.thumbnailUrl : null) || m.compressedUrl || m.thumbnailUrl || m.url || m.r2Url || '';
-    if (url.startsWith('localdb://')) {
+    const url = (isThumbnail && m.thumbnailUrl ? m.thumbnailUrl : null) || m.compressedUrl || m.thumbnailUrl || m.url || m.r2Url || m.r2Key || '';
+    if (typeof url === 'string' && url.startsWith('localdb://')) {
       const id = url.replace('localdb://', '');
       if (localUrls[id]) return localUrls[id];
       getLocalFile(id).then((file) => {
@@ -174,7 +174,7 @@ export default function DedicatedFaceScanPage() {
       });
       return '';
     }
-    return url;
+    return globalResolveMediaUrl(url || m, isThumbnail);
   }, [localUrls]);
 
   // ── Camera Management ──────────────────────────
@@ -1382,7 +1382,7 @@ export default function DedicatedFaceScanPage() {
                           className="w-full h-full object-cover smooth-zoom-img"
                           loading="lazy"
                           onError={(e) => {
-                            const fallback = photo.r2Url || photo.thumbnailUrl || photo.url;
+                            const fallback = resolveMediaUrl(photo, false) || globalResolveMediaUrl(photo.r2Key || photo.compressedUrl || photo.r2Url || photo.url);
                             if (fallback && e.currentTarget.src !== fallback) {
                               e.currentTarget.src = fallback;
                             }
@@ -1494,6 +1494,12 @@ export default function DedicatedFaceScanPage() {
               src={resolveMediaUrl(selectedPhoto)}
               alt="Full Size View"
               className="max-h-[75vh] sm:max-h-[82vh] max-w-[95vw] sm:max-w-full object-contain rounded-xl sm:rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-white/10"
+              onError={(e) => {
+                const fb = globalResolveMediaUrl(selectedPhoto?.r2Key || selectedPhoto?.compressedUrl || selectedPhoto?.thumbnailUrl || selectedPhoto?.url);
+                if (fb && e.currentTarget.src !== fb) {
+                  e.currentTarget.src = fb;
+                }
+              }}
             />
 
             {/* Next Button */}

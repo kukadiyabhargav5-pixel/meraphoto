@@ -7,7 +7,7 @@ import { Lock, Key, AlertCircle, Loader, ChevronLeft, ChevronRight, X, Camera, S
 import confetti from 'canvas-confetti';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { apiClient } from '../../../../lib/api';
+import { apiClient, resolveMediaUrl as globalResolveMediaUrl } from '../../../../lib/api';
 import toast from 'react-hot-toast';
 
 const dbName = 'MeraPhotoDB';
@@ -126,16 +126,16 @@ export default function EventPhotosPage() {
   const resolveMediaUrl = (m: any, isThumbnail = false) => {
     if (!m) return '';
     if (m.type === 'VIDEO' && isThumbnail) {
-      if (m.thumbnailUrl && !m.thumbnailUrl.endsWith('.mp4')) return m.thumbnailUrl;
+      if (m.thumbnailUrl && !m.thumbnailUrl.endsWith('.mp4')) return globalResolveMediaUrl(m.thumbnailUrl);
       const base = m.compressedUrl || m.url || m.r2Url || '';
       if (base.includes('imagekit.io')) return `${base}/ik-thumbnail.jpg`;
-      return m.thumbnailUrl || base;
+      return globalResolveMediaUrl(m.thumbnailUrl || base);
     }
     if (isThumbnail && m.thumbnailUrl && !m.thumbnailUrl.endsWith('.mp4')) {
-      return m.thumbnailUrl;
+      return globalResolveMediaUrl(m.thumbnailUrl);
     }
-    const url = (isThumbnail && m.thumbnailUrl ? m.thumbnailUrl : null) || m.compressedUrl || m.thumbnailUrl || m.url || m.r2Url || '';
-    if (url.startsWith('localdb://')) {
+    const url = (isThumbnail && m.thumbnailUrl ? m.thumbnailUrl : null) || m.compressedUrl || m.thumbnailUrl || m.url || m.r2Url || m.r2Key || '';
+    if (typeof url === 'string' && url.startsWith('localdb://')) {
       const id = url.replace('localdb://', '');
       if (localUrls[id]) return localUrls[id];
       
@@ -147,7 +147,7 @@ export default function EventPhotosPage() {
       });
       return '';
     }
-    return url;
+    return globalResolveMediaUrl(url || m, isThumbnail);
   };
 
   const fetchPhotos = async (eventId: string) => {

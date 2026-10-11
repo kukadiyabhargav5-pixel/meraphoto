@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import CustomDatePicker from '../../../components/CustomDatePicker';
 import { useRouter } from 'next/navigation';
-import { apiClient } from '@/lib/api';
+import { apiClient, resolveMediaUrl } from '@/lib/api';
 import { useDashboard } from '../DashboardContext';
 import toast from 'react-hot-toast';
 
@@ -71,7 +71,7 @@ export default function CreateEventPage() {
       setCoverDimensions({ width: w, height: h });
       setRatioMismatch(!is16by9);
     };
-    img.src = coverImage;
+    img.src = resolveMediaUrl(coverImage);
   }, [coverImage]);
 
   // Step 5: Watermark & Portfolio
@@ -1038,7 +1038,7 @@ export default function CreateEventPage() {
                         <div className="relative w-full aspect-[16/9] rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-[#c5a880] bg-slate-950 shadow-md group transition-all duration-300">
                           {/* Full Image in 1920 × 1080 (16:9) frame */}
                           <img 
-                            src={coverImage} 
+                            src={resolveMediaUrl(coverImage)} 
                             alt="Cover" 
                             className="w-full h-full object-cover block mx-auto select-none transition-transform duration-700 group-hover:scale-105" 
                           />
@@ -1201,7 +1201,7 @@ export default function CreateEventPage() {
                                   {uploadingWatermark ? (
                                     <Loader2 className="h-5 w-5 animate-spin text-[#c5a880]" />
                                   ) : (watermarkLogoUrl ? (
-                                    <img src={watermarkLogoUrl} className="max-w-[44px] max-h-[44px] object-contain" alt="WM" />
+                                    <img src={resolveMediaUrl(watermarkLogoUrl)} className="max-w-[44px] max-h-[44px] object-contain" alt="WM" />
                                   ) : (
                                     <Camera className="h-5 w-5 text-slate-400" />
                                   ))}

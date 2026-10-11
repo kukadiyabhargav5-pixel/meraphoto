@@ -3,7 +3,7 @@ import React, { useState, useEffect, use, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, CheckCircle, Copy, ChevronDown, LayoutGrid, Sparkles, Crown, ArrowRight, ShieldCheck, Flame, RefreshCw, ZoomIn, Play, X, Clock, AlertTriangle, Zap, Activity, Gauge } from 'lucide-react';
-import { apiClient } from '@/lib/api';
+import { apiClient, resolveMediaUrl } from '@/lib/api';
 import toast from 'react-hot-toast';
 import CustomDatePicker from '../../../../components/CustomDatePicker';
 import { useAuth } from '../../../../lib/AuthContext';
@@ -539,10 +539,10 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
         customWatermark: !!event.watermark?.isActive,
         addToPortfolio: !!event.addToPortfolio,
         allowDownload: event.allowDownload !== undefined ? !!event.allowDownload : true,
-        coverImageUrl: event.coverImageUrl || '',
+        coverImageUrl: resolveMediaUrl(event.coverImageUrl || ''),
         watermarkType: event.watermark?.type || 'LOGO',
         watermarkText: event.watermark?.text || '',
-        watermarkLogoUrl: event.watermark?.logoUrl || '',
+        watermarkLogoUrl: resolveMediaUrl(event.watermark?.logoUrl || ''),
         watermarkPosition: event.watermark?.position || 'BOTTOM_RIGHT',
         watermarkWidth: event.watermark?.width || 20,
         watermarkOpacity: (event.watermark?.opacity !== undefined ? event.watermark.opacity * 100 : 50)
@@ -566,7 +566,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
       setCoverDimensions({ width: w, height: h });
       setCoverRatioMismatch(!is16by9);
     };
-    img.src = formData.coverImageUrl;
+    img.src = resolveMediaUrl(formData.coverImageUrl);
   }, [formData.coverImageUrl]);
 
   useEffect(() => {
@@ -1831,7 +1831,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-3">
                   <div className="w-full xs:w-44 aspect-video rounded-xl border border-slate-300 bg-slate-950 flex items-center justify-center overflow-hidden shrink-0 relative shadow-xs">
                     {formData.coverImageUrl ? (
-                      <img src={formData.coverImageUrl} alt="Cover" className="w-full h-full object-cover" />
+                      <img src={resolveMediaUrl(formData.coverImageUrl)} alt="Cover" className="w-full h-full object-cover" />
                     ) : (
                       <Camera className="h-6 w-6 text-slate-400" />
                     )}
@@ -2007,7 +2007,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                           <label className="edit-label">Watermark Logo Image</label>
                           <div className="flex gap-4 items-center mt-1">
                             <div className="w-[60px] h-[60px] rounded border border-dashed border-slate-300 flex items-center justify-center shrink-0 bg-[#f8f7f4] text-slate-900">
-                               {uploadingLogo ? <Loader2 className="h-5 w-5 animate-spin text-[#c5a880]" /> : (formData.watermarkLogoUrl ? <img src={formData.watermarkLogoUrl} className="max-w-[40px] max-h-[40px] object-contain" alt="Logo preview" /> : <Camera className="h-5 w-5 text-slate-400" />)}
+                               {uploadingLogo ? <Loader2 className="h-5 w-5 animate-spin text-[#c5a880]" /> : (formData.watermarkLogoUrl ? <img src={resolveMediaUrl(formData.watermarkLogoUrl)} className="max-w-[40px] max-h-[40px] object-contain" alt="Logo preview" /> : <Camera className="h-5 w-5 text-slate-400" />)}
                             </div>
                             <div className="flex-1 flex flex-col">
                               <label className="w-full text-center border border-slate-200 text-[#b69970] font-bold text-[13px] py-2 rounded-lg bg-white cursor-pointer hover:bg-[#f8f7f4] text-slate-900 transition-colors shadow-sm">
@@ -2085,7 +2085,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                          
                          {formData.watermarkType === 'LOGO' && formData.watermarkLogoUrl && (
                             <img 
-                              src={formData.watermarkLogoUrl} 
+                              src={resolveMediaUrl(formData.watermarkLogoUrl)}
                               className="absolute pointer-events-none object-contain"
                               style={{
                                 opacity: Number(formData.watermarkOpacity || 80) / 100,
