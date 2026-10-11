@@ -18,6 +18,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
   const [credits, setCredits] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isUpdatingDownload, setIsUpdatingDownload] = useState(false);
   const [showGalleryLink, setShowGalleryLink] = useState(false);
   const [hasSavedDetails, setHasSavedDetails] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -257,8 +258,15 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
         });
       }, 200);
 
-      // ── Step 4: 32 Parallel Turbo Streams Directly to Cloudflare R2 ──
-      const concurrency = Math.min(32, fileArray.length);
+      // ── Step 4: Optimized Parallel Turbo Streams Directly to Cloudflare R2 ──
+      let imageCompressionModule: any = null;
+      try {
+        imageCompressionModule = (await import('browser-image-compression')).default;
+      } catch {
+        imageCompressionModule = null;
+      }
+
+      const concurrency = Math.min(16, Math.max(2, fileArray.length));
 
       const worker = async () => {
         while (currentFileIndex < fileArray.length) {
@@ -271,20 +279,19 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
           let fileToUpload: File = file;
 
           // ⚡ SMART HIGH-SPEED PHOTO COMPRESSION:
-          // Photos > 2MB: Compress to <= 1.95MB via Web Worker (zero UI lag)
-          // Photos <= 2MB: Skip compression completely for raw gigabit throughput
-          if (!isVideo && file.size > 2 * 1024 * 1024) {
+          // Photos > 2.5MB: Compress via Web Worker with snappy 2s timeout
+          // Photos <= 2.5MB: Stream raw file straight to Cloudflare R2 for gigabit speed
+          if (!isVideo && file.size > 2.5 * 1024 * 1024 && imageCompressionModule) {
             try {
-              const imageCompression = (await import('browser-image-compression')).default;
-              const compPromise = imageCompression(file, {
-                maxSizeMB: 1.95, // Strictly under 2MB target
-                maxWidthOrHeight: 2560, // Crystal-clear 2.5K/4K resolution preservation
+              const compPromise = imageCompressionModule(file, {
+                maxSizeMB: 2.0,
+                maxWidthOrHeight: 2560,
                 useWebWorker: true,
                 initialQuality: 0.88,
                 fileType: file.type || 'image/jpeg',
               });
               const timeoutPromise = new Promise<null>((_, reject) =>
-                setTimeout(() => reject(new Error('Compression timeout')), 3500)
+                setTimeout(() => reject(new Error('Compression timeout')), 2000)
               );
               const compressedBlob = (await Promise.race([compPromise, timeoutPromise])) as Blob | null;
               if (compressedBlob && compressedBlob.size < file.size) {
@@ -296,7 +303,6 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 bytesSavedTotal += (file.size - compressedBlob.size);
               }
             } catch (compErr) {
-              console.warn(`[Smart Compress] Fallback to raw for ${file.name}:`, compErr);
               fileToUpload = file;
             }
           }
@@ -1630,6 +1636,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
             <form className="space-y-5" onSubmit={async (e) => {
               e.preventDefault();
+              if (saving || isUpdatingDownload) return;
               try {
                 setSaving(true);
                 
@@ -2181,17 +2188,22 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                       {formData.allowDownload ? 'Download button ON in album' : 'Download button OFF (Disabled)'}
                     </span>
                   </div>
-                  {saving && <Loader2 className="h-3 w-3 animate-spin text-slate-400 ml-2" />}
+                  {isUpdatingDownload && (
+                    <div className="flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-md text-[10px] font-semibold ml-2">
+                      <Loader2 className="h-3 w-3 animate-spin text-amber-600" />
+                      <span>Saving setting...</span>
+                    </div>
+                  )}
                 </div>
                 <div 
-                  className={`toggle-switch ${saving ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                  className={`toggle-switch ${isUpdatingDownload || saving ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'}`} 
                   data-active={formData.allowDownload}
                   onClick={async () => {
-                    if (saving) return;
+                    if (isUpdatingDownload || saving) return;
                     const newValue = !formData.allowDownload;
                     
-                    setFormData({...formData, allowDownload: newValue});
-                    setSaving(true);
+                    setFormData(prev => ({...prev, allowDownload: newValue}));
+                    setIsUpdatingDownload(true);
                     
                     try {
                       await apiClient.patch(`/event/${eventId}/download-status`, { 
@@ -2199,14 +2211,14 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                       });
                       
                       if (event) {
-                        setEvent({...event, allowDownload: newValue});
+                        setEvent((prev: any) => prev ? ({...prev, allowDownload: newValue}) : null);
                       }
                       toast.success(newValue ? 'Photo downloads enabled for album' : 'Photo downloads disabled for album');
                     } catch (err) {
                       toast.error("Failed to update download setting.");
-                      setFormData({...formData, allowDownload: !newValue});
+                      setFormData(prev => ({...prev, allowDownload: !newValue}));
                     } finally {
-                      setSaving(false);
+                      setIsUpdatingDownload(false);
                     }
                   }}
                 />
@@ -2255,11 +2267,19 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 <button 
                   id="save-event-button"
                   type="submit" 
-                  disabled={saving} 
-                  className="flex-1 flex justify-center items-center gap-2 bg-[#c5a880] hover:bg-[#b59a72] text-[#09090b] font-black py-3 rounded-xl text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 cursor-pointer min-h-[44px]"
+                  disabled={saving || isUpdatingDownload} 
+                  className="flex-1 flex justify-center items-center gap-2 bg-[#c5a880] hover:bg-[#b59a72] text-[#09090b] font-black py-3 rounded-xl text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer min-h-[44px]"
                 >
                   {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Saving Event Details...</span>
+                    </>
+                  ) : isUpdatingDownload ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin text-slate-800" />
+                      <span>Updating Download Setting...</span>
+                    </>
                   ) : (
                     <>
                       <span>Save Event Details</span>
