@@ -6,6 +6,9 @@ import Link from 'next/link';
 import confetti from 'canvas-confetti';
 import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy, ZoomIn, Play, ShieldCheck, RefreshCw, ScanFace, ChevronRight, ChevronLeft, ChevronDown, LayoutGrid, Sliders, X, Download, Loader, Sparkles, CalendarDays, Lock, Key, AlertCircle, Search, HelpCircle, Send, CheckCircle, Globe } from 'lucide-react';
 import { apiClient, resolveMediaUrl as globalResolveMediaUrl } from '@/lib/api';
+import toast from 'react-hot-toast';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 import { MasonryPhotoAlbum, RowsPhotoAlbum } from "react-photo-album";
 import "react-photo-album/masonry.css";
 import "react-photo-album/rows.css";
@@ -201,6 +204,11 @@ export default function ClientGallery() {
   // Selection for bulk downloads
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
   const [isMultiSelect, setIsMultiSelect] = useState(false);
+
+  // ZIP Download progress state
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadStatusText, setDownloadStatusText] = useState('');
 
   // Drag & Drop state
   const [isDragOver, setIsDragOver] = useState(false);
@@ -676,20 +684,100 @@ export default function ClientGallery() {
     }
   };
 
-  const handleBulkDownload = async () => {
-    if (selectedMediaIds.length === 0) return;
+  const handleDownloadAllAsZip = async (selectedOnly = false) => {
+    const targets = selectedOnly && selectedMediaIds.length > 0
+      ? media.filter((m) => selectedMediaIds.includes(m._id))
+      : media;
+
+    if (!targets || targets.length === 0) {
+      toast.error('No photos or videos to download.');
+      return;
+    }
+
+    setIsDownloadingZip(true);
+    setDownloadProgress(5);
+    setDownloadStatusText(`Preparing ${targets.length} item${targets.length > 1 ? 's' : ''}...`);
+
     try {
-      const res = await apiClient.post('/media/download-bulk', { mediaIds: selectedMediaIds });
-      const downloads = res.data.downloads || [];
-      for (const d of downloads) {
-        window.open(d.url, '_blank');
+      const zip = new JSZip();
+      const folderName = `${(event?.name || 'Event').replace(/[^a-zA-Z0-9_-]/g, '_')}_Media`;
+      const zipFolder = zip.folder(folderName) || zip;
+
+      // Concurrent batch download (chunks of 4)
+      const CONCURRENCY = 4;
+      let completedCount = 0;
+
+      for (let i = 0; i < targets.length; i += CONCURRENCY) {
+        const batch = targets.slice(i, i + CONCURRENCY);
+        await Promise.all(
+          batch.map(async (item, batchIdx) => {
+            const overallIdx = i + batchIdx;
+            const url = resolveMediaUrl(item, false);
+            if (!url) return;
+
+            try {
+              const resp = await fetch(url);
+              if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+              const blob = await resp.blob();
+
+              const ext = item.type === 'VIDEO' ? 'mp4' : 'jpg';
+              const cleanName = (item.originalName || `media_${overallIdx + 1}.${ext}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+              const entryName = `${String(overallIdx + 1).padStart(3, '0')}_${cleanName}`;
+              zipFolder.file(entryName, blob);
+            } catch (fetchErr) {
+              console.warn(`[ZIP] Failed to fetch item ${item._id}:`, fetchErr);
+            } finally {
+              completedCount++;
+              const percent = Math.min(85, Math.round((completedCount / targets.length) * 80) + 5);
+              setDownloadProgress(percent);
+              setDownloadStatusText(`Packaging: ${completedCount}/${targets.length} items (${percent}%)`);
+            }
+          })
+        );
       }
-      setSelectedMediaIds([]);
-      setIsMultiSelect(false);
-    } catch (err) {
-      console.error(err);
+
+      setDownloadStatusText('Generating ZIP archive...');
+      setDownloadProgress(90);
+
+      const zipBlob = await zip.generateAsync(
+        { type: 'blob', compression: 'STORE' },
+        (metadata) => {
+          const genPercent = 90 + Math.round(metadata.percent * 0.09);
+          setDownloadProgress(genPercent);
+        }
+      );
+
+      setDownloadProgress(100);
+      setDownloadStatusText('Download starting!');
+      const zipFileName = `${(event?.name || 'Gallery').replace(/[^a-zA-Z0-9_-]/g, '_')}_Photos.zip`;
+      saveAs(zipBlob, zipFileName);
+
+      toast.success(`Downloaded ${targets.length} item(s) as ZIP!`);
+      if (selectedOnly) {
+        setSelectedMediaIds([]);
+        setIsMultiSelect(false);
+      }
+    } catch (err: any) {
+      console.error('[ZIP Download Failed]:', err);
+      // Fallback: try direct backend zip stream
+      try {
+        setDownloadStatusText('Starting streaming download...');
+        const ids = targets.map((m) => m._id).join(',');
+        const fallbackUrl = `/api/media/download-zip?slug=${slug}&mediaIds=${ids}`;
+        window.location.href = fallbackUrl;
+      } catch (fallbackErr) {
+        toast.error('Failed to download ZIP. Please try again.');
+      }
+    } finally {
+      setTimeout(() => {
+        setIsDownloadingZip(false);
+        setDownloadProgress(0);
+        setDownloadStatusText('');
+      }, 1500);
     }
   };
+
+  const handleBulkDownload = () => handleDownloadAllAsZip(true);
 
   const handleJumpToTimestamp = (sec: number) => {
     if (playerRef.current) {
@@ -929,23 +1017,21 @@ export default function ClientGallery() {
             </button>
             
             <button 
-              onClick={async () => {
-                try {
-                  const idsToDownload = selectedMediaIds.length > 0 ? selectedMediaIds : media.map(m => m._id);
-                  if (idsToDownload.length === 0) return;
-                  const res = await apiClient.post('/media/download-bulk', { mediaIds: idsToDownload });
-                  const downloads = res.data.downloads || [];
-                  for (const d of downloads) {
-                    window.open(d.url, '_blank');
-                  }
-                } catch (err) {
-                  console.error(err);
-                }
-              }} 
-              className="bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-extrabold px-2.5 sm:px-5 py-2.5 sm:py-3 rounded-xl shadow-[0_4px_14px_0_rgba(0,0,0,0.15)] flex justify-center items-center gap-1.5 transition-all text-xs sm:text-sm cursor-pointer min-h-[42px]"
+              onClick={() => handleDownloadAllAsZip(false)} 
+              disabled={isDownloadingZip || media.length === 0}
+              className="bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-extrabold px-2.5 sm:px-5 py-2.5 sm:py-3 rounded-xl shadow-[0_4px_14px_0_rgba(0,0,0,0.15)] flex justify-center items-center gap-1.5 transition-all text-xs sm:text-sm cursor-pointer min-h-[42px] disabled:opacity-50"
             >
-              <Download className="h-3.5 w-3.5 sm:h-4.5 sm:w-4.5" />
-              <span>Download All</span>
+              {isDownloadingZip ? (
+                <>
+                  <Loader className="h-3.5 w-3.5 sm:h-4.5 sm:w-4.5 animate-spin text-[#c5a880]" />
+                  <span>Packaging ({downloadProgress}%)...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="h-3.5 w-3.5 sm:h-4.5 sm:w-4.5" />
+                  <span>Download All</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -1017,11 +1103,28 @@ export default function ClientGallery() {
           {isMultiSelect ? (
             <div className="flex items-center gap-2.5">
               <span className="text-xs text-slate-500 font-bold">Selected: <strong>{selectedMediaIds.length}</strong></span>
-              <button onClick={handleBulkDownload} disabled={selectedMediaIds.length === 0} className="bg-[#FF6B00] hover:bg-[#E05E00] text-white text-xs font-bold px-3.5 py-2 rounded-lg disabled:opacity-50 flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer">
-                <Download className="h-3.5 w-3.5" />
-                Download Selected
+              <button 
+                onClick={handleBulkDownload} 
+                disabled={selectedMediaIds.length === 0 || isDownloadingZip} 
+                className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-3.5 py-2 rounded-lg disabled:opacity-50 flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+              >
+                {isDownloadingZip ? (
+                  <>
+                    <Loader className="h-3.5 w-3.5 animate-spin text-[#c5a880]" />
+                    <span>Packaging ({downloadProgress}%)...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-3.5 w-3.5" />
+                    <span>Download Selected ({selectedMediaIds.length})</span>
+                  </>
+                )}
               </button>
-              <button onClick={() => { setIsMultiSelect(false); setSelectedMediaIds([]); }} className="text-xs text-slate-500 hover:text-slate-700 cursor-pointer">
+              <button 
+                onClick={() => { setIsMultiSelect(false); setSelectedMediaIds([]); }} 
+                disabled={isDownloadingZip}
+                className="text-xs text-slate-500 hover:text-slate-700 cursor-pointer"
+              >
                 Cancel
               </button>
             </div>
@@ -1983,6 +2086,30 @@ export default function ClientGallery() {
                 </button>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ZIP Download Progress Modal Overlay */}
+      {isDownloadingZip && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-slate-100 flex flex-col items-center text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-2xl bg-[#c5a880]/15 flex items-center justify-center text-[#c5a880] mb-4">
+              <Download className="w-8 h-8 animate-bounce text-[#c5a880]" />
+            </div>
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 mb-1">
+              Downloading Album ZIP
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-500 mb-5 font-medium">
+              {downloadStatusText || 'Packaging photos and videos...'}
+            </p>
+            <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden mb-2">
+              <div 
+                className="bg-gradient-to-r from-[#c5a880] to-[#b09672] h-full transition-all duration-200 rounded-full" 
+                style={{ width: `${downloadProgress}%` }}
+              />
+            </div>
+            <span className="text-xs font-black text-slate-700">{downloadProgress}% Completed</span>
           </div>
         </div>
       )}
