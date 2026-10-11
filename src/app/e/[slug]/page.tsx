@@ -685,9 +685,15 @@ export default function ClientGallery() {
   };
 
   const handleDownloadAllAsZip = async (selectedOnly = false) => {
+    if (event?.allowDownload === false) {
+      toast.error('Photo downloads have been disabled by the studio for this album.');
+      return;
+    }
+
+    const activePool = searchActive && matchedMedia.length > 0 ? matchedMedia : media;
     const targets = selectedOnly && selectedMediaIds.length > 0
-      ? media.filter((m) => selectedMediaIds.includes(m._id))
-      : media;
+      ? activePool.filter((m) => selectedMediaIds.includes(m._id))
+      : activePool;
 
     if (!targets || targets.length === 0) {
       toast.error('No photos or videos to download.');
@@ -749,7 +755,8 @@ export default function ClientGallery() {
 
       setDownloadProgress(100);
       setDownloadStatusText('Download starting!');
-      const zipFileName = `${(event?.name || 'Gallery').replace(/[^a-zA-Z0-9_-]/g, '_')}_Photos.zip`;
+      const baseName = (event?.name || 'Gallery').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const zipFileName = searchActive && matchedMedia.length > 0 ? `${baseName}_Matched_Photos.zip` : `${baseName}_Photos.zip`;
       saveAs(zipBlob, zipFileName);
 
       toast.success(`Downloaded ${targets.length} item(s) as ZIP!`);
@@ -1016,23 +1023,34 @@ export default function ClientGallery() {
               <span>Quick Popup</span>
             </button>
             
-            <button 
-              onClick={() => handleDownloadAllAsZip(false)} 
-              disabled={isDownloadingZip || media.length === 0}
-              className="bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-extrabold px-2.5 sm:px-5 py-2.5 sm:py-3 rounded-xl shadow-[0_4px_14px_0_rgba(0,0,0,0.15)] flex justify-center items-center gap-1.5 transition-all text-xs sm:text-sm cursor-pointer min-h-[42px] disabled:opacity-50"
-            >
-              {isDownloadingZip ? (
-                <>
-                  <Loader className="h-3.5 w-3.5 sm:h-4.5 sm:w-4.5 animate-spin text-[#c5a880]" />
-                  <span>Packaging ({downloadProgress}%)...</span>
-                </>
-              ) : (
-                <>
-                  <Download className="h-3.5 w-3.5 sm:h-4.5 sm:w-4.5" />
-                  <span>Download All</span>
-                </>
-              )}
-            </button>
+            {event?.allowDownload !== false ? (
+              <button 
+                onClick={() => handleDownloadAllAsZip(false)} 
+                disabled={isDownloadingZip || (searchActive ? matchedMedia.length === 0 : media.length === 0)}
+                className="bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-extrabold px-2.5 sm:px-5 py-2.5 sm:py-3 rounded-xl shadow-[0_4px_14px_0_rgba(0,0,0,0.15)] flex justify-center items-center gap-1.5 transition-all text-xs sm:text-sm cursor-pointer min-h-[42px] disabled:opacity-50"
+              >
+                {isDownloadingZip ? (
+                  <>
+                    <Loader className="h-3.5 w-3.5 sm:h-4.5 sm:w-4.5 animate-spin text-[#c5a880]" />
+                    <span>Packaging ({downloadProgress}%)...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-3.5 w-3.5 sm:h-4.5 sm:w-4.5" />
+                    <span>Download {searchActive && matchedMedia.length > 0 ? `Matched (${matchedMedia.length})` : 'All'}</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <button 
+                disabled
+                title="Photo downloads have been disabled by the studio for this album"
+                className="bg-slate-100 text-slate-400 font-bold px-2.5 sm:px-4 py-2.5 sm:py-3 rounded-xl border border-slate-200 flex justify-center items-center gap-1.5 text-xs sm:text-sm cursor-not-allowed min-h-[42px] opacity-70"
+              >
+                <Download className="h-3.5 w-3.5 sm:h-4.5 sm:w-4.5 text-slate-400" />
+                <span>Download Disabled</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1100,38 +1118,40 @@ export default function ClientGallery() {
             </button>
           )}
 
-          {isMultiSelect ? (
-            <div className="flex items-center gap-2.5">
-              <span className="text-xs text-slate-500 font-bold">Selected: <strong>{selectedMediaIds.length}</strong></span>
-              <button 
-                onClick={handleBulkDownload} 
-                disabled={selectedMediaIds.length === 0 || isDownloadingZip} 
-                className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-3.5 py-2 rounded-lg disabled:opacity-50 flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
-              >
-                {isDownloadingZip ? (
-                  <>
-                    <Loader className="h-3.5 w-3.5 animate-spin text-[#c5a880]" />
-                    <span>Packaging ({downloadProgress}%)...</span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="h-3.5 w-3.5" />
-                    <span>Download Selected ({selectedMediaIds.length})</span>
-                  </>
-                )}
+          {event?.allowDownload !== false && (
+            isMultiSelect ? (
+              <div className="flex items-center gap-2.5">
+                <span className="text-xs text-slate-500 font-bold">Selected: <strong>{selectedMediaIds.length}</strong></span>
+                <button 
+                  onClick={handleBulkDownload} 
+                  disabled={selectedMediaIds.length === 0 || isDownloadingZip} 
+                  className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-3.5 py-2 rounded-lg disabled:opacity-50 flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+                >
+                  {isDownloadingZip ? (
+                    <>
+                      <Loader className="h-3.5 w-3.5 animate-spin text-[#c5a880]" />
+                      <span>Packaging ({downloadProgress}%)...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-3.5 w-3.5" />
+                      <span>Download Selected ({selectedMediaIds.length})</span>
+                    </>
+                  )}
+                </button>
+                <button 
+                  onClick={() => { setIsMultiSelect(false); setSelectedMediaIds([]); }} 
+                  disabled={isDownloadingZip}
+                  className="text-xs text-slate-500 hover:text-slate-700 cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setIsMultiSelect(true)} className="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 bg-white rounded-lg px-3 py-1.5 sm:px-3.5 sm:py-2 hover:bg-slate-50 transition-colors shadow-sm font-semibold cursor-pointer">
+                Select Multiple
               </button>
-              <button 
-                onClick={() => { setIsMultiSelect(false); setSelectedMediaIds([]); }} 
-                disabled={isDownloadingZip}
-                className="text-xs text-slate-500 hover:text-slate-700 cursor-pointer"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <button onClick={() => setIsMultiSelect(true)} className="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 bg-white rounded-lg px-3 py-1.5 sm:px-3.5 sm:py-2 hover:bg-slate-50 transition-colors shadow-sm font-semibold cursor-pointer">
-              Select Multiple
-            </button>
+            )
           )}
         </div>
       </div>
@@ -1927,10 +1947,12 @@ export default function ClientGallery() {
               {galleryMedia.findIndex(m => m._id === selectedItem._id) + 1} / {galleryMedia.length}
             </span>
             <div className="flex items-center gap-2 sm:gap-4 pointer-events-auto">
-              <a href={resolveMediaUrl(selectedItem)} target="_blank" download className="bg-white/10 hover:bg-white/20 px-3 sm:px-4 py-2 text-white rounded-xl flex items-center gap-2 font-bold text-xs sm:text-sm transition-colors border border-white/10 min-h-[40px]">
-                <Download className="h-4 w-4" />
-                <span className="hidden xs:inline">Download</span>
-              </a>
+              {event?.allowDownload !== false && (
+                <a href={resolveMediaUrl(selectedItem)} target="_blank" download className="bg-white/10 hover:bg-white/20 px-3 sm:px-4 py-2 text-white rounded-xl flex items-center gap-2 font-bold text-xs sm:text-sm transition-colors border border-white/10 min-h-[40px]">
+                  <Download className="h-4 w-4" />
+                  <span className="hidden xs:inline">Download</span>
+                </a>
+              )}
               <button onClick={() => setSelectedItem(null)} className="bg-white/10 hover:bg-rose-500/90 px-3 sm:px-4 py-2 text-white rounded-xl flex items-center gap-2 font-bold text-xs sm:text-sm transition-colors border border-white/10 min-h-[40px] cursor-pointer">
                 <X className="h-4 w-4" />
                 <span>Close</span>
