@@ -23,23 +23,29 @@ export default function EventsManagementPage() {
   });
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Helper to calculate exact live days left out of 30 days based on event date or creation date
+  // Helper to calculate exact live days left out of 30 days based strictly on creation date
   const getDaysLeft = (event: any) => {
     if (typeof event?.daysLeft === 'number') return event.daysLeft;
-    const baseDateStr = event?.date || event?.createdAt;
-    if (!baseDateStr) return 30;
+    const baseDateStr = event?.createdAt || (event?._id ? null : event?.date);
+    let createdDate: Date;
+    if (baseDateStr) {
+      createdDate = new Date(baseDateStr);
+    } else if (event?._id && typeof event._id === 'string' && event._id.length === 24) {
+      try {
+        createdDate = new Date(parseInt(event._id.substring(0, 8), 16) * 1000);
+      } catch {
+        createdDate = new Date();
+      }
+    } else {
+      return 30;
+    }
 
-    const baseDate = new Date(baseDateStr);
     const now = new Date();
-
     const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const baseMidnight = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()).getTime();
+    const createdMidnight = new Date(createdDate.getFullYear(), createdDate.getMonth(), createdDate.getDate()).getTime();
 
-    const diffDays = Math.floor((todayMidnight - baseMidnight) / (1000 * 60 * 60 * 24));
-    if (diffDays <= 0) return 30;
-
-    const remaining = 30 - diffDays;
-    return Math.max(0, remaining);
+    const diffDays = Math.max(0, Math.floor((todayMidnight - createdMidnight) / (1000 * 60 * 60 * 24)));
+    return Math.max(0, 30 - diffDays);
   };
 
   useEffect(() => {
@@ -194,10 +200,20 @@ export default function EventsManagementPage() {
                       {(() => {
                         const days = getDaysLeft(event);
                         const label = days === 0 ? 'Expires today' : `${days} ${days === 1 ? 'day' : 'days'} left`;
+                        const isUrgent = days <= 1;
+                        const isWarning = days <= 5;
                         return (
-                          <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-xs px-2.5 py-1 rounded-full text-[11px] font-bold shadow-sm border border-slate-200/80 flex items-center gap-1.5 text-slate-700">
-                            <Clock className={`w-3.5 h-3.5 ${days <= 5 ? 'text-rose-500 animate-pulse' : 'text-[#c5a880]'}`} />
-                            <span>{label}</span>
+                          <div className={`absolute top-3 right-3 backdrop-blur-xs px-2.5 py-1 rounded-full text-[11px] font-bold shadow-sm border flex items-center gap-1.5 transition-colors ${
+                            isUrgent
+                              ? 'bg-rose-50/95 border-rose-300 text-rose-700'
+                              : isWarning
+                              ? 'bg-amber-50/95 border-amber-300 text-amber-800'
+                              : 'bg-white/95 border-slate-200/80 text-slate-700'
+                          }`}>
+                            <Clock className={`w-3.5 h-3.5 ${
+                              isUrgent ? 'text-rose-600 animate-pulse' : isWarning ? 'text-amber-500' : 'text-[#c5a880]'
+                            }`} />
+                            <span className={isUrgent ? 'font-black tracking-tight' : ''}>{label}</span>
                           </div>
                         );
                       })()}
