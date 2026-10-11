@@ -230,27 +230,60 @@ export default apiClient;
  * 3. Relative R2 keys (e.g. "branding/assets/...", "studios/...") -> /api/media/file/:key
  * 4. Empty/null -> fallback placeholder or empty string
  */
-export const resolveMediaUrl = (url?: string | null, fallback: string = ''): string => {
-  if (!url || typeof url !== 'string' || !url.trim()) return fallback;
-  const trimmed = url.trim();
+export const resolveMediaUrl = (
+  urlOrMedia?: any,
+  fallbackOrIsThumbnail: string | boolean = ''
+): string => {
+  if (!urlOrMedia) {
+    return typeof fallbackOrIsThumbnail === 'string' ? fallbackOrIsThumbnail : '';
+  }
 
-  // If data URI or blob URI (e.g. local file preview), return as-is
-  if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+  let candidate = '';
+  const isThumbnail = typeof fallbackOrIsThumbnail === 'boolean' ? fallbackOrIsThumbnail : false;
+  const fallback = typeof fallbackOrIsThumbnail === 'string' ? fallbackOrIsThumbnail : '';
+
+  if (typeof urlOrMedia === 'object') {
+    if (urlOrMedia.type === 'VIDEO' && isThumbnail) {
+      if (urlOrMedia.thumbnailUrl && !urlOrMedia.thumbnailUrl.endsWith('.mp4')) {
+        candidate = urlOrMedia.thumbnailUrl;
+      } else {
+        const base = urlOrMedia.compressedUrl || urlOrMedia.url || urlOrMedia.r2Url || '';
+        candidate = base.includes('imagekit.io') ? `${base}/ik-thumbnail.jpg` : (urlOrMedia.thumbnailUrl || base);
+      }
+    } else if (isThumbnail) {
+      candidate = urlOrMedia.thumbnailUrl || urlOrMedia.compressedUrl || urlOrMedia.r2Url || urlOrMedia.url || urlOrMedia.r2Key || '';
+    } else {
+      candidate = urlOrMedia.compressedUrl || urlOrMedia.r2Url || urlOrMedia.url || urlOrMedia.r2Key || urlOrMedia.thumbnailUrl || '';
+    }
+  } else if (typeof urlOrMedia === 'string') {
+    candidate = urlOrMedia;
+  }
+
+  if (!candidate || typeof candidate !== 'string' || !candidate.trim()) {
+    return fallback;
+  }
+
+  const trimmed = candidate.trim();
+
+  // Local storage / blob / data preview
+  if (trimmed.startsWith('data:') || trimmed.startsWith('blob:') || trimmed.startsWith('localdb://')) {
     return trimmed;
   }
 
-  // Cloudflare R2 dev bucket URL (401 unauthorized if visited directly)
+  // Cloudflare R2 direct dev URL
   if (trimmed.includes('.r2.dev/')) {
-    const key = trimmed.split('.r2.dev/')[1];
+    const key = trimmed.split('.r2.dev/')[1] || '';
     return `/api/media/file/${key.replace(/^\/+/, '')}`;
   }
 
-  // Localhost development URLs saved in DB
+  // File stream endpoint
+  if (trimmed.includes('/api/media/file/')) {
+    const key = trimmed.split('/api/media/file/')[1] || '';
+    return `/api/media/file/${key.replace(/^\/+/, '')}`;
+  }
+
+  // Localhost development URLs
   if (trimmed.includes('localhost:5000') || trimmed.includes('127.0.0.1:5000')) {
-    if (trimmed.includes('/api/media/file/')) {
-      const key = trimmed.split('/api/media/file/')[1];
-      return `/api/media/file/${key.replace(/^\/+/, '')}`;
-    }
     return trimmed.replace(/^https?:\/\/(localhost|127\.0\.0\.1):5000/, '');
   }
 
