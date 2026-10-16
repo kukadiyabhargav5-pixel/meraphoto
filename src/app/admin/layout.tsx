@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, Camera, FolderOpen, LifeBuoy, Settings, LogOut, ChevronRight, Bell, Sparkles, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, Camera, FolderOpen, LifeBuoy, Settings, LogOut, ChevronRight, Bell, Sparkles, Menu, X, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../lib/AuthContext';
 import './admin.css';
@@ -67,6 +67,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { href: '/admin/users', icon: <Users className="w-5 h-5" />, label: 'Users' },
         { href: '/admin/studios', icon: <Camera className="w-5 h-5" />, label: 'Studios' },
         { href: '/admin/events', icon: <FolderOpen className="w-5 h-5" />, label: 'Events' },
+        { href: '/admin/plans', icon: <CreditCard className="w-5 h-5" />, label: 'Pricing Plans' },
       ],
     },
     {

@@ -3,14 +3,14 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import PublicWrapper from '../components/PublicWrapper';
-import CinematicHero from '../components/CinematicHero';
-import './cinematic-hero.css';
+import Hero from '../components/Hero';
 import {
   Star, Check,
   ChevronDown, ArrowRight, Shield, Users,
   Globe, QrCode, ScanFace, Zap, Upload,
   Mail, Phone, Send,
-  Quote, BadgeCheck, Sparkles, Award
+  Quote, BadgeCheck, Sparkles, Award,
+  FolderUp, LayoutDashboard, Download, Camera, Building2, Heart
 } from 'lucide-react';
 
 /* ─────────────── DATA ─────────────── */
@@ -19,60 +19,107 @@ const howItWorks = [
   {
     step: '01',
     icon: Upload,
-    title: 'Create Gallery & Upload',
-    desc: 'Create a private, high-speed event gallery directly from your mobile or laptop. Upload raw or high-res edits seamlessly during the event.',
+    title: 'Create Gallery & Bulk Upload',
+    desc: 'Create a private, high-speed event gallery directly from your mobile or laptop. Upload raw or high-res edits seamlessly during or after the event.',
   },
   {
     step: '02',
     icon: QrCode,
     title: 'Display Branded QR Code',
-    desc: 'Present a beautifully designed table tent or backdrop banner with your unique event QR code. Guests simply scan to begin.',
+    desc: 'Present a beautifully designed table tent or backdrop banner with your unique event QR code. Guests simply scan with their mobile camera to begin.',
   },
   {
     step: '03',
     icon: ScanFace,
     title: 'AI Matches Moments Instantly',
-    desc: 'Guests snap a quick selfie. The AI instantly scans thousands of event photos, matching and serving their personal memories in seconds.',
+    desc: 'Guests snap a quick selfie. The deep-learning AI instantly indexes event photos, matching and serving their personal memories typically in under 2 seconds.',
+  },
+  {
+    step: '04',
+    icon: Download,
+    title: 'Find, Download & Share',
+    desc: 'Guests view their personal photos, favorite memorable moments, download original high-resolution files, and share directly to social media.',
   },
 ];
 
 const features = [
-  { icon: ScanFace, title: 'Instant Face Recognition',  desc: 'Eliminate manual photo searching. Guests upload a selfie and view their personalized, matched photos in under 2 seconds.' },
+  { icon: ScanFace, title: 'Instant Face Recognition',  desc: 'Eliminate manual photo searching. Guests upload a selfie and view their personalized, matched photos typically in under 2 seconds.' },
+  { icon: FolderUp, title: 'High-Speed Bulk Upload',    desc: 'Upload tens of thousands of high-resolution photos with chunked background upload, folder drag-and-drop, and zero browser freezing.' },
+  { icon: LayoutDashboard, title: 'Photographer CRM Dashboard', desc: 'Complete suite for photographers: manage events, track visitor analytics, create professional quotations, and generate GST invoices.' },
   { icon: QrCode,   title: 'Elegant QR Branding',       desc: 'Generate custom branded QR codes showing your studio logo. Print or display them at event tables and entries.' },
   { icon: Zap,      title: 'Real-time Live Delivery',    desc: 'Photos stream live to guests as you shoot and upload. Drive organic social shares while the event is still happening.' },
-  { icon: Globe,    title: 'Fully White-Labeled',        desc: 'Use your own custom branding colors, logo, and optional custom domain. Deliver a luxury, high-end gallery experience to premium clients.' },
-  { icon: Shield,   title: 'End-to-End Privacy',         desc: 'Encrypt and protect your client\'s personal photos. Only authorized guests with the unique event QR code can view.' },
-  { icon: Users,    title: 'Unlimited Guest Delivery',   desc: 'Deliver photos to thousands of guests simultaneously with zero lag, zero performance drops, and zero limits.' },
+  { icon: Download, title: 'Bulk & High-Res Downloads', desc: 'Guests and clients can download individual photos or grab full event zip archives in crisp high resolution without quality loss.' },
+  { icon: Shield,   title: 'Enterprise Security & Privacy', desc: 'Protect your client\'s personal photos with encrypted cloud storage, customizable PIN protection, and studio-controlled watermark overlays.' },
+  { icon: Globe,    title: 'Fully White-Labeled',        desc: 'Use your own custom branding colors, logo, and studio identity. Deliver a luxury, high-end gallery experience to premium clients.' },
+];
+
+const benefits = [
+  {
+    role: 'For Independent Photographers',
+    badge: 'Solo Creators',
+    icon: Camera,
+    headline: 'Eliminate post-event delivery chaos and get booked faster',
+    points: [
+      'Zero manual sorting: guests find their own photos automatically via AI selfies',
+      'Deliver photos live on-site during wedding receptions and corporate galas',
+      'Built-in watermark protection prevents unauthorized downloading before full payment',
+      'Integrated quotation generator to send polished proposals to clients in 60 seconds'
+    ],
+  },
+  {
+    role: 'For Commercial Studios & Agencies',
+    badge: 'Growing Studios',
+    icon: Building2,
+    headline: 'Scale operations, manage teams, and build a luxury brand',
+    points: [
+      'Multi-user team permissions: photographers upload while managers review billing',
+      'White-label galleries: custom branding, studio logo, and personalized client links',
+      'Automated GST billing: generate official invoices with custom tax rates & payment links',
+      'In-depth visitor analytics: track guest engagement, download counts, and lead captures'
+    ],
+  },
+  {
+    role: 'For Event Hosts & Wedding Couples',
+    badge: 'Clients & Couples',
+    icon: Heart,
+    headline: 'Give guests an unforgettable, frictionless memory experience',
+    points: [
+      'No application downloads: works completely in mobile browsers (Chrome, Safari, etc.)',
+      'Instant gratification: guests get their photos on the very same day of the celebration',
+      'Private & secure: PIN code protection and strict individual photo matching',
+      'High-resolution downloads with full color fidelity for pristine printing and framing'
+    ],
+  },
 ];
 
 const plans = [
   {
-    name: 'Basic',
-    price: 'Free',
+    name: 'Startup',
+    price: '₹3,999',
     period: '/year',
     desc: 'Store 50,000 photos & store 10 videos',
     highlight: false,
-    features: [],
-    cta: 'Choose Basic',
+    features: ['Store 50,000 photos', 'Store 10 videos', 'Create & Manage Events', 'Quotation Generator', 'Profile & Galleries'],
+    cta: 'Choose Startup',
     href: '/signup',
   },
   {
     name: 'Standard',
-    price: '₹4,999',
+    price: '₹7,999',
     period: '/year',
-    desc: 'Store 50,000 photos & store 20 videos',
+    desc: 'Store 1,00,000 photos & store 20 videos',
     highlight: true,
-    features: ['Store 50,000 photos', 'Store 20 videos', 'Watermarks', 'Includes all Basic features'],
+    features: ['Store 1,00,000 photos', 'Store 20 videos', 'ALL Dashboard Tools Enabled', 'Bill & Invoice Generator', 'Lead Capture & Branding', 'Watermarks & Protection'],
     cta: 'Choose Standard',
     href: '/signup',
   },
   {
     name: 'Essential',
-    price: '₹9,999',
+    price: '₹12,999',
     period: '/year',
     desc: 'Store 1,50,000 photos & store 50 videos',
     highlight: false,
-    features: ['Store 1,50,000 photos', 'Store 50 videos', 'View Client Favourites', 'Switch on/off Downloads', 'Portfolio Website', 'Includes all Standard features'],
+    features: ['Store 1,50,000 photos', 'Store 50 videos', 'ALL Dashboard Tools Enabled', 'High-Speed Optimization', 'Priority 24/7 Support', 'Includes all Standard features'],
     cta: 'Choose Essential',
     href: '/signup',
   },
@@ -80,9 +127,9 @@ const plans = [
     name: 'Premium',
     price: '₹19,999',
     period: '/year',
-    desc: 'Store 4,00,000 photos & store 100 videos',
+    desc: 'Store 3,00,000 photos & store 100 videos',
     highlight: false,
-    features: ['Store 4,00,000 photos', 'Store 100 videos', 'Digital Album', 'Includes all Essential features'],
+    features: ['Store 3,00,000 photos', 'Store 100 videos', 'ALL Dashboard Tools Enabled', 'AI Face Recognition Scanner', 'Dedicated VIP Account Manager', 'Includes all Essential features'],
     cta: 'Choose Premium',
     href: '/signup',
   },
@@ -91,7 +138,7 @@ const plans = [
 const faqs = [
   {
     q: 'How accurate is the AI face recognition system?',
-    a: 'Our deep-learning facial analysis engine is incredibly accurate and fast. It matches a guest\'s selfie against thousands of high-resolution event photos in under 2 seconds, even recognizing faces under different lighting conditions and angles.',
+    a: 'Our deep-learning facial analysis engine is fast and precise. It matches a guest\'s selfie against thousands of high-resolution event photos typically in under 2 seconds, recognizing faces across various lighting conditions and angles.',
   },
   {
     q: 'Do event guests need to download an application?',
@@ -136,9 +183,9 @@ const testimonials = [
     name: 'Hardik Patel',
     role: 'Creative Director, Ahmedabad',
     category: 'Grand Multi-Day Wedding',
-    metric: '12,000+ Photos • 100% AI Accuracy',
+    metric: '12,000+ Photos • High Precision AI',
     icon: Award,
-    text: 'For a massive three-day Gujarati wedding, we uploaded over 12,000 photos. The AI face recognition worked flawlessly. Guests were thrilled, and we looked incredibly professional and modern.',
+    text: 'For a massive three-day Gujarati wedding, we uploaded over 12,000 photos. The AI face recognition worked with impressive precision. Guests were thrilled, and we looked incredibly professional and modern.',
   },
 ];
 
@@ -212,8 +259,9 @@ export default function HomePage() {
         /* ── WORKFLOW ── */
         .workflow-section {
           padding: 48px 0;
-          background: #fff;
+          background: #ffffff;
           position: relative;
+          z-index: 25;
         }
         @media (min-width: 1024px) {
           .workflow-section { padding: 96px 0; }
@@ -962,14 +1010,14 @@ export default function HomePage() {
 
       <div className="font-poppins">
 
-      {/* ── CINEMATIC HERO SECTION ── */}
-      <CinematicHero />
+      {/* ── FLAGSHIP RESPONSIVE LUXURY HERO (ZERO BLACK SCREEN) ── */}
+      <Hero />
 
       {/* ── HOW IT WORKS / WORKFLOW SECTION ── */}
       <section className="workflow-section" id="workflow">
         <div className="section-container" style={{ textAlign: 'center' }}>
           <span className="section-badge">How It Works</span>
-          <h2 className="section-title">Three Simple Steps</h2>
+          <h2 className="section-title">Four Simple Steps</h2>
           <p className="section-desc">From camera to guest phone in seconds.</p>
           <div className="workflow-grid">
             {howItWorks.map((step) => {
@@ -1003,6 +1051,65 @@ export default function HomePage() {
                   <div className="feature-icon"><Icon className="w-5 h-5" /></div>
                   <h3>{f.title}</h3>
                   <p>{f.desc}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ── AUDIENCE BENEFITS ── */}
+      <section className="benefits-section py-20 bg-white border-y border-[#e3d8c8]/30">
+        <div className="section-container" style={{ textAlign: 'center' }}>
+          <span className="section-badge">Built For Growth</span>
+          <h2 className="section-title">Tailored For Every Stage of Event Photography</h2>
+          <p className="section-desc">From solo artists to grand production studios and delighted couples.</p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12 text-left">
+            {benefits.map((b) => {
+              const RoleIcon = b.icon;
+              return (
+                <div 
+                  key={b.role}
+                  className="bg-[#faf9f6] rounded-3xl p-7 border border-[#e3d8c8]/40 hover:border-[#c5a880]/40 transition-all duration-300 flex flex-col justify-between shadow-sm hover:shadow-md"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-11 h-11 rounded-2xl bg-[#09090b] text-[#c5a880] flex items-center justify-center">
+                        <RoleIcon className="w-5 h-5" />
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-[#f5f2eb] text-[#c5a880] border border-[#c5a880]/20">
+                        {b.badge}
+                      </span>
+                    </div>
+
+                    <h3 className="font-bold text-base text-[#09090b] mb-1">
+                      {b.role}
+                    </h3>
+                    <p className="text-xs text-gray-500 font-medium mb-6">
+                      {b.headline}
+                    </p>
+
+                    <div className="h-px bg-gray-200/60 mb-5" />
+
+                    <ul className="space-y-3">
+                      {b.points.map((pt, idx) => (
+                        <li key={idx} className="flex items-start gap-2.5 text-xs text-gray-700 leading-relaxed font-medium">
+                          <Check className="w-4 h-4 text-[#c5a880] shrink-0 mt-0.5" />
+                          <span>{pt}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="mt-8 pt-5 border-t border-gray-200/50">
+                    <Link
+                      href="/signup"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#09090b] hover:text-[#c5a880] transition-colors"
+                    >
+                      Get Started <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
                 </div>
               );
             })}
@@ -1088,6 +1195,15 @@ export default function HomePage() {
                 </Link>
               </div>
             ))}
+          </div>
+
+          <div style={{ marginTop: '36px', textAlign: 'center' }}>
+            <Link 
+              href="/pricing"
+              className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#c5a880] hover:text-[#09090b] transition-colors"
+            >
+              View Full Plan Comparison &amp; Free Tier Details <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
         </div>
       </section>

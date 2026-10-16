@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
+import { ChevronDown } from 'lucide-react';
 
 /* ─────────────── CONFIGURATION ─────────────── */
 
@@ -16,30 +17,35 @@ function getFramePath(index: number): string {
   return `${FRAME_PREFIX}${num}${FRAME_EXT}`;
 }
 
-function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, cw: number, ch: number) {
+function drawAdaptive(ctx: CanvasRenderingContext2D, img: HTMLImageElement, cw: number, ch: number) {
   if (!img || !img.complete || img.naturalWidth === 0 || img.naturalHeight === 0 || cw <= 0 || ch <= 0) return;
   const iw = img.naturalWidth;
   const ih = img.naturalHeight;
-  const imgRatio = iw / ih;
-  const canvasRatio = cw / ch;
-  let sx = 0, sy = 0, sw = iw, sh = ih;
-  if (imgRatio > canvasRatio) {
-    sw = ih * canvasRatio;
-    sx = (iw - sw) / 2;
-  } else {
-    sh = iw / canvasRatio;
-    sy = (ih - sh) / 2;
-  }
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch);
+
+  // Seamless 100% full cover scaling without letterboxing or black gaps
+  const scale = Math.max(cw / iw, ch / ih);
+  const dw = iw * scale;
+  const dh = ih * scale;
+  const dx = (cw - dw) / 2;
+  const dy = (ch - dh) / 2;
+
+  // Direct paint overwrites the canvas completely (no clearRect blanking flash)
+  ctx.drawImage(img, 0, 0, iw, ih, dx, dy, dw, dh);
 }
 
 function getClosestLoadedImage(index: number, images: (HTMLImageElement | null)[]): HTMLImageElement | null {
-  if (images[index]) return images[index];
+  if (images[index] && images[index]?.complete && images[index]?.naturalWidth !== 0) {
+    return images[index];
+  }
   for (let i = index - 1; i >= 0; i--) {
-    if (images[i]) return images[i];
+    if (images[i] && images[i]?.complete && images[i]?.naturalWidth !== 0) {
+      return images[i];
+    }
   }
   for (let i = index + 1; i < images.length; i++) {
-    if (images[i]) return images[i];
+    if (images[i] && images[i]?.complete && images[i]?.naturalWidth !== 0) {
+      return images[i];
+    }
   }
   return null;
 }
@@ -47,32 +53,42 @@ function getClosestLoadedImage(index: number, images: (HTMLImageElement | null)[
 /* ─────────────── COMPONENT ─────────────── */
 
 export default function CinematicHero() {
+  const containerRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const bgCanvasRef = useRef<HTMLCanvasElement>(null);
+  const posterRef = useRef<HTMLImageElement>(null);
+  const auraRef = useRef<HTMLDivElement>(null);
+  const progressBarRef = useRef<HTMLDivElement>(null);
+  const scrollBtnRef = useRef<HTMLButtonElement>(null);
+
   const imagesRef = useRef<(HTMLImageElement | null)[]>(new Array(TOTAL_FRAMES).fill(null));
   const currentFrameRef = useRef<number>(0);
+  const targetFrameRef = useRef<number>(0);
   const lastDrawnFrameRef = useRef<number>(-1);
-  const wheelAccumulatorRef = useRef<number>(0);
-  const touchStartYRef = useRef<number>(0);
-  const touchAccumulatorRef = useRef<number>(0);
-  const isUnlockedRef = useRef<boolean>(false);
+  const rafIdRef = useRef<number | null>(null);
+  const lastPinStateRef = useRef<'TOP' | 'FIXED' | 'BOTTOM' | null>(null);
 
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
-  const [isUnlocked, setIsUnlocked] = useState(false);
-
-  // Preload an individual image
+  // Preload an individual image with hardware decode
   const loadImage = useCallback((index: number): Promise<void> => {
     return new Promise((resolve) => {
       if (imagesRef.current[index]) { resolve(); return; }
       const img = new Image();
       img.src = getFramePath(index);
-      img.onload = () => { imagesRef.current[index] = img; resolve(); };
+      img.onload = async () => {
+        try {
+          if (img.decode) await img.decode();
+        } catch {
+          // fallback if decode not supported
+        }
+        imagesRef.current[index] = img;
+        resolve();
+      };
       img.onerror = () => { resolve(); };
     });
   }, []);
 
-  // Draw specific frame on canvas
+  // Draw specific frame on both ambient background and sharp foreground
   const drawFrame = useCallback((frameIdx: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -80,305 +96,325 @@ export default function CinematicHero() {
     if (!ctx) return;
 
     const img = getClosestLoadedImage(frameIdx, imagesRef.current);
-    if (img) {
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      drawCover(ctx, img, canvas.width, canvas.height);
-      lastDrawnFrameRef.current = frameIdx;
+    if (!img) return;
+
+    // 1. Draw warm ambient glow to background canvas (low-res, instant, blurred via CSS)
+    if (bgCanvasRef.current) {
+      const bgCtx = bgCanvasRef.current.getContext('2d');
+      if (bgCtx) {
+        bgCtx.drawImage(img, 0, 0, bgCanvasRef.current.width, bgCanvasRef.current.height);
+      }
     }
+
+    // 2. Activate luxury gold radial aura for logo outro frames (23 to 34)
+    if (auraRef.current) {
+      if (frameIdx >= 23) {
+        auraRef.current.classList.add('active');
+      } else {
+        auraRef.current.classList.remove('active');
+      }
+    }
+
+    // 3. Draw main foreground adaptive frame (100% full cover on desktop)
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    drawAdaptive(ctx, img, canvas.width, canvas.height);
+    lastDrawnFrameRef.current = frameIdx;
   }, []);
 
-  // Preload all 35 frames in background
+  // Resize canvas according to device pixel ratio and viewport dimensions
+  const resizeCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    const bgCanvas = bgCanvasRef.current;
+    if (!canvas) return;
+
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = window.innerWidth;
+    const h = window.innerHeight - HEADER_HEIGHT;
+    if (w <= 0 || h <= 0) return;
+
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+
+    if (bgCanvas) {
+      bgCanvas.width = 160;
+      bgCanvas.height = 90;
+    }
+
+    drawFrame(currentFrameRef.current);
+  }, [drawFrame]);
+
+  // Preload all frames immediately in parallel for instant laptop response
   useEffect(() => {
     let cancelled = false;
 
     async function preloadAll() {
-      // 1. Load initial frame and immediately paint to canvas
+      // 1. Load initial frame and immediately paint to canvas & background
       await loadImage(0);
-      if (canvasRef.current && imagesRef.current[0]) {
-        const ctx = canvasRef.current.getContext('2d');
-        if (ctx) {
-          ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = 'high';
-          drawCover(ctx, imagesRef.current[0], canvasRef.current.width, canvasRef.current.height);
-          lastDrawnFrameRef.current = 0;
+      if (imagesRef.current[0]) {
+        drawFrame(0);
+        if (posterRef.current) {
+          posterRef.current.style.opacity = '0';
         }
       }
 
-      // 2. Preload remaining frames in parallel
+      // 2. Preload all remaining frames in parallel for instant scrub capability
       const promises: Promise<void>[] = [];
       for (let i = 1; i < TOTAL_FRAMES && !cancelled; i++) {
         promises.push(loadImage(i));
       }
       await Promise.all(promises);
-      if (cancelled) return;
-      setIsLoaded(true);
     }
 
     preloadAll();
     return () => { cancelled = true; };
-  }, [loadImage]);
+  }, [loadImage, drawFrame]);
 
-  // Resize canvas according to device pixel ratio
-  const resizeCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const parent = canvas.parentElement;
-    const w = parent ? parent.clientWidth : window.innerWidth;
-    const h = parent ? parent.clientHeight : (window.innerHeight - HEADER_HEIGHT);
-    if (w <= 0 || h <= 0) return;
-
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    canvas.style.width = w + 'px';
-    canvas.style.height = h + 'px';
-
-    drawFrame(currentFrameRef.current);
-  }, [drawFrame]);
-
+  // ── SCROLL-DRIVEN SEQUENCE WITH BULLETPROOF FIXED PINNING ──
   useEffect(() => {
+    const container = containerRef.current;
+    const section = sectionRef.current;
+    if (!container || !section) return;
+
+    const updateOnScroll = () => {
+      const heroHeight = window.innerHeight - HEADER_HEIGHT;
+      const maxScroll = container.offsetHeight - heroHeight;
+      if (maxScroll <= 0) return;
+
+      const rect = container.getBoundingClientRect();
+      // Distance user has scrolled into container relative to header line
+      const scrolled = HEADER_HEIGHT - rect.top;
+
+      // ── DETERMINISTIC VIEWPORT PINNING ──
+      // State 'FIXED': Hero is locked at top: 64px, filling entire viewport. Never scrolls up.
+      // State 'BOTTOM': User finished all 35 frames; hero is locked at bottom of container and scrolls away smoothly.
+      // State 'TOP': User is at or above start of container.
+      let nextState: 'TOP' | 'FIXED' | 'BOTTOM';
+      if (scrolled < 0) {
+        nextState = 'TOP';
+      } else if (scrolled >= maxScroll) {
+        nextState = 'BOTTOM';
+      } else {
+        nextState = 'FIXED';
+      }
+
+      if (lastPinStateRef.current !== nextState) {
+        lastPinStateRef.current = nextState;
+        if (nextState === 'FIXED') {
+          section.style.position = 'fixed';
+          section.style.top = `${HEADER_HEIGHT}px`;
+          section.style.bottom = 'auto';
+          section.style.left = '0px';
+          section.style.width = '100%';
+          section.style.height = `${heroHeight}px`;
+        } else if (nextState === 'BOTTOM') {
+          section.style.position = 'absolute';
+          section.style.top = 'auto';
+          section.style.bottom = '0px';
+          section.style.left = '0px';
+          section.style.width = '100%';
+          section.style.height = `${heroHeight}px`;
+        } else {
+          section.style.position = 'absolute';
+          section.style.top = '0px';
+          section.style.bottom = 'auto';
+          section.style.left = '0px';
+          section.style.width = '100%';
+          section.style.height = `${heroHeight}px`;
+        }
+      }
+
+      const progress = Math.min(1, Math.max(0, scrolled / maxScroll));
+
+      // Segmented frame progression:
+      // 0.00 to 0.70 -> Frames 0 to 22 (Upload, AI Scan, Guest Matching)
+      // 0.70 to 0.85 -> Frames 23 to 34 (Mara Photo outro logo reveal)
+      // 0.85 to 1.00 -> Frame 34 (Holds the final brand frame firmly)
+      // >= 1.00      -> Hero unpins at bottom and next page section enters cleanly
+      let target = 0;
+      if (progress >= 0.85) {
+        target = TOTAL_FRAMES - 1; // Frame 34 (Final Logo)
+      } else if (progress >= 0.70) {
+        const outroProgress = (progress - 0.70) / (0.85 - 0.70);
+        target = 23 + Math.floor(outroProgress * (TOTAL_FRAMES - 1 - 23));
+      } else {
+        const demoProgress = progress / 0.70;
+        target = Math.floor(demoProgress * 23);
+      }
+      targetFrameRef.current = Math.min(TOTAL_FRAMES - 1, Math.max(0, target));
+
+      // Update progress bar width directly (0ms overhead, zero React re-renders)
+      if (progressBarRef.current) {
+        const pct = Math.min(100, Math.max(0, progress * 100));
+        progressBarRef.current.style.width = `${pct}%`;
+      }
+
+      // Update scroll-down indicator directly
+      if (scrollBtnRef.current) {
+        if (progress > 0.04) {
+          scrollBtnRef.current.style.opacity = '0';
+          scrollBtnRef.current.style.pointerEvents = 'none';
+        } else {
+          scrollBtnRef.current.style.opacity = '1';
+          scrollBtnRef.current.style.pointerEvents = 'auto';
+        }
+      }
+    };
+
+    // Responsive 60fps/120fps render loop with snappy desktop response
+    const renderLoop = () => {
+      const diff = targetFrameRef.current - currentFrameRef.current;
+      if (Math.abs(diff) > 0.01) {
+        if (Math.abs(diff) < 0.25) {
+          currentFrameRef.current = targetFrameRef.current;
+        } else {
+          currentFrameRef.current += diff * 0.85;
+        }
+
+        const rounded = Math.round(currentFrameRef.current);
+        const clamped = Math.min(TOTAL_FRAMES - 1, Math.max(0, rounded));
+
+        if (clamped !== lastDrawnFrameRef.current) {
+          drawFrame(clamped);
+        }
+      }
+      rafIdRef.current = requestAnimationFrame(renderLoop);
+    };
+
+    const handleResize = () => {
+      lastPinStateRef.current = null;
+      resizeCanvas();
+      updateOnScroll();
+    };
+
     resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-    return () => window.removeEventListener('resize', resizeCanvas);
-  }, [resizeCanvas]);
+    updateOnScroll();
 
-  // ── SCROLL-PINNED INTERACTION (MOBILE & DESKTOP LOCK) ──
-  // The page CANNOT scroll down until the LAST image (Frame 35 / index 34) is reached.
-  // Uses touch-action: none + non-passive event listeners to ensure 100% lock on iOS/Android.
-  useEffect(() => {
-    const WHEEL_THRESHOLD = 18; // wheel delta per frame
-    const TOUCH_THRESHOLD = 8;  // 8px swipe distance per frame (fast & responsive)
-
-    const onWheel = (e: WheelEvent) => {
-      // If user is scrolled down into page content, let normal scrolling happen
-      if (window.scrollY > 15) return;
-
-      if (e.deltaY > 0) {
-        // Scrolling DOWN
-        if (currentFrameRef.current < TOTAL_FRAMES - 1) {
-          // Lock page and advance frame
-          e.preventDefault();
-          wheelAccumulatorRef.current += e.deltaY;
-          if (Math.abs(wheelAccumulatorRef.current) >= WHEEL_THRESHOLD) {
-            const step = Math.sign(wheelAccumulatorRef.current);
-            wheelAccumulatorRef.current = 0;
-            const next = Math.min(TOTAL_FRAMES - 1, currentFrameRef.current + step);
-            currentFrameRef.current = next;
-            setCurrentFrameIndex(next);
-            drawFrame(next);
-
-            if (next >= TOTAL_FRAMES - 1) {
-              isUnlockedRef.current = true;
-              setIsUnlocked(true);
-            }
-          }
-        } else {
-          // User is at last frame: allow normal scroll down!
-          isUnlockedRef.current = true;
-          setIsUnlocked(true);
-        }
-      } else if (e.deltaY < 0) {
-        // Scrolling UP at top of page: scrub backwards
-        if (window.scrollY <= 10 && currentFrameRef.current > 0) {
-          e.preventDefault();
-          wheelAccumulatorRef.current += e.deltaY;
-          if (Math.abs(wheelAccumulatorRef.current) >= WHEEL_THRESHOLD) {
-            const step = Math.sign(wheelAccumulatorRef.current);
-            wheelAccumulatorRef.current = 0;
-            const next = Math.max(0, currentFrameRef.current + step);
-            currentFrameRef.current = next;
-            setCurrentFrameIndex(next);
-            drawFrame(next);
-
-            if (next < TOTAL_FRAMES - 1) {
-              isUnlockedRef.current = false;
-              setIsUnlocked(false);
-            }
-          }
-        }
-      }
-    };
-
-    // Mobile touch interaction
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length > 0) {
-        touchStartYRef.current = e.touches[0].clientY;
-        touchAccumulatorRef.current = 0;
-      }
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length === 0) return;
-
-      // If user is already scrolled down into the page body, allow normal scrolling
-      if (window.scrollY > window.innerHeight * 0.6) return;
-
-      const currentY = e.touches[0].clientY;
-      const deltaY = touchStartYRef.current - currentY; // positive = swiping up (trying to scroll down)
-      touchStartYRef.current = currentY;
-
-      if (deltaY > 0) {
-        // Swiping UP -> wants to advance down
-        if (currentFrameRef.current < TOTAL_FRAMES - 1) {
-          // STRICT LOCK: Must preventDefault on mobile so page does NOT scroll down early!
-          if (e.cancelable) e.preventDefault();
-
-          touchAccumulatorRef.current += deltaY;
-          if (touchAccumulatorRef.current >= TOUCH_THRESHOLD) {
-            const framesToAdvance = Math.floor(touchAccumulatorRef.current / TOUCH_THRESHOLD);
-            touchAccumulatorRef.current %= TOUCH_THRESHOLD;
-            const next = Math.min(TOTAL_FRAMES - 1, currentFrameRef.current + framesToAdvance);
-            currentFrameRef.current = next;
-            setCurrentFrameIndex(next);
-            drawFrame(next);
-
-            if (next >= TOTAL_FRAMES - 1) {
-              isUnlockedRef.current = true;
-              setIsUnlocked(true);
-            }
-          }
-        } else {
-          // ALREADY AT LAST FRAME:
-          // Unlocked! Move window scroll down seamlessly
-          isUnlockedRef.current = true;
-          setIsUnlocked(true);
-          window.scrollBy({ top: Math.max(deltaY * 1.2, 12), behavior: 'auto' });
-        }
-      } else if (deltaY < 0) {
-        // Swiping DOWN -> wants to scroll up
-        if (window.scrollY <= 10 && currentFrameRef.current > 0) {
-          if (e.cancelable) e.preventDefault();
-          touchAccumulatorRef.current += deltaY;
-          if (Math.abs(touchAccumulatorRef.current) >= TOUCH_THRESHOLD) {
-            const framesToRewind = Math.floor(Math.abs(touchAccumulatorRef.current) / TOUCH_THRESHOLD);
-            touchAccumulatorRef.current = -(Math.abs(touchAccumulatorRef.current) % TOUCH_THRESHOLD);
-            const next = Math.max(0, currentFrameRef.current - framesToRewind);
-            currentFrameRef.current = next;
-            setCurrentFrameIndex(next);
-            drawFrame(next);
-
-            if (next < TOTAL_FRAMES - 1) {
-              isUnlockedRef.current = false;
-              setIsUnlocked(false);
-            }
-          }
-        }
-      }
-    };
-
-    // Keyboard support (down arrow / spacebar / up arrow)
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (window.scrollY <= 8) {
-        if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
-          if (currentFrameRef.current < TOTAL_FRAMES - 1) {
-            e.preventDefault();
-            const next = Math.min(TOTAL_FRAMES - 1, currentFrameRef.current + 1);
-            currentFrameRef.current = next;
-            setCurrentFrameIndex(next);
-            drawFrame(next);
-            if (next >= TOTAL_FRAMES - 1) {
-              isUnlockedRef.current = true;
-              setIsUnlocked(true);
-            }
-          }
-        } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
-          if (currentFrameRef.current > 0) {
-            e.preventDefault();
-            const next = Math.max(0, currentFrameRef.current - 1);
-            currentFrameRef.current = next;
-            setCurrentFrameIndex(next);
-            drawFrame(next);
-            if (next < TOTAL_FRAMES - 1) {
-              isUnlockedRef.current = false;
-              setIsUnlocked(false);
-            }
-          }
-        }
-      }
-    };
-
-    const heroSection = sectionRef.current;
-
-    // Attach listeners with passive: false to guarantee preventDefault works
-    window.addEventListener('wheel', onWheel, { passive: false });
-    window.addEventListener('keydown', onKeyDown, { passive: false });
-
-    if (heroSection) {
-      heroSection.addEventListener('touchstart', onTouchStart, { passive: true });
-      heroSection.addEventListener('touchmove', onTouchMove, { passive: false });
-    }
-    window.addEventListener('touchstart', onTouchStart, { passive: true });
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    rafIdRef.current = requestAnimationFrame(renderLoop);
+    window.addEventListener('scroll', updateOnScroll, { passive: true });
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
 
     return () => {
-      window.removeEventListener('wheel', onWheel);
-      window.removeEventListener('keydown', onKeyDown);
-      if (heroSection) {
-        heroSection.removeEventListener('touchstart', onTouchStart);
-        heroSection.removeEventListener('touchmove', onTouchMove);
-      }
-      window.removeEventListener('touchstart', onTouchStart);
-      window.removeEventListener('touchmove', onTouchMove);
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      window.removeEventListener('scroll', updateOnScroll);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
     };
-  }, [drawFrame]);
+  }, [drawFrame, resizeCanvas]);
 
-  const progressPercent = Math.min(100, Math.max(0, ((currentFrameIndex + 1) / TOTAL_FRAMES) * 100));
+  const handleSmoothScrollDown = () => {
+    const container = containerRef.current;
+    if (container) {
+      const heroHeight = window.innerHeight - HEADER_HEIGHT;
+      const maxScroll = container.offsetHeight - heroHeight;
+      const containerTop = container.getBoundingClientRect().top + window.scrollY;
+      const targetScroll = containerTop - HEADER_HEIGHT + maxScroll + 50;
+      window.scrollTo({ top: targetScroll, behavior: 'smooth' });
+    } else {
+      const workflowSection = document.getElementById('workflow');
+      if (workflowSection) workflowSection.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   return (
-    <section
-      ref={sectionRef}
-      className="hero-section"
-      id="hero"
-      style={{
-        touchAction: isUnlocked ? 'pan-y' : 'none',
-        position: 'relative',
-        width: '100%',
-        height: `calc(100vh - ${HEADER_HEIGHT}px)`,
-        minHeight: '520px',
-        maxHeight: '960px',
-        overflow: 'hidden',
-        background: '#09090b',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
+    <div
+      ref={containerRef}
+      className="hero-scroll-container"
     >
-      {/* Zero-latency poster fallback */}
-      <img
-        src={getFramePath(0)}
-        alt="Mara Photo Cinematic Hero"
-        className="hero-poster"
-        style={{
-          opacity: isLoaded ? 0.3 : 0.95,
-        }}
-      />
+      <section
+        ref={sectionRef}
+        className="hero-section"
+        id="hero"
+      >
+        {/* Ambient background canvas - paints warm blurred frame colors across 100% of viewport */}
+        <canvas
+          ref={bgCanvasRef}
+          className="hero-ambient-canvas"
+          aria-hidden="true"
+        />
 
-      {/* Dynamic Canvas */}
-      <canvas
-        ref={canvasRef}
-        className="hero-canvas"
-      />
+        {/* Luxury radial gold aura for brand outro frames */}
+        <div
+          ref={auraRef}
+          className="hero-radial-aura"
+          aria-hidden="true"
+        />
 
-      {/* Subtle vignette */}
-      <div className="hero-cinematic-overlay" />
+        {/* 0ms initial frame poster fallback before JS canvas paints */}
+        <img
+          ref={posterRef}
+          src={getFramePath(0)}
+          alt="Mara Photo Cinematic Hero"
+          className="hero-poster"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            pointerEvents: 'none',
+            zIndex: 1,
+            transition: 'opacity 0.3s ease',
+          }}
+        />
 
-      {/* Clean luxury progress bar at bottom of hero section */}
-      <div
-        className="hero-progress-bar"
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          height: '2.5px',
-          background: 'linear-gradient(90deg, #c5a880 0%, #e3d8c8 50%, #f5f2eb 100%)',
-          width: `${progressPercent}%`,
-          zIndex: 10,
-          transition: 'width 0.05s linear',
-          boxShadow: '0 0 10px rgba(197, 168, 128, 0.5)',
-        }}
-      />
-    </section>
+        {/* Dynamic Foreground Canvas with GPU Compositing */}
+        <canvas
+          ref={canvasRef}
+          className="hero-canvas"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            display: 'block',
+            objectFit: 'cover',
+            willChange: 'transform',
+            transform: 'translateZ(0)',
+            touchAction: 'pan-y',
+            zIndex: 2,
+          }}
+        />
+
+        {/* Subtle cinematic vignette */}
+        <div className="hero-cinematic-overlay" />
+
+        {/* Luxury Pulsing Scroll Down Indicator */}
+        <button
+          ref={scrollBtnRef}
+          onClick={handleSmoothScrollDown}
+          type="button"
+          aria-label="Scroll to explore"
+          style={{
+            transition: 'opacity 0.3s ease',
+          }}
+          className="flex absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex-col items-center gap-1.5 text-white/70 hover:text-white transition-all cursor-pointer group select-none hero-scroll-btn"
+        >
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#c5a880] drop-shadow-sm group-hover:tracking-[0.25em] transition-all">
+            Scroll to Explore
+          </span>
+          <div className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-md border border-[#c5a880]/30 flex items-center justify-center shadow-lg group-hover:scale-110 group-hover:border-[#c5a880] transition-all animate-bounce">
+            <ChevronDown className="w-4 h-4 text-[#c5a880]" />
+          </div>
+        </button>
+
+        {/* Clean luxury gold progress bar at bottom of hero section */}
+        <div
+          ref={progressBarRef}
+          className="hero-progress-bar"
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            height: '3px',
+            background: 'linear-gradient(90deg, #c5a880 0%, #e3d8c8 50%, #f5f2eb 100%)',
+            width: '0%',
+            zIndex: 10,
+            boxShadow: '0 0 12px rgba(197, 168, 128, 0.6)',
+          }}
+        />
+      </section>
+    </div>
   );
 }
