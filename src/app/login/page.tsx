@@ -194,11 +194,11 @@ export default function LoginPage() {
             <GoogleAuthButton
               text="Continue with Google"
               disabled={loading}
-              onSuccess={async ({ accessToken }) => {
+              onSuccess={async ({ accessToken, credential }) => {
                 setLoading(true);
                 try {
                   if (googleLogin) {
-                    await googleLogin(undefined, accessToken);
+                    await googleLogin(credential, accessToken);
                     toast.success('Google login successful!');
                     router.push('/dashboard');
                   }

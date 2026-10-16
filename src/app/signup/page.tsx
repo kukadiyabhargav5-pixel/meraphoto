@@ -539,11 +539,12 @@ export default function SignupPage() {
                 <GoogleAuthButton
                   text="Sign up with Google"
                   disabled={loading}
-                  onSuccess={async ({ accessToken, email, name }) => {
+                  onSuccess={async ({ accessToken, credential, email, name }) => {
                     setRegName(name || '');
                     setRegEmail(email || '');
                     setIsGoogleUser(true);
-                    setGoogleAccessToken(accessToken);
+                    if (accessToken) setGoogleAccessToken(accessToken);
+                    if (credential) setGoogleCredential(credential);
                     goToStep(1);
                     toast.success('Google account connected! Please complete your profile.');
                   }}
