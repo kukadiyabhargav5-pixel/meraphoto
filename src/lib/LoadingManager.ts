@@ -369,9 +369,7 @@ class LoadingManagerClass {
     try {
       await Promise.all([
         Promise.resolve(this.routerPrefetchFn('/login')).catch(() => {}),
-        Promise.resolve(this.routerPrefetchFn('/auth/login')).catch(() => {}),
         Promise.resolve(this.routerPrefetchFn('/signup')).catch(() => {}),
-        Promise.resolve(this.routerPrefetchFn('/auth/register')).catch(() => {}),
       ]);
     } catch {}
 

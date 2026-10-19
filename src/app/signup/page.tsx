@@ -160,24 +160,30 @@ export default function SignupPage() {
     }
 
     try {
-      if (isGoogleUser && (googleAccessToken || googleCredential)) {
+      if (isGoogleUser) {
+        if (!googleCredential && !googleAccessToken) {
+          toast.error('Google session expired. Please connect with Google again.');
+          setIsGoogleUser(false);
+          goToStep(1);
+          setLoading(false);
+          return;
+        }
+
         if (googleLogin) {
           setRedirecting(true);
-          await googleLogin(googleCredential || undefined, googleAccessToken || undefined);
-          try {
-            await apiClient.put('/auth/update-profile', {
-              name: regName.trim(),
-              phone: cleanPhone,
-              studioName: regStudioName.trim(),
-              websiteLink: regWebsite.trim(),
-              instagramUrl: regInstagram.trim(),
-              facebookUrl: regFacebook.trim(),
-              logoUrl: regLogo,
-              password: regPassword || undefined,
-            });
-          } catch (updateErr) {
-            console.warn('Profile update after Google signup:', updateErr);
-          }
+          const registrationPayload = {
+            name: regName.trim(),
+            phone: cleanPhone,
+            studioName: regStudioName.trim(),
+            websiteLink: regWebsite.trim() || undefined,
+            instagramUrl: regInstagram.trim() || undefined,
+            facebookUrl: regFacebook.trim() || undefined,
+            logoUrl: regLogo || undefined,
+            password: regPassword || undefined,
+          };
+
+          await googleLogin(googleCredential || undefined, googleAccessToken || undefined, registrationPayload);
+          
           toast.success('Account created successfully! Redirecting...');
           router.replace('/dashboard');
           setTimeout(() => {
@@ -194,10 +200,10 @@ export default function SignupPage() {
           password: regPassword,
           phone: cleanPhone,
           studioName: regStudioName.trim(),
-          websiteLink: regWebsite.trim(),
-          instagramUrl: regInstagram.trim(),
-          facebookUrl: regFacebook.trim(),
-          logoUrl: regLogo,
+          websiteLink: regWebsite.trim() || undefined,
+          instagramUrl: regInstagram.trim() || undefined,
+          facebookUrl: regFacebook.trim() || undefined,
+          logoUrl: regLogo || undefined,
         });
         toast.success('Registration successful! Opening dashboard...');
         router.replace('/dashboard');
@@ -328,7 +334,7 @@ export default function SignupPage() {
                     <input 
                       type="email" id="regEmail" required placeholder="Email Address"
                       disabled={isGoogleUser}
-                      className={`peer w-full bg-slate-50/50 hover:bg-slate-50 focus:bg-white border rounded-2xl pl-12 pr-4 pt-7 pb-2.5 text-sm font-semibold text-slate-900 focus:ring-2 transition-all outline-none shadow-sm placeholder-transparent disabled:opacity-70 disabled:cursor-not-allowed ${emailExists ? 'border-rose-400 focus:ring-rose-400/20' : 'border-slate-200 focus:border-[#c5a880] focus:ring-[#c5a880]/20'}`}
+                      className={`peer w-full bg-slate-50/50 hover:bg-slate-50 focus:bg-white border rounded-2xl pl-12 pr-4 pt-7 pb-2.5 text-sm font-semibold text-slate-900 focus:ring-2 transition-all outline-none shadow-sm placeholder-transparent disabled:opacity-70 disabled:cursor-not-allowed ${emailExists && !isGoogleUser ? 'border-rose-400 focus:ring-rose-400/20' : 'border-slate-200 focus:border-[#c5a880] focus:ring-[#c5a880]/20'}`}
                       value={regEmail} onChange={(e) => setRegEmail(e.target.value)} 
                     />
                     <label htmlFor="regEmail" className="absolute left-12 top-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest transition-all peer-placeholder-shown:top-[17px] peer-placeholder-shown:text-[13px] peer-placeholder-shown:normal-case peer-focus:top-2 peer-focus:text-[10px] peer-focus:uppercase peer-focus:text-[#c5a880]">
@@ -336,7 +342,11 @@ export default function SignupPage() {
                     </label>
                     {emailChecking && <Loader className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin" />}
                   </div>
-                  {emailExists && <p className="text-rose-500 text-[10px] font-bold pl-2 -mt-3 uppercase tracking-wider">Email already registered</p>}
+                  {emailExists && (
+                    <p className={`${isGoogleUser ? 'text-amber-600' : 'text-rose-500'} text-[10px] font-bold pl-2 -mt-3 uppercase tracking-wider`}>
+                      {isGoogleUser ? 'Existing account found – continuing will link and sign you in' : 'Email already registered'}
+                    </p>
+                  )}
 
                   <div className="relative group">
                     <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-5 h-5 pointer-events-none text-slate-400 peer-focus:text-[#c5a880] transition-colors z-10">

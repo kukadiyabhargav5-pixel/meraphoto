@@ -33,7 +33,7 @@ interface AuthContextType {
   loading: boolean;
   isLoggingOut: boolean;
   login: (email: string, password: string) => Promise<void>;
-  googleLogin: (credential?: string, accessToken?: string) => Promise<void>;
+  googleLogin: (credential?: string, accessToken?: string, extraData?: any) => Promise<any>;
   register: (data: any) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -42,38 +42,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('user');
-        return saved ? JSON.parse(saved) : null;
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  });
-  const [studio, setStudio] = useState<AuthStudio | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('studio');
-        return saved ? JSON.parse(saved) : null;
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  });
-  const [loading, setLoading] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const token = localStorage.getItem('accessToken');
-        const saved = localStorage.getItem('user');
-        if (token && saved) return false;
-      } catch {}
-    }
-    return true;
-  });
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [studio, setStudio] = useState<AuthStudio | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const isAuthenticated = !!user;
@@ -122,6 +93,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   useEffect(() => {
+    try {
+      const savedUser = localStorage.getItem('user');
+      const savedStudio = localStorage.getItem('studio');
+      const token = localStorage.getItem('accessToken');
+      if (token && savedUser) {
+        setUser(JSON.parse(savedUser));
+        if (savedStudio) setStudio(JSON.parse(savedStudio));
+        setLoading(false);
+      }
+    } catch {}
+
     refreshUser();
   }, [refreshUser]);
 
@@ -145,8 +127,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setLoading(false);
   };
 
-  const googleLogin = async (credential?: string, accessToken?: string) => {
-    const res = await apiClient.post('/auth/google', { credential, accessToken });
+  const googleLogin = async (credential?: string, accessToken?: string, extraData?: any) => {
+    const res = await apiClient.post('/auth/google', { credential, accessToken, ...(extraData || {}) });
     const data = res.data;
 
     // Save tokens
@@ -163,6 +145,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(data.user);
     setStudio(data.studio || null);
     setLoading(false);
+    return data;
   };
 
   const register = async (formData: any) => {

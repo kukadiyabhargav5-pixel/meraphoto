@@ -83,7 +83,8 @@ export const DashboardProvider = ({ children }: { children: React.ReactNode }) =
         setStudio((prev: any) => ({
           ...prev,
           subscriptionPlan: res.data.studio.subscriptionPlan,
-          name: res.data.studio.name || prev?.name
+          name: res.data.studio.name || prev?.name,
+          logoUrl: res.data.studio.logoUrl !== undefined ? res.data.studio.logoUrl : prev?.logoUrl
         }));
       }
     } catch (err) {

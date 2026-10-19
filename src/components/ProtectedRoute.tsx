@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { useRouter, usePathname } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
@@ -13,18 +13,23 @@ export default function ProtectedRoute({
   allowedRoles?: string[];
 }) {
   const { isAuthenticated, loading, user } = useAuth();
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !loading && !isAuthenticated) {
       router.replace('/login');
-    } else if (!loading && isAuthenticated && allowedRoles && user && !allowedRoles.includes(user.role)) {
+    } else if (mounted && !loading && isAuthenticated && allowedRoles && user && !allowedRoles.includes(user.role)) {
       router.replace('/dashboard');
     }
-  }, [loading, isAuthenticated, allowedRoles, user, router]);
+  }, [mounted, loading, isAuthenticated, allowedRoles, user, router]);
 
-  if (loading) {
+  if (!mounted || loading) {
     return (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#faf9f6] p-4 overscroll-none select-none">
         <div className="flex flex-col items-center justify-center text-center">

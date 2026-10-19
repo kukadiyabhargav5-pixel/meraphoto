@@ -26,6 +26,30 @@ const nextConfig: NextConfig = {
       }
     ];
   },
+  async redirects() {
+    return [
+      {
+        source: '/features',
+        destination: '/#features',
+        permanent: true,
+      },
+      {
+        source: '/auth/login',
+        destination: '/login',
+        permanent: true,
+      },
+      {
+        source: '/dashboard/studio-branding',
+        destination: '/dashboard/profile',
+        permanent: true,
+      },
+      {
+        source: '/dashboard/studio-settings',
+        destination: '/dashboard/profile',
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

@@ -1,12 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { 
-  ArrowRight, 
-  Zap, 
-  Check, 
-  Star, 
-  Sparkles, 
+import {
+  ArrowRight,
+  Zap,
+  Check,
+  Star,
+  Sparkles,
   ChevronDown,
   ShieldCheck
 } from 'lucide-react';
@@ -19,14 +19,14 @@ export default function Hero() {
 
   return (
     <section className="relative w-full bg-white text-[#09090b] pt-10 pb-16 lg:pt-20 lg:pb-28 px-4 sm:px-6 lg:px-12 overflow-hidden font-poppins border-b border-[#e3d8c8]/30">
-      
+
       {/* ── Soft Champagne / Gold Ambient Gradient Orbs (White Luxury Aesthetic) ── */}
-      <div 
-        aria-hidden="true" 
+      <div
+        aria-hidden="true"
         className="pointer-events-none absolute -top-28 left-1/4 w-[500px] h-[500px] bg-[#c5a880]/10 rounded-full blur-[120px]"
       />
-      <div 
-        aria-hidden="true" 
+      <div
+        aria-hidden="true"
         className="pointer-events-none absolute top-1/2 -right-24 w-[450px] h-[450px] bg-[#f5f2eb] rounded-full blur-[100px]"
       />
 
@@ -86,10 +86,10 @@ export default function Hero() {
 
           {/* ══════════════ RIGHT COLUMN: MARA PHOTO IMAGE WITH SMOOTH HOVER ZOOM ══════════════ */}
           <div className="lg:col-span-5 w-full max-w-md lg:max-w-none mx-auto relative px-3 sm:px-6 lg:px-0">
-            
+
             {/* ── The Luxury Main Rounded Card (Interactive Smooth Zoom In / Zoom Out) ── */}
             <div className="relative rounded-[32px] sm:rounded-[40px] overflow-hidden bg-[#faf9f6] border-2 border-[#e3d8c8] shadow-[0_25px_60px_rgba(197,168,128,0.22),0_15px_30px_rgba(0,0,0,0.06)] aspect-[3/4] group cursor-pointer transition-all duration-500 hover:shadow-[0_32px_75px_rgba(197,168,128,0.32),0_20px_40px_rgba(0,0,0,0.1)] hover:-translate-y-1">
-              
+
               {/* Generated Luxury Royal Indian Wedding Image with 'MARA PHOTO' watermark */}
               <img
                 src="/mara-photo-hero.jpg"
@@ -128,7 +128,7 @@ export default function Hero() {
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                 </div>
                 <div className="text-[10px] sm:text-[11px] text-gray-300 font-semibold">
-                  99.8% Accuracy &lt; 2s
+                  99.8% Accuracy
                 </div>
               </div>
             </div>

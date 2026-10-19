@@ -376,17 +376,13 @@ export default function BillPage() {
       return;
     }
 
-    if (!newBillGst.trim()) {
-      setErrorMsg('Please enter 15-digit GST Number');
-      toast.error('Please enter 15-digit GST Number');
-      return;
-    }
-
-    const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-    if (!gstRegex.test(newBillGst.trim())) {
-      setErrorMsg('Invalid GST Number format. It must be 15 characters (e.g. 24AAAAA0000A1Z5)');
-      toast.error('Invalid GST Number format. It must be 15 characters');
-      return;
+    if (newBillGst.trim()) {
+      const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+      if (!gstRegex.test(newBillGst.trim())) {
+        setErrorMsg('Invalid GST Number format. It must be 15 characters (e.g. 24AAAAA0000A1Z5)');
+        toast.error('Invalid GST Number format. It must be 15 characters');
+        return;
+      }
     }
 
     const totalVal = parseFloat(newBillAmount) || 0;
@@ -892,16 +888,16 @@ export default function BillPage() {
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center">
                       <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                        GST Number <span className="text-rose-500">*</span>
+                        GST Number <span className="text-slate-400 font-normal normal-case">(Optional)</span>
                       </label>
                       <span className={`text-[10px] font-mono font-bold ${newBillGst.length === 15 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                        {newBillGst.length}/15
+                        {newBillGst.length > 0 ? `${newBillGst.length}/15` : 'Optional'}
                       </span>
                     </div>
                     <input
                       type="text"
-                      required
                       maxLength={15}
+                      placeholder="e.g. 24AAAAA0000A1Z5 (Optional)"
                       value={newBillGst}
                       onChange={(e) => handleGstChange(e.target.value)}
                       className={`w-full bg-white border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none uppercase font-mono font-bold tracking-wider shadow-2xs transition-all ${

@@ -7,12 +7,13 @@ import {
   LayoutDashboard, Calendar, Settings, CreditCard, HelpCircle,
   LogOut, Plus,
   Users, Users2, FileText, QrCode, User, BookOpen, Receipt, Briefcase,
-  Menu, X, UserPlus, ScanLine, Lock, Shield, Sparkles
+  Menu, X, UserPlus, ScanLine, Lock, Shield, Sparkles,
+  Camera, Upload, Loader2
 } from 'lucide-react';
 import { DashboardProvider, useDashboard } from './DashboardContext';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import { useAuth } from '../../lib/AuthContext';
-import { resolveMediaUrl } from '../../lib/api';
+import { apiClient, resolveMediaUrl } from '../../lib/api';
 import toast from 'react-hot-toast';
 
 const NAV_SECTIONS = [
@@ -72,9 +73,61 @@ function SidebarContent({
   const { studio: authStudio } = useAuth();
   const [logoState, setLogoState] = useState<string>(() => resolveMediaUrl(studio?.logoUrl || authStudio?.logoUrl, '/logo.png'));
 
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  const handleDirectLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
+    if (!validMimes.includes(file.type)) {
+      toast.error('Please upload a JPG, PNG, WEBP, or SVG image.');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Logo file size must be under 10MB.');
+      return;
+    }
+
+    const toastId = toast.loading('Uploading studio logo...');
+    setUploadingLogo(true);
+    try {
+      const formData = new FormData();
+      formData.append('logo', file);
+      formData.append('image', file);
+
+      const res = await apiClient.post('/studio/logo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      if (res.data?.logoUrl) {
+        const newUrl = resolveMediaUrl(res.data.logoUrl);
+        setLogoState(newUrl);
+        if (res.data?.studio) {
+          try {
+            localStorage.setItem('studio', JSON.stringify(res.data.studio));
+          } catch {}
+          window.dispatchEvent(new CustomEvent('studio_logo_updated', { detail: res.data.studio }));
+          window.dispatchEvent(new CustomEvent('studio_updated', { detail: res.data.studio }));
+        }
+        toast.success('Studio logo updated successfully!', { id: toastId });
+      }
+    } catch (err: any) {
+      console.error('Logo upload error:', err);
+      toast.error(err?.response?.data?.error || 'Failed to upload studio logo.', { id: toastId });
+    } finally {
+      setUploadingLogo(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
   useEffect(() => {
     const raw = studio?.logoUrl || authStudio?.logoUrl;
-    setLogoState(resolveMediaUrl(raw, '/logo.png'));
+    if (raw) {
+      setLogoState(resolveMediaUrl(raw, '/logo.png'));
+    }
   }, [studio?.logoUrl, authStudio?.logoUrl]);
 
   useEffect(() => {
@@ -173,18 +226,92 @@ function SidebarContent({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-center w-full py-4 mb-4 px-2 shrink-0 h-16 max-h-16 overflow-hidden">
-        <Link href={basePrefix} className="cursor-pointer flex items-center justify-center h-full max-w-[150px]" onClick={onLinkClick}>
-          <img
-            src={resolveMediaUrl(logoState, '/logo.png')}
-            alt="Studio Logo"
-            onError={() => {
-              if (logoState !== '/logo.png') setLogoState('/logo.png');
-            }}
-            style={{ maxHeight: '42px', maxWidth: '140px', height: '42px', width: 'auto' }}
-            className={`max-h-10 h-10 w-auto max-w-[140px] object-contain shrink-0 ${logoState === '/logo.png' ? 'filter invert' : ''}`}
-          />
-        </Link>
+      {/* Studio Logo & Identity Section */}
+      <div className="flex flex-col items-center justify-center w-full pt-3 pb-3 mb-3 px-2 shrink-0 border-b border-white/5 relative">
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleDirectLogoUpload}
+          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+          className="hidden"
+          id="sidebarDirectLogoInput"
+        />
+
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          className="relative cursor-pointer group/logo flex items-center justify-center rounded-2xl p-1.5 transition-all duration-300 hover:bg-white/5"
+          title="Click to add or change Studio Logo"
+        >
+          {logoState && logoState !== '/logo.png' ? (
+            <div className="relative flex items-center justify-center">
+              <img
+                src={resolveMediaUrl(logoState, '/logo.png')}
+                alt={studio?.name || authStudio?.name || 'Studio Logo'}
+                onError={() => {
+                  if (logoState !== '/logo.png') setLogoState('/logo.png');
+                }}
+                style={{ maxHeight: '46px', maxWidth: '140px', height: 'auto', width: 'auto' }}
+                className="max-h-11 w-auto max-w-[140px] object-contain rounded-lg shadow-md"
+              />
+              <div className="absolute inset-0 bg-black/60 rounded-lg opacity-0 group-hover/logo:opacity-100 flex flex-col items-center justify-center transition-all duration-200">
+                <Camera className="w-4 h-4 text-white" />
+                <span className="text-[9px] font-bold text-white mt-0.5">Change</span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center">
+              <div className="relative">
+                <img
+                  src="/logo.png"
+                  alt="Mara Photo"
+                  style={{ maxHeight: '36px', maxWidth: '130px', height: '36px', width: 'auto' }}
+                  className="max-h-9 h-9 w-auto max-w-[130px] object-contain filter invert opacity-80 group-hover/logo:opacity-40 transition-opacity"
+                />
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/logo:opacity-100 transition-opacity">
+                  <div className="bg-[#c5a880] text-black px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-lg">
+                    <Camera className="w-3 h-3" />
+                    <span>Add Logo</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {uploadingLogo && (
+            <div className="absolute inset-0 bg-black/75 rounded-2xl flex items-center justify-center z-20">
+              <Loader2 className="w-5 h-5 text-[#c5a880] animate-spin" />
+            </div>
+          )}
+        </div>
+
+        {/* Studio Name and Quick Action */}
+        <div className="mt-1 text-center w-full px-1">
+          <Link
+            href={`${basePrefix}/profile`}
+            onClick={onLinkClick}
+            className="group/name inline-flex items-center justify-center gap-1.5 max-w-full hover:opacity-85 transition-opacity"
+          >
+            <span className="text-xs font-bold text-slate-200 truncate font-poppins tracking-wide">
+              {studio?.name || authStudio?.name || user?.name || 'My Studio'}
+            </span>
+            <span className="text-[9px] text-[#c5a880] font-bold bg-[#c5a880]/15 px-1.5 py-0.5 rounded border border-[#c5a880]/30 shrink-0">
+              Studio
+            </span>
+          </Link>
+          
+          {(!logoState || logoState === '/logo.png') && (
+            <div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="mt-1 inline-flex items-center gap-1 text-[10.5px] font-semibold text-[#c5a880] hover:text-white transition-colors cursor-pointer"
+              >
+                <Upload className="w-3 h-3" />
+                <span>+ Add Studio Logo</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Nav */}
@@ -287,7 +414,9 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const raw = studio?.logoUrl || authStudio?.logoUrl;
-    setLogoState(resolveMediaUrl(raw, '/logo.png'));
+    if (raw) {
+      setLogoState(resolveMediaUrl(raw, '/logo.png'));
+    }
   }, [studio?.logoUrl, authStudio?.logoUrl]);
 
   useEffect(() => {
