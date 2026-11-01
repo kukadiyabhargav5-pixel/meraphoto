@@ -12,4 +12,6 @@ const teamSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+teamSchema.index({ studioId: 1, createdAt: -1 });
+
 export default mongoose.model('Team', teamSchema);

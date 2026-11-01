@@ -16,4 +16,6 @@ const quotationSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+quotationSchema.index({ studioId: 1, createdAt: -1 });
+
 export default mongoose.model('Quotation', quotationSchema);

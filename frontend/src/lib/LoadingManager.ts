@@ -118,8 +118,8 @@ class LoadingManagerClass {
 
       // Fast, ultra-smooth transition (~250-300ms total)
       const elapsed = Date.now() - startTime;
-      if (elapsed < 280) {
-        await new Promise((r) => setTimeout(r, 280 - elapsed));
+      if (elapsed < 60) {
+        await new Promise((r) => setTimeout(r, 60 - elapsed));
       }
 
       // ══════════════════════════════════════════════════

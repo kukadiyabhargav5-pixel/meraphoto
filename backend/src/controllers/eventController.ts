@@ -84,7 +84,7 @@ export const createEvent = async (req: AuthRequest, res: Response) => {
       code,
       clientName,
       clientMobile,
-      clientEmail,
+      clientEmail: clientEmail ? clientEmail.toLowerCase().trim() : '',
       date: new Date(date),
       type,
       coverImageUrl: coverImageUrl ? getFileUrl(coverImageUrl) : coverImageUrl,
@@ -248,13 +248,14 @@ export const getEventByCode = async (req: Request, res: Response) => {
 
   try {
     let event = null;
+    const cleanCode = (code || '').toLowerCase().trim();
     if (code.match(/^[0-9a-fA-F]{24}$/)) {
       event = await Event.findById(code)
-        .populate('studioId', 'name logoUrl watermark customDomain instagramUrl facebookUrl');
+        .populate('studioId', 'name logoUrl watermark customDomain instagramUrl facebookUrl subscriptionPlan subscriptionStartDate subscriptionExpiresAt');
     }
     if (!event) {
-      event = await Event.findOne({ code })
-        .populate('studioId', 'name logoUrl watermark customDomain instagramUrl facebookUrl');
+      event = await Event.findOne({ code: cleanCode })
+        .populate('studioId', 'name logoUrl watermark customDomain instagramUrl facebookUrl subscriptionPlan subscriptionStartDate subscriptionExpiresAt');
     }
     
     if (!event) {
@@ -262,8 +263,30 @@ export const getEventByCode = async (req: Request, res: Response) => {
     }
 
     // Redact passwordHash before sending
-    const eventObj = event.toObject();
+    const eventObj: any = event.toObject();
     delete eventObj.passwordHash;
+
+    // Attach accurate plan-based validity & days remaining
+    const studioId = (event.studioId as any)?._id || event.studioId;
+    let planExpiresAt: any = null;
+    if (studioId) {
+      const activeSub = await StorageSubscription.findOne({
+        studioId,
+        status: 'ACTIVE',
+        paymentStatus: 'paid',
+        expiresAt: { $gt: new Date() }
+      }).sort({ expiresAt: -1 }).lean();
+
+      const studioDoc = await Studio.findById(studioId).select('subscriptionExpiresAt subscriptionPlan subscriptionStartDate').lean();
+      planExpiresAt = activeSub?.expiresAt || studioDoc?.subscriptionExpiresAt;
+      if (!planExpiresAt && studioDoc?.subscriptionPlan && studioDoc.subscriptionPlan !== 'BASIC') {
+        const start = studioDoc.subscriptionStartDate || event.createdAt || new Date();
+        planExpiresAt = new Date(new Date(start).getTime() + 180 * 24 * 60 * 60 * 1000);
+      }
+    }
+    const { daysLeft, autoDeleteAt } = calculateEventDaysLeft(event, planExpiresAt);
+    eventObj.daysLeft = daysLeft;
+    eventObj.autoDeleteAt = autoDeleteAt;
     if (eventObj.coverImageUrl) eventObj.coverImageUrl = getFileUrl(eventObj.coverImageUrl);
     if (eventObj.studioId && (eventObj.studioId as any).logoUrl) {
       (eventObj.studioId as any).logoUrl = getFileUrl((eventObj.studioId as any).logoUrl);
@@ -377,10 +400,11 @@ export const updateEvent = async (req: AuthRequest, res: Response) => {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
     let event;
-    if (eventId.match(/^[0-9a-fA-F]{24}$/)) {
-      event = await Event.findById(eventId);
+    const cleanUpdateId = (eventId || '').trim();
+    if (cleanUpdateId.match(/^[0-9a-fA-F]{24}$/)) {
+      event = await Event.findById(cleanUpdateId);
     } else {
-      event = await Event.findOne({ code: eventId });
+      event = await Event.findOne({ code: cleanUpdateId.toLowerCase() });
     }
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
@@ -427,7 +451,7 @@ export const updateEvent = async (req: AuthRequest, res: Response) => {
     if (name && name.trim()) event.name = name.trim();
     if (clientName) event.clientName = clientName;
     if (clientMobile) event.clientMobile = clientMobile;
-    if (clientEmail) event.clientEmail = clientEmail;
+    if (clientEmail !== undefined) event.clientEmail = clientEmail ? clientEmail.toLowerCase().trim() : '';
     if (date) event.date = new Date(date);
     if (type) event.type = type;
     if (coverImageUrl !== undefined) event.coverImageUrl = coverImageUrl;
@@ -515,9 +539,29 @@ export const updateEvent = async (req: AuthRequest, res: Response) => {
     const updatedStudio = await Studio.findById(event.studioId).lean();
     const credits = updatedStudio ? await calculateStudioCredits(updatedStudio._id, updatedStudio.subscriptionPlan, updatedStudio) : null;
 
+    // Attach daysLeft calculation to updated event response
+    const studioIdForDays = event.studioId;
+    let updatePlanExpiresAt: any = null;
+    if (studioIdForDays) {
+      const activeSub = await StorageSubscription.findOne({
+        studioId: studioIdForDays,
+        status: 'ACTIVE',
+        paymentStatus: 'paid',
+        expiresAt: { $gt: new Date() }
+      }).sort({ expiresAt: -1 }).lean();
+      const studioDoc = await Studio.findById(studioIdForDays).select('subscriptionExpiresAt subscriptionPlan subscriptionStartDate').lean();
+      updatePlanExpiresAt = activeSub?.expiresAt || studioDoc?.subscriptionExpiresAt;
+      if (!updatePlanExpiresAt && studioDoc?.subscriptionPlan && studioDoc.subscriptionPlan !== 'BASIC') {
+        const start = studioDoc.subscriptionStartDate || event.createdAt || new Date();
+        updatePlanExpiresAt = new Date(new Date(start).getTime() + 180 * 24 * 60 * 60 * 1000);
+      }
+    }
+    const { daysLeft: updatedDaysLeft, autoDeleteAt: updatedAutoDeleteAt } = calculateEventDaysLeft(event, updatePlanExpiresAt);
+    const enrichedUpdatedEvent = { ...event.toObject(), daysLeft: updatedDaysLeft, autoDeleteAt: updatedAutoDeleteAt };
+
     return res.json({ 
       message: 'Event updated successfully', 
-      event,
+      event: enrichedUpdatedEvent,
       deductedPhotos: photosToDeduct,
       deductedVideos: videosToDeduct,
       credits
@@ -605,10 +649,11 @@ export const updatePortfolioStatus = async (req: AuthRequest, res: Response) => 
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
     let event;
-    if (eventId.match(/^[0-9a-fA-F]{24}$/)) {
-      event = await Event.findById(eventId);
+    const cleanPortId = (eventId || '').trim();
+    if (cleanPortId.match(/^[0-9a-fA-F]{24}$/)) {
+      event = await Event.findById(cleanPortId);
     } else {
-      event = await Event.findOne({ code: eventId });
+      event = await Event.findOne({ code: cleanPortId.toLowerCase() });
     }
     
     if (!event) return res.status(404).json({ error: 'Event not found' });
@@ -650,10 +695,11 @@ export const updateDownloadStatus = async (req: AuthRequest, res: Response) => {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
     let event;
-    if (eventId.match(/^[0-9a-fA-F]{24}$/)) {
-      event = await Event.findById(eventId);
+    const cleanPortId = (eventId || '').trim();
+    if (cleanPortId.match(/^[0-9a-fA-F]{24}$/)) {
+      event = await Event.findById(cleanPortId);
     } else {
-      event = await Event.findOne({ code: eventId });
+      event = await Event.findOne({ code: cleanPortId.toLowerCase() });
     }
     
     if (!event) return res.status(404).json({ error: 'Event not found' });

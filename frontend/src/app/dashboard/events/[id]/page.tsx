@@ -700,7 +700,11 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
               const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
               const createdMidnight = new Date(createdDate.getFullYear(), createdDate.getMonth(), createdDate.getDate()).getTime();
               const diffDays = Math.max(0, Math.floor((todayMidnight - createdMidnight) / (1000 * 60 * 60 * 24)));
-              const days = typeof event.daysLeft === 'number' ? event.daysLeft : 180;
+              const days = typeof event.daysLeft === 'number' 
+                ? event.daysLeft 
+                : typeof storageUsage?.activePlan?.daysLeft === 'number'
+                ? storageUsage.activePlan.daysLeft
+                : 30;
               const label = days >= 9000 ? 'Active Lifetime' : days === 0 ? 'Plan Expired' : `${days} ${days === 1 ? 'day' : 'days'} left`;
               const isUrgent = days <= 1;
               const isWarning = days <= 5;
@@ -1058,7 +1062,8 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                   }
                 };
 
-                const res = await apiClient.put(`/event/${eventId}`, payload);
+                const targetId = event?._id || eventId;
+                const res = await apiClient.put(`/event/${targetId}`, payload);
                 if (res.data.event) {
                   setEvent(res.data.event);
                   setFormData(prev => ({
@@ -1541,83 +1546,127 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 })()}
               </div>
 
-              <div className="flex items-center justify-between py-4">
-                <div className="flex items-center gap-2">
-                  <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-400 font-bold">P</span>
-                  <span className="text-xs font-bold text-slate-600 uppercase">Add to Portfolio</span>
-                  {saving && <Loader2 className="h-3 w-3 animate-spin text-slate-400 ml-2" />}
+              {/* Add to Portfolio Toggle */}
+              <div 
+                onClick={async () => {
+                  if (saving) return;
+                  const newValue = !formData.addToPortfolio;
+                  const targetId = event?._id || eventId;
+                  
+                  setFormData(prev => ({...prev, addToPortfolio: newValue}));
+                  setSaving(true);
+                  
+                  try {
+                    await apiClient.patch(`/event/${targetId}/portfolio-status`, { 
+                      addToPortfolio: newValue 
+                    });
+                    
+                    if (event) {
+                      setEvent((prev: any) => prev ? ({...prev, addToPortfolio: newValue}) : null);
+                    }
+                    toast.success(newValue ? 'Added to Public Portfolio!' : 'Removed from Public Portfolio');
+                    if (typeof window !== 'undefined') {
+                      localStorage.removeItem('mara_cached_events');
+                    }
+                  } catch (err) {
+                    toast.error("Failed to save portfolio status.");
+                    setFormData(prev => ({...prev, addToPortfolio: !newValue}));
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                className={`flex items-center justify-between py-3.5 px-4 rounded-xl border cursor-pointer select-none transition-all my-2 ${
+                  formData.addToPortfolio 
+                    ? 'bg-amber-50/40 border-[#c5a880] ring-1 ring-[#c5a880]/30' 
+                    : 'bg-white border-slate-200 hover:border-[#c5a880]/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className={`w-6 h-6 rounded-lg border flex items-center justify-center text-[10px] font-black shrink-0 transition-colors ${
+                    formData.addToPortfolio ? 'bg-[#c5a880] text-white border-[#c5a880]' : 'bg-slate-100 text-slate-500 border-slate-200'
+                  }`}>P</span>
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">Add to Portfolio</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                        formData.addToPortfolio ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {formData.addToPortfolio ? 'ON' : 'OFF'}
+                      </span>
+                      {saving && <Loader2 className="h-3 w-3 animate-spin text-[#c5a880]" />}
+                    </div>
+                    <span className="text-[10px] text-slate-400">Showcase this event on your studio public portfolio</span>
+                  </div>
                 </div>
                 <div 
-                  className={`toggle-switch ${saving ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                  role="switch"
+                  aria-checked={formData.addToPortfolio}
+                  className={`toggle-switch ${saving ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`} 
                   data-active={formData.addToPortfolio}
-                  onClick={async () => {
-                    if (saving) return;
-                    const newValue = !formData.addToPortfolio;
-                    
-                    setFormData({...formData, addToPortfolio: newValue});
-                    setSaving(true);
-                    
-                    try {
-                      await apiClient.patch(`/event/${eventId}/portfolio-status`, { 
-                        addToPortfolio: newValue 
-                      });
-                      
-                      if (event) {
-                        setEvent({...event, addToPortfolio: newValue});
-                      }
-                    } catch (err) {
-                      toast.error("Failed to save portfolio status.");
-                      setFormData({...formData, addToPortfolio: !newValue});
-                    } finally {
-                      setSaving(false);
-                    }
-                  }}
                 />
               </div>
 
               {/* Album Photo Download On/Off Toggle */}
-              <div className="flex items-center justify-between py-4 border-t border-slate-100">
-                <div className="flex items-center gap-2">
-                  <span className="w-4 h-4 rounded border border-[#c5a880] text-[#c5a880] flex items-center justify-center text-[10px] font-black">D</span>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-700 uppercase">Album Photo Download</span>
+              <div 
+                onClick={async () => {
+                  if (isUpdatingDownload || saving) return;
+                  const newValue = !formData.allowDownload;
+                  const targetId = event?._id || eventId;
+                  
+                  setFormData(prev => ({...prev, allowDownload: newValue}));
+                  setIsUpdatingDownload(true);
+                  
+                  try {
+                    await apiClient.patch(`/event/${targetId}/download-status`, { 
+                      allowDownload: newValue 
+                    });
+                    
+                    if (event) {
+                      setEvent((prev: any) => prev ? ({...prev, allowDownload: newValue}) : null);
+                    }
+                    toast.success(newValue ? 'Photo downloads enabled for album' : 'Photo downloads disabled for album');
+                  } catch (err) {
+                    toast.error("Failed to update download setting.");
+                    setFormData(prev => ({...prev, allowDownload: !newValue}));
+                  } finally {
+                    setIsUpdatingDownload(false);
+                  }
+                }}
+                className={`flex items-center justify-between py-3.5 px-4 rounded-xl border cursor-pointer select-none transition-all my-2 ${
+                  formData.allowDownload 
+                    ? 'bg-amber-50/40 border-[#c5a880] ring-1 ring-[#c5a880]/30' 
+                    : 'bg-white border-slate-200 hover:border-[#c5a880]/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className={`w-6 h-6 rounded-lg border flex items-center justify-center text-[10px] font-black shrink-0 transition-colors ${
+                    formData.allowDownload ? 'bg-[#c5a880] text-white border-[#c5a880]' : 'bg-slate-100 text-slate-500 border-slate-200'
+                  }`}>D</span>
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">Album Photo Download</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                        formData.allowDownload ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {formData.allowDownload ? 'ON' : 'OFF'}
+                      </span>
+                      {isUpdatingDownload && (
+                        <div className="flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded text-[9px] font-semibold">
+                          <Loader2 className="h-2.5 w-2.5 animate-spin text-amber-600" />
+                          <span>Saving...</span>
+                        </div>
+                      )}
+                    </div>
                     <span className="text-[10px] text-slate-400">
-                      {formData.allowDownload ? 'Download button ON in album' : 'Download button OFF (Disabled)'}
+                      {formData.allowDownload ? 'Download button enabled in album for guests' : 'Download button disabled in album'}
                     </span>
                   </div>
-                  {isUpdatingDownload && (
-                    <div className="flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-md text-[10px] font-semibold ml-2">
-                      <Loader2 className="h-3 w-3 animate-spin text-amber-600" />
-                      <span>Saving setting...</span>
-                    </div>
-                  )}
                 </div>
                 <div 
+                  role="switch"
+                  aria-checked={formData.allowDownload}
                   className={`toggle-switch ${isUpdatingDownload || saving ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'}`} 
                   data-active={formData.allowDownload}
-                  onClick={async () => {
-                    if (isUpdatingDownload || saving) return;
-                    const newValue = !formData.allowDownload;
-                    
-                    setFormData(prev => ({...prev, allowDownload: newValue}));
-                    setIsUpdatingDownload(true);
-                    
-                    try {
-                      await apiClient.patch(`/event/${eventId}/download-status`, { 
-                        allowDownload: newValue 
-                      });
-                      
-                      if (event) {
-                        setEvent((prev: any) => prev ? ({...prev, allowDownload: newValue}) : null);
-                      }
-                      toast.success(newValue ? 'Photo downloads enabled for album' : 'Photo downloads disabled for album');
-                    } catch (err) {
-                      toast.error("Failed to update download setting.");
-                      setFormData(prev => ({...prev, allowDownload: !newValue}));
-                    } finally {
-                      setIsUpdatingDownload(false);
-                    }
-                  }}
                 />
               </div>
 

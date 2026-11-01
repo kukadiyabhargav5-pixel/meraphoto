@@ -10,4 +10,6 @@ const bookingSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+bookingSchema.index({ studioId: 1, date: -1 });
+
 export default mongoose.model('Booking', bookingSchema);

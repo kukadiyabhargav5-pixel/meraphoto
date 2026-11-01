@@ -417,7 +417,7 @@ export default function CreateEventPage() {
         name: eventName,
         clientName,
         clientMobile,
-        clientEmail,
+        clientEmail: clientEmail.trim() || undefined,
         date: eventDate || new Date().toISOString(),
         type: getEffectiveEventType(),
         location: eventLocation,
@@ -462,6 +462,9 @@ export default function CreateEventPage() {
 
       try {
         sessionStorage.removeItem('mara_create_event_step');
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('mara_cached_events');
+        }
       } catch {}
 
       toast.success('Event created successfully!');
@@ -1618,46 +1621,76 @@ export default function CreateEventPage() {
                     </div>
 
                     {/* Portfolio Toggle */}
-                    <div className="bg-white border border-[#e8dfd3] rounded-2xl p-4 sm:p-6 shadow-sm flex items-center justify-between gap-3">
+                    <div 
+                      onClick={() => setAddToPortfolio(!addToPortfolio)}
+                      className={`bg-white border rounded-2xl p-4 sm:p-6 shadow-sm flex items-center justify-between gap-3 cursor-pointer select-none transition-all ${
+                        addToPortfolio ? 'border-[#c5a880] ring-2 ring-[#c5a880]/20 bg-amber-50/20' : 'border-[#e8dfd3] hover:border-[#c5a880]/60'
+                      }`}
+                    >
                       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                        <span className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-black text-slate-600 shrink-0">
+                        <span className={`w-9 h-9 rounded-xl border flex items-center justify-center text-xs font-black shrink-0 transition-colors ${
+                          addToPortfolio ? 'bg-[#c5a880] text-white border-[#c5a880]' : 'bg-slate-100 border-slate-200 text-slate-600'
+                        }`}>
                           P
                         </span>
                         <div className="min-w-0">
-                          <h4 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider truncate">
-                            Add to Public Portfolio
-                          </h4>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider truncate">
+                              Add to Public Portfolio
+                            </h4>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                              addToPortfolio ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              {addToPortfolio ? 'ON' : 'OFF'}
+                            </span>
+                          </div>
                           <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium">
                             Showcase this event on your studio public portfolio
                           </p>
                         </div>
                       </div>
                       <div
+                        role="switch"
+                        aria-checked={addToPortfolio}
                         className="toggle-switch cursor-pointer shrink-0"
                         data-active={addToPortfolio}
-                        onClick={() => setAddToPortfolio(!addToPortfolio)}
                       />
                     </div>
 
                     {/* Album Download Toggle */}
-                    <div className="bg-white border border-[#e8dfd3] rounded-2xl p-4 sm:p-6 shadow-sm flex items-center justify-between gap-3">
+                    <div 
+                      onClick={() => setAllowDownload(!allowDownload)}
+                      className={`bg-white border rounded-2xl p-4 sm:p-6 shadow-sm flex items-center justify-between gap-3 cursor-pointer select-none transition-all ${
+                        allowDownload ? 'border-[#c5a880] ring-2 ring-[#c5a880]/20 bg-amber-50/20' : 'border-[#e8dfd3] hover:border-[#c5a880]/60'
+                      }`}
+                    >
                       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                        <span className="w-9 h-9 rounded-xl bg-[#c5a880]/15 border border-[#c5a880]/30 flex items-center justify-center text-xs font-black text-[#9c7c56] shrink-0">
+                        <span className={`w-9 h-9 rounded-xl border flex items-center justify-center text-xs font-black shrink-0 transition-colors ${
+                          allowDownload ? 'bg-[#c5a880] text-white border-[#c5a880]' : 'bg-slate-100 border-slate-200 text-slate-600'
+                        }`}>
                           D
                         </span>
                         <div className="min-w-0">
-                          <h4 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider truncate">
-                            Allow Album Photo Downloads
-                          </h4>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider truncate">
+                              Allow Album Photo Downloads
+                            </h4>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                              allowDownload ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              {allowDownload ? 'ON' : 'OFF'}
+                            </span>
+                          </div>
                           <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium">
                             Enable or disable download button for guests in this album
                           </p>
                         </div>
                       </div>
                       <div
+                        role="switch"
+                        aria-checked={allowDownload}
                         className="toggle-switch cursor-pointer shrink-0"
                         data-active={allowDownload}
-                        onClick={() => setAllowDownload(!allowDownload)}
                       />
                     </div>
                   </motion.div>

@@ -5,7 +5,7 @@ export interface IEvent extends Document {
   code: string; // URL Slug, e.g. "sharma-wedding-2026"
   clientName: string;
   clientMobile: string;
-  clientEmail: string;
+  clientEmail?: string;
   date: Date;
   type: string;
   coverImageUrl?: string;
@@ -37,6 +37,8 @@ export interface IEvent extends Document {
   };
   isFaceSearchEnabled?: boolean;
   searchThreshold?: number;
+  daysLeft?: number;
+  autoDeleteAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -46,7 +48,7 @@ const EventSchema = new Schema<IEvent>({
   code: { type: String, required: true, unique: true, index: true, lowercase: true, trim: true },
   clientName: { type: String, required: true },
   clientMobile: { type: String, required: true },
-  clientEmail: { type: String, required: true, lowercase: true, trim: true },
+  clientEmail: { type: String, required: false, lowercase: true, trim: true },
   date: { type: Date, required: true },
   type: { type: String, required: true },
   coverImageUrl: { type: String },

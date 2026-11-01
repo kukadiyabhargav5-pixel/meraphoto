@@ -57,6 +57,8 @@ const MediaSchema = new Schema<IMedia>({
 });
 
 // Performance indexes for instant gallery loading, indexing lookups, and studio analytics
+MediaSchema.index({ studioId: 1, creditDeducted: 1, type: 1, createdAt: -1 });
+MediaSchema.index({ studioId: 1, size: 1, type: 1 });
 MediaSchema.index({ eventId: 1, type: 1, faceIndexStatus: 1 });
 MediaSchema.index({ eventId: 1, createdAt: -1 });
 MediaSchema.index({ studioId: 1, createdAt: -1 });

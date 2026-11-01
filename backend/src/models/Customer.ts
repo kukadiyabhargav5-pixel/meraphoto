@@ -15,4 +15,8 @@ const customerSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+customerSchema.index({ studioId: 1, createdAt: -1 });
+customerSchema.index({ studioId: 1, phone: 1 });
+customerSchema.index({ studioId: 1, email: 1 });
+
 export default mongoose.model('Customer', customerSchema);
