@@ -415,7 +415,14 @@ export const downloadBulkMedia = async (req: Request, res: Response) => {
  */
 export const downloadEventZip = async (req: Request, res: Response): Promise<void> => {
   try {
-    const archiver = require('archiver');
+    let archiverLib: any;
+    try {
+      const mod = await import('archiver');
+      archiverLib = mod.default || mod;
+    } catch {
+      archiverLib = require('archiver');
+    }
+    const archiver = archiverLib?.default || archiverLib;
     const { mediaIds, slug, eventId } = { ...req.query, ...req.body } as any;
 
     let targetEvent: any = null;

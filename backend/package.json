@@ -19,7 +19,7 @@
     "@google/generative-ai": "^0.24.1",
     "@qdrant/js-client-rest": "^1.19.0",
     "@types/morgan": "^1.9.10",
-    "archiver": "^8.0.0",
+    "archiver": "^6.0.2",
     "axios": "^1.7.2",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.8.3",

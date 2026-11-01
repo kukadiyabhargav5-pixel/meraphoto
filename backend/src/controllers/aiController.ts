@@ -7,6 +7,8 @@ const getCandidateAiUrls = (): string[] => {
   const envUrl = process.env.AI_SERVICE_URL;
   const list = [
     envUrl,
+    'http://meraphotoes-ai:10000',
+    'https://meraphotoes-ai.onrender.com',
     'http://maraphotoes-ai:10000',
     'http://meraphoto-ai:10000',
     'https://maraphotoes-ai.onrender.com',

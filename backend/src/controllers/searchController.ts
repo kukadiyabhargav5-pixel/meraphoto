@@ -5,12 +5,14 @@ import { getObjectStream, getFileUrl } from '../services/StorageService';
 import axios from 'axios';
 import FormData from 'form-data';
 import { v4 as uuidv4 } from 'uuid';
-const archiver = require('archiver');
+// archiver imported dynamically to avoid ERR_REQUIRE_ESM on startup
 
 const getCandidateAiUrls = (): string[] => {
   const envUrl = process.env.AI_SERVICE_URL;
   const list = [
     envUrl,
+    'http://meraphotoes-ai:10000',
+    'https://meraphotoes-ai.onrender.com',
     'http://maraphotoes-ai:10000',
     'http://meraphoto-ai:10000',
     'https://maraphotoes-ai.onrender.com',
@@ -663,13 +665,19 @@ export const downloadFaceScanZip = async (req: Request, res: Response): Promise<
     res.setHeader('Content-Disposition', `attachment; filename="${zipFileName}"`);
     res.setHeader('X-Total-Count', matchingMedia.length.toString());
 
-    // 5. Initialize streaming archiver (level 0 = STORE for instant JPEGs with zero CPU overhead)
+    // 5. Initialize streaming archiver dynamically (supports ESM & CommonJS)
+    let archiverLib: any;
+    try {
+      const mod = await import('archiver');
+      archiverLib = mod.default || mod;
+    } catch {
+      archiverLib = require('archiver');
+    }
     const createZipStream = (options: any) => {
-      if (typeof archiver === 'function') return archiver('zip', options);
-      if (archiver.ZipArchive) return new archiver.ZipArchive(options);
-      if (archiver.default && typeof archiver.default === 'function') return archiver.default('zip', options);
-      if (archiver.default?.ZipArchive) return new archiver.default.ZipArchive(options);
-      return new archiver.ZipArchive(options);
+      const arch = archiverLib?.default || archiverLib;
+      if (typeof arch === 'function') return arch('zip', options);
+      if (arch?.ZipArchive) return new arch.ZipArchive(options);
+      return (arch as any)('zip', options);
     };
 
     const archive = createZipStream({
