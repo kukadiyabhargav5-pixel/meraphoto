@@ -1649,11 +1649,15 @@ export default function EventUploadDedicatedPage({
             className="max-w-5xl w-full max-h-[90vh] relative flex flex-col items-center justify-center"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="relative max-w-full max-h-[75vh] flex items-center justify-center overflow-hidden rounded-2xl bg-black/50 border border-white/10 shadow-2xl">
+            <div className="relative w-full max-w-4xl lg:max-w-5xl aspect-video max-h-[75vh] flex items-center justify-center overflow-hidden rounded-2xl bg-black border border-white/15 shadow-2xl">
               {(() => {
                 const actualPreview = Array.isArray(previewMedia) ? previewMedia[0] : previewMedia;
-                const previewSrc = resolveMediaUrl(actualPreview?.compressedUrl || actualPreview?.r2Url || actualPreview?.url || actualPreview?.r2Key) || null;
                 const isVid = actualPreview?.type === 'VIDEO' || (actualPreview?.mimeType && actualPreview.mimeType.startsWith('video/'));
+                const rawVideoUrl = actualPreview?.compressedUrl && !actualPreview.compressedUrl.endsWith('.jpg')
+                  ? actualPreview.compressedUrl
+                  : (actualPreview?.r2Url || actualPreview?.url || actualPreview?.r2Key);
+                const rawPhotoUrl = actualPreview?.r2Url || actualPreview?.url || actualPreview?.r2Key || actualPreview?.compressedUrl;
+                const previewSrc = resolveMediaUrl(isVid ? rawVideoUrl : rawPhotoUrl) || null;
                 if (!previewSrc) {
                   return (
                     <div className="p-16 text-center text-slate-400">
@@ -1664,11 +1668,18 @@ export default function EventUploadDedicatedPage({
                 }
                 return isVid ? (
                   <video
+                    key={previewSrc}
                     src={previewSrc}
                     controls
                     autoPlay
-                    className="max-w-full max-h-[75vh] rounded-xl"
-                  />
+                    playsInline
+                    preload="auto"
+                    crossOrigin="anonymous"
+                    className="w-full h-full max-h-[75vh] object-contain rounded-xl bg-black"
+                  >
+                    <source src={previewSrc} type={actualPreview?.mimeType || 'video/mp4'} />
+                    Your browser does not support HTML5 video streaming.
+                  </video>
                 ) : (
                   <img
                     src={previewSrc}
@@ -1676,7 +1687,7 @@ export default function EventUploadDedicatedPage({
                     className="max-w-full max-h-[75vh] object-contain rounded-xl select-none"
                     onError={(e) => {
                       const target = e.currentTarget;
-                      const fallbackSrc = resolveMediaUrl(actualPreview?.r2Url || actualPreview?.url || actualPreview?.r2Key);
+                      const fallbackSrc = resolveMediaUrl(actualPreview?.compressedUrl || actualPreview?.url || actualPreview?.r2Key);
                       if (fallbackSrc && target.src !== fallbackSrc) target.src = fallbackSrc;
                     }}
                   />
@@ -1706,18 +1717,29 @@ export default function EventUploadDedicatedPage({
               </div>
 
               <div className="flex items-center gap-2">
-                {resolveMediaUrl(previewMedia.compressedUrl || previewMedia.r2Url || previewMedia.url) && (
-                  <a
-                    href={resolveMediaUrl(previewMedia.compressedUrl || previewMedia.r2Url || previewMedia.url)}
-                    target="_blank"
-                    rel="noreferrer"
-                    download={previewMedia.originalName || 'download'}
-                    className="px-3.5 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Download className="w-3.5 h-3.5 text-[#c5a880]" />
-                    <span>Download Original</span>
-                  </a>
-                )}
+                {(() => {
+                  const actual = Array.isArray(previewMedia) ? previewMedia[0] : previewMedia;
+                  const isVid = actual?.type === 'VIDEO' || (actual?.mimeType && actual.mimeType.startsWith('video/'));
+                  const rawDl = isVid
+                    ? (actual?.compressedUrl && !actual.compressedUrl.endsWith('.jpg') ? actual.compressedUrl : (actual?.r2Url || actual?.url || actual?.r2Key))
+                    : (actual?.r2Url || actual?.url || actual?.r2Key || actual?.compressedUrl);
+                  const dlUrl = resolveMediaUrl(rawDl);
+                  if (!dlUrl) return null;
+                  const filename = actual?.originalName || (isVid ? 'video.mp4' : 'photo.jpg');
+                  const dlHref = `${dlUrl}${dlUrl.includes('?') ? '&' : '?'}download=1&filename=${encodeURIComponent(filename)}`;
+                  return (
+                    <a
+                      href={dlHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      download={filename}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#c5a880] to-[#b89665] hover:brightness-110 text-slate-900 text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-[#c5a880]/25 active:scale-95"
+                    >
+                      <Download className="w-4 h-4 text-slate-900" />
+                      <span>Download {isVid ? 'Video' : 'Original HD'}</span>
+                    </a>
+                  );
+                })()}
               </div>
             </div>
           </div>

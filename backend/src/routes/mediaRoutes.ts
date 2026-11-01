@@ -21,7 +21,8 @@ import { upload } from '../middlewares/upload';
 const router = Router();
 
 // Stream media directly from Cloudflare R2 with HTTP caching & video range support
-router.get('/file/:key(*)', streamMediaFile);
+router.route('/file/:key(*)').get(streamMediaFile).head(streamMediaFile);
+router.route('/file/*').get(streamMediaFile).head(streamMediaFile);
 
 // Stream full event or selected photos directly as a ZIP archive
 router.get('/download-zip', downloadEventZip);

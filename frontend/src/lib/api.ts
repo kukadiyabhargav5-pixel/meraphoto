@@ -247,6 +247,20 @@ apiClient.interceptors.response.use(
 export default apiClient;
 
 /**
+ * Returns the direct media streaming base URL.
+ * In production on Vercel, requests stream directly from Render backend to bypass Vercel's
+ * 4.5MB proxy buffer limit and ensure fast, unrestricted HTTP 206 video range seeking.
+ */
+export const getMediaBaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return '';
+    }
+  }
+  return 'https://meraphotoes.onrender.com';
+};
+
+/**
  * Resolves any media, logo, or cover URL into a reliable, working browser URL.
  * Automatically fixes:
  * 1. Broken Cloudflare R2 subdomain URLs (e.g. pub-xxx.r2.dev) -> /api/media/file/:key
@@ -273,17 +287,26 @@ export const resolveMediaUrl = (
   const fallback = typeof fallbackOrIsThumbnail === 'string' ? fallbackOrIsThumbnail : '';
 
   if (typeof target === 'object') {
-    if (target.type === 'VIDEO' && isThumbnail) {
+    const isVideo = target.type === 'VIDEO' || (target.mimeType && target.mimeType.startsWith('video/'));
+    if (isVideo && isThumbnail) {
       if (target.thumbnailUrl && !target.thumbnailUrl.endsWith('.mp4')) {
         candidate = target.thumbnailUrl;
       } else {
         const base = target.compressedUrl || target.url || target.r2Url || '';
         candidate = base.includes('imagekit.io') ? `${base}/ik-thumbnail.jpg` : (target.thumbnailUrl || base);
       }
+    } else if (isVideo) {
+      // Full video streaming: ensure we use the actual video URL (not thumbnail JPG)
+      if (target.compressedUrl && !target.compressedUrl.endsWith('.jpg')) {
+        candidate = target.compressedUrl;
+      } else {
+        candidate = target.r2Url || target.url || target.r2Key || '';
+      }
     } else if (isThumbnail) {
       candidate = target.thumbnailUrl || target.compressedUrl || target.r2Url || target.url || target.r2Key || '';
     } else {
-      candidate = target.compressedUrl || target.r2Url || target.url || target.r2Key || target.thumbnailUrl || '';
+      // Full photo view/download: prioritize original full-resolution / upscaled file
+      candidate = target.r2Url || target.url || target.r2Key || target.compressedUrl || target.thumbnailUrl || '';
     }
   } else if (typeof target === 'string') {
     candidate = target;
@@ -300,21 +323,24 @@ export const resolveMediaUrl = (
     return trimmed;
   }
 
+  const mediaBase = getMediaBaseUrl();
+
   // Cloudflare R2 direct dev URL
   if (trimmed.includes('.r2.dev/')) {
     const key = trimmed.split('.r2.dev/')[1] || '';
-    return `/api/media/file/${key.replace(/^\/+/, '')}`;
+    return `${mediaBase}/api/media/file/${key.replace(/^\/+/, '')}`;
   }
 
   // File stream endpoint
   if (trimmed.includes('/api/media/file/')) {
     const key = trimmed.split('/api/media/file/')[1] || '';
-    return `/api/media/file/${key.replace(/^\/+/, '')}`;
+    return `${mediaBase}/api/media/file/${key.replace(/^\/+/, '')}`;
   }
 
   // Localhost development URLs
   if (trimmed.includes('localhost:5000') || trimmed.includes('127.0.0.1:5000')) {
-    return trimmed.replace(/^https?:\/\/(localhost|127\.0\.0\.1):5000/, '');
+    const clean = trimmed.replace(/^https?:\/\/(localhost|127\.0\.0\.1):5000\/api\/media\/file\//, '').replace(/^https?:\/\/(localhost|127\.0\.0\.1):5000\/?/, '');
+    return `${mediaBase}/api/media/file/${clean.replace(/^\/+/, '')}`;
   }
 
   // Relative R2 storage keys
@@ -324,11 +350,11 @@ export const resolveMediaUrl = (
     trimmed.startsWith('events/') ||
     trimmed.startsWith('mara-photo/')
   ) {
-    return `/api/media/file/${trimmed}`;
+    return `${mediaBase}/api/media/file/${trimmed}`;
   }
 
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return trimmed;
   }
-  return `/api/media/file/${trimmed.replace(/^\/+/, '')}`;
+  return `${mediaBase}/api/media/file/${trimmed.replace(/^\/+/, '')}`;
 };

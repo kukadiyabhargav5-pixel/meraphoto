@@ -117,19 +117,43 @@ export const uploadFile = async (
 };
 
 /**
+ * Cleans and sanitizes any full URL, API route, or raw identifier into a canonical Cloudflare R2 object key.
+ */
+export const cleanR2Key = (keyOrUrl: string): string => {
+  if (!keyOrUrl || typeof keyOrUrl !== 'string') return '';
+  let str = keyOrUrl.split('?')[0].trim();
+  if (str.startsWith('data:') || str.startsWith('blob:') || str.startsWith('localdb://')) return '';
+
+  if (str.includes('/api/media/file/')) {
+    str = str.split('/api/media/file/')[1] || '';
+  } else if (str.includes('.r2.dev/')) {
+    str = str.split('.r2.dev/')[1] || '';
+  } else if (str.includes('.cloudflarestorage.com/')) {
+    const parts = str.split('.cloudflarestorage.com/')[1] || '';
+    const slashIdx = parts.indexOf('/');
+    str = slashIdx !== -1 ? parts.substring(slashIdx + 1) : parts;
+  } else if (process.env.R2_PUBLIC_URL && str.includes(process.env.R2_PUBLIC_URL)) {
+    str = str.replace(process.env.R2_PUBLIC_URL.replace(/\/+$/, '') + '/', '');
+  } else if (str.startsWith('http://') || str.startsWith('https://')) {
+    try {
+      const parsed = new URL(str);
+      str = parsed.pathname.replace(/^\/+/, '');
+      if (str.startsWith('api/media/file/')) {
+        str = str.replace('api/media/file/', '');
+      }
+    } catch {
+      return '';
+    }
+  }
+  return decodeURIComponent(str.replace(/^\/+/, ''));
+};
+
+/**
  * Deletes a file from Cloudflare R2 given its storage key or publicId.
  */
 export const deleteFile = async (keyOrId: string): Promise<void> => {
   try {
-    if (!keyOrId) return;
-    // Strip public URL prefix if a full URL was provided
-    let key = keyOrId.split('?')[0].trim();
-    if (key.includes('/api/media/file/')) {
-      key = key.split('/api/media/file/')[1] || key;
-    } else if (process.env.R2_PUBLIC_URL && key.includes(process.env.R2_PUBLIC_URL)) {
-      key = key.replace(process.env.R2_PUBLIC_URL.replace(/\/+$/, '') + '/', '');
-    }
-    key = key.replace(/^\/+/, '');
+    const key = cleanR2Key(keyOrId);
     if (!key) return;
 
     await r2Client.send(
@@ -138,6 +162,7 @@ export const deleteFile = async (keyOrId: string): Promise<void> => {
         Key: key,
       })
     );
+    console.log(`[StorageService] Successfully permanently deleted R2 file: ${key}`);
   } catch (error) {
     console.error(`[StorageService] Failed to delete R2 file: ${keyOrId}`, error);
   }
@@ -148,17 +173,24 @@ export const deleteFile = async (keyOrId: string): Promise<void> => {
  */
 export const deleteFiles = async (keys: string[]): Promise<void> => {
   try {
-    const validKeys = keys.filter(Boolean);
-    if (validKeys.length === 0) return;
+    const cleanedKeys = Array.from(
+      new Set(
+        keys
+          .map((k) => cleanR2Key(k))
+          .filter((k) => k && k.length > 0)
+      )
+    );
+    if (cleanedKeys.length === 0) return;
 
-    for (let i = 0; i < validKeys.length; i += 1000) {
-      const chunk = validKeys.slice(i, i + 1000);
+    for (let i = 0; i < cleanedKeys.length; i += 1000) {
+      const chunk = cleanedKeys.slice(i, i + 1000);
       await r2Client.send(
         new DeleteObjectsCommand({
           Bucket: R2_BUCKET,
           Delete: { Objects: chunk.map((Key) => ({ Key })) },
         })
       );
+      console.log(`[StorageService] Successfully bulk deleted ${chunk.length} R2 files from storage.`);
     }
   } catch (error) {
     console.error('[StorageService] Bulk Delete Error:', error);
