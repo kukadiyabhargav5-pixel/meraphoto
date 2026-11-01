@@ -409,14 +409,13 @@ export default function EventFacesPage({
             ) : (
               /* Centered, beautifully aligned horizontal carousel of round avatars */
               <div
-                ref={scrollContainerRef}
-                className="flex items-center gap-4 sm:gap-6 overflow-x-auto pb-4 pt-2 px-1 scrollbar-thin scrollbar-thumb-[#c5a880]/30 scrollbar-track-transparent"
+                className="grid grid-cols-2 xs:grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 xl:grid-cols-8 gap-3 sm:gap-4.5 pt-2 pb-4 px-1"
               >
                 {/* 1. "All People" Avatar */}
                 <button
                   type="button"
                   onClick={() => setSelectedClusterId(null)}
-                  className="group flex flex-col items-center flex-shrink-0 cursor-pointer focus:outline-hidden select-none"
+                  className="group flex flex-col items-center w-full cursor-pointer focus:outline-hidden select-none"
                 >
                   <div
                     className={`relative w-20 h-20 sm:w-24 sm:h-24 rounded-full flex flex-col items-center justify-center transition-all duration-300 border-3 ${
@@ -458,7 +457,7 @@ export default function EventFacesPage({
                       key={cluster.id}
                       type="button"
                       onClick={() => setSelectedClusterId(cluster.id)}
-                      className="group flex flex-col items-center flex-shrink-0 cursor-pointer focus:outline-hidden select-none"
+                      className="group flex flex-col items-center w-full cursor-pointer focus:outline-hidden select-none"
                     >
                       {/* Round Face Circle */}
                       <div

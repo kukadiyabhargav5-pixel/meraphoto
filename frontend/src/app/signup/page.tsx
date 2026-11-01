@@ -79,7 +79,7 @@ export default function SignupPage() {
   const router = useRouter();
 
   // 2 STEPS for Google User, 3 STEPS for Standard Email/Password User
-  const totalSteps = isGoogleUser ? 2 : 3;
+  const totalSteps = 3;
 
   // Prefetch dashboard routes for instant loading
   useEffect(() => {
@@ -94,6 +94,17 @@ export default function SignupPage() {
       router.replace('/dashboard');
     }
   }, [authLoading, isAuthenticated, router]);
+
+  // Auto-fill email if passed in URL query param (e.g. from login redirect)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const emailParam = params.get('email');
+      if (emailParam && !regEmail) {
+        setRegEmail(emailParam);
+      }
+    }
+  }, []);
 
   // Debounced email check & auto-login if Google user already exists
   useEffect(() => {
@@ -431,7 +442,7 @@ export default function SignupPage() {
               })}
             </div>
             {/* Dynamic Progress line */}
-            <div className={`absolute top-4 sm:top-5 h-0.5 bg-slate-100 -z-0 ${isGoogleUser ? 'left-16 right-16' : 'left-10 right-10'}`}>
+            <div className="absolute top-4 sm:top-5 h-0.5 bg-slate-100 -z-0 left-10 right-10">
               <div 
                 className="h-full bg-gradient-to-r from-[#c5a880] to-[#9c7c56] transition-all duration-500 ease-out"
                 style={{ 

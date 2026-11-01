@@ -155,13 +155,28 @@ export const login = async (req: Request, res: Response) => {
     }
 
     const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user || !user.passwordHash) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    if (!user) {
+      return res.status(404).json({ 
+        error: 'આ ઈમેલ રજીસ્ટર થયેલ નથી. કૃપા કરીને પહેલાં રજીસ્ટર (Sign Up) કરો, પછી લોગિન થશે.',
+        message: 'This email is not registered. Please register first before logging in.',
+        notRegistered: true 
+      });
+    }
+
+    if (!user.passwordHash) {
+      return res.status(400).json({ 
+        error: 'આ એકાઉન્ટ Google થી બનાવેલું છે. કૃપા કરીને નીચે "Continue with Google" બટન દબાવીને લોગિન કરો.',
+        message: 'This account was created with Google. Please use Continue with Google.',
+        useGoogle: true 
+      });
     }
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ 
+        error: 'પાસવર્ડ ખોટો છે. કૃપા કરીને સાચો પાસવર્ડ દાખલ કરો.',
+        message: 'Incorrect password. Please try again.'
+      });
     }
 
     const tokens = generateTokens(user._id.toString(), user.role);
@@ -318,10 +333,10 @@ export const googleLogin = async (req: Request, res: Response) => {
       }
     }
 
-    // Set optional password if provided and user doesn't have one
-    if (password && !user.passwordHash) {
+    // Set optional password if provided
+    if (password && typeof password === 'string' && password.trim().length >= 6) {
       const salt = await bcrypt.genSalt(10);
-      user.passwordHash = await bcrypt.hash(password, salt);
+      user.passwordHash = await bcrypt.hash(password.trim(), salt);
       await user.save();
     }
 

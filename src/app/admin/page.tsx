@@ -1,6 +1,6 @@
 'use client';
 import React, { useEffect, useState, useRef } from 'react';
-import { Users, Camera, FolderOpen, Image as ImageIcon, Activity, ArrowUpRight, TrendingUp, MessageSquare, HelpCircle, ChevronRight, BarChart3, Clock, Sparkles } from 'lucide-react';
+import { Users, Camera, FolderOpen, Image as ImageIcon, Activity, ArrowUpRight, TrendingUp, MessageSquare, HelpCircle, ChevronRight, BarChart3, Clock, Sparkles, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiClient } from '@/lib/api';
 import Link from 'next/link';
@@ -116,6 +116,45 @@ export default function AdminDashboard() {
               </span>
             </div>
           </div>
+        </div>
+      </motion.div>
+
+      {/* ═══ Superadmin Quick Actions: Plans & Pricing Management ═══ */}
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 mb-8 text-white shadow-xl border border-indigo-500/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-6"
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-amber-500/10 via-transparent to-transparent pointer-events-none" />
+        <div className="relative z-10 flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-[#c5a880] flex items-center justify-center text-slate-950 shadow-lg shadow-amber-500/25 shrink-0">
+            <CreditCard className="w-7 h-7" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                Superadmin Control
+              </span>
+              <span className="text-xs text-slate-400 font-bold">1 Month • 6 Months • 1 Year</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+              Plans & Pricing Management
+            </h2>
+            <p className="text-xs text-slate-300 font-medium mt-0.5 max-w-2xl">
+              Live control to edit subscription prices (₹), storage capacity, durations, and bullet-point details. Changes sync instantly to the Home Page & Plan & Billing Page.
+            </p>
+          </div>
+        </div>
+        <div className="relative z-10 w-full md:w-auto shrink-0">
+          <Link
+            href="/admin/plans"
+            className="w-full md:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-[#c5a880] via-[#d4be9f] to-[#b89665] hover:brightness-105 active:scale-95 text-slate-950 font-black text-sm transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>Manage Plans & Pricing</span>
+            <ChevronRight className="w-4 h-4" />
+          </Link>
         </div>
       </motion.div>
 

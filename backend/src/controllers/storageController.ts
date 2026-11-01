@@ -705,3 +705,92 @@ export const adminCancelSubscription = async (req: AuthRequest, res: Response) =
   }
 };
 
+/**
+ * GET /api/storage/admin/plans OR /api/admin/storage-plans
+ * Superadmin endpoint to fetch all storage plans
+ */
+export const adminGetStoragePlans = async (req: AuthRequest, res: Response) => {
+  try {
+    let plans = await StoragePlan.find().sort({ sortOrder: 1 }).lean();
+    if (!plans || plans.length === 0) {
+      await seedStoragePlans();
+      plans = await StoragePlan.find().sort({ sortOrder: 1 }).lean();
+    }
+    return res.json({ success: true, plans });
+  } catch (err: any) {
+    console.error('[adminGetStoragePlans Error]:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch storage plans' });
+  }
+};
+
+/**
+ * PUT /api/storage/admin/plans/:planId OR /api/admin/storage-plans/:planId
+ * Superadmin endpoint to update any storage plan (pricing, storage GB, features list, name, etc.)
+ */
+export const adminUpdateStoragePlan = async (req: AuthRequest, res: Response) => {
+  try {
+    const { planId } = req.params;
+    const {
+      name,
+      priceInr,
+      displayPrice,
+      storageGb,
+      billingPeriodText,
+      durationMonths,
+      desc,
+      badge,
+      features,
+      isRecommended,
+      isActive,
+      sortOrder,
+    } = req.body;
+
+    const plan = await StoragePlan.findOne({
+      $or: [
+        { planId: planId },
+        { _id: mongoose.isValidObjectId(planId) ? planId : undefined },
+      ],
+    });
+
+    if (!plan) {
+      return res.status(404).json({ error: 'Storage plan not found' });
+    }
+
+    if (name !== undefined) plan.name = String(name).trim();
+    if (priceInr !== undefined) {
+      plan.priceInr = Number(priceInr);
+      plan.displayPrice = displayPrice ? String(displayPrice).trim() : `₹${Number(priceInr).toLocaleString('en-IN')}`;
+    } else if (displayPrice !== undefined) {
+      plan.displayPrice = String(displayPrice).trim();
+    }
+    if (storageGb !== undefined) {
+      plan.storageGb = Number(storageGb);
+      plan.storageBytes = Number(storageGb) * ONE_GB_BYTES;
+    }
+    if (billingPeriodText !== undefined) plan.billingPeriodText = String(billingPeriodText).trim();
+    if (durationMonths !== undefined) plan.durationMonths = Number(durationMonths);
+    if (desc !== undefined) plan.desc = String(desc).trim();
+    if (badge !== undefined) plan.badge = String(badge).trim();
+    if (Array.isArray(features)) {
+      plan.features = features
+        .map((f: any) => String(f).trim())
+        .filter((f: string) => f.length > 0);
+    }
+    if (isRecommended !== undefined) plan.isRecommended = Boolean(isRecommended);
+    if (isActive !== undefined) plan.isActive = Boolean(isActive);
+    if (sortOrder !== undefined) plan.sortOrder = Number(sortOrder);
+
+    await plan.save();
+
+    return res.json({
+      success: true,
+      message: `Plan ${plan.name} updated successfully`,
+      plan,
+    });
+  } catch (err: any) {
+    console.error('[adminUpdateStoragePlan Error]:', err);
+    return res.status(500).json({ error: err.message || 'Failed to update storage plan' });
+  }
+};
+
+

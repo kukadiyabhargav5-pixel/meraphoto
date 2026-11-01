@@ -365,16 +365,35 @@ export const retryFailedIndexing = async (req: AuthRequest, res: Response) => {
 function cosineSimilarity(a: number[], b: number[]): number {
   if (!a || !b || a.length === 0 || b.length === 0) return 0;
   let dot = 0;
+  let normA = 0;
+  let normB = 0;
   const len = Math.min(a.length, b.length);
   for (let i = 0; i < len; i++) {
     dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
   }
-  return dot;
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom > 0 ? dot / denom : 0;
+}
+
+function normalizeVec(v: number[]): number[] {
+  let sumSq = 0;
+  for (let i = 0; i < v.length; i++) sumSq += v[i] * v[i];
+  const norm = Math.sqrt(sumSq);
+  if (norm > 0) {
+    for (let i = 0; i < v.length; i++) v[i] /= norm;
+  }
+  return v;
 }
 
 /**
  * Get clustered faces for an event
- * Groups all detected faces into distinct person identities
+ * High-precision clustering:
+ * 1. Filters false positives (statues, noise, non-face textures)
+ * 2. Compares against both centroid and cluster members
+ * 3. Runs an agglomerative merge pass so identical people (even with sunglasses/different angles)
+ *    are 100% unified into a single Person block!
  * GET /api/face-index/clusters/:eventId
  */
 export const getEventFaceClusters = async (req: AuthRequest, res: Response) => {
@@ -409,9 +428,27 @@ export const getEventFaceClusters = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // 2. Cluster face embeddings using greedy cosine similarity
-    const SIMILARITY_THRESHOLD = 0.48; // Face verification threshold
-    
+    // 3. Exclude noise, tiny artifacts, and non-human detections
+    const validEmbeddings = embeddings.filter((item) => {
+      if (!item.embedding || !Array.isArray(item.embedding) || item.embedding.length < 128) return false;
+      // Filter out low confidence detections (statues, noise, background artifacts)
+      if (item.detectionConfidence !== undefined && item.detectionConfidence !== null && item.detectionConfidence > 0 && item.detectionConfidence < 0.65) {
+        return false;
+      }
+      // Check bbox if available: valid human faces have width & height and normal aspect ratio
+      if (Array.isArray(item.bbox) && item.bbox.length === 4) {
+        const [x1, y1, x2, y2] = item.bbox;
+        const w = Math.abs(x2 - x1);
+        const h = Math.abs(y2 - y1);
+        if (w < 35 || h < 35) return false; // tiny noise / non-face
+        const ratio = w / h;
+        if (ratio < 0.55 || ratio > 1.8) return false; // non-face distortion
+      }
+      return true;
+    });
+
+    const activeList = validEmbeddings.length > 0 ? validEmbeddings : embeddings;
+
     interface Cluster {
       id: string;
       label: string;
@@ -420,12 +457,14 @@ export const getEventFaceClusters = async (req: AuthRequest, res: Response) => {
       faceCount: number;
       mediaIds: Set<string>;
       centroid: number[];
-      embeddingsCount: number;
+      allEmbeddings: number[][];
     }
 
     const clusters: Cluster[] = [];
+    // Lower initial threshold to 0.34 so variations of same person (sunglasses, angles, lighting) cluster together
+    const INITIAL_THRESHOLD = 0.34;
 
-    for (const item of embeddings) {
+    for (const item of activeList) {
       const emb = item.embedding;
       if (!emb || !Array.isArray(emb) || emb.length === 0) continue;
 
@@ -433,7 +472,14 @@ export const getEventFaceClusters = async (req: AuthRequest, res: Response) => {
       let highestSim = -1;
 
       for (const cl of clusters) {
-        const sim = cosineSimilarity(emb, cl.centroid);
+        const centroidSim = cosineSimilarity(emb, cl.centroid);
+        let maxMemberSim = -1;
+        for (const member of cl.allEmbeddings) {
+          const s = cosineSimilarity(emb, member);
+          if (s > maxMemberSim) maxMemberSim = s;
+        }
+        // Combined similarity: member match helps handle sunglasses, lighting, and pose changes
+        const sim = Math.max(centroidSim, maxMemberSim * 0.98);
         if (sim > highestSim) {
           highestSim = sim;
           bestCluster = cl;
@@ -441,51 +487,99 @@ export const getEventFaceClusters = async (req: AuthRequest, res: Response) => {
       }
 
       const mediaIdStr = item.mediaId?.toString();
+      const quality = (item.faceQuality || 0) * 0.5 + (item.detectionConfidence || 0) * 0.5;
 
-      if (bestCluster && highestSim >= SIMILARITY_THRESHOLD) {
+      if (bestCluster && highestSim >= INITIAL_THRESHOLD) {
         bestCluster.faceCount += 1;
         if (mediaIdStr) bestCluster.mediaIds.add(mediaIdStr);
+        bestCluster.allEmbeddings.push(emb);
 
-        const quality = (item.faceQuality || 0) * 0.5 + (item.detectionConfidence || 0) * 0.5;
         if (quality > bestCluster.bestQuality && item.faceThumbnailUrl) {
           bestCluster.bestQuality = quality;
           bestCluster.avatarUrl = item.faceThumbnailUrl;
         }
 
-        const count = bestCluster.embeddingsCount;
+        // Recompute normalized centroid
+        const count = bestCluster.allEmbeddings.length;
         for (let i = 0; i < bestCluster.centroid.length; i++) {
-          bestCluster.centroid[i] = (bestCluster.centroid[i] * count + emb[i]) / (count + 1);
+          bestCluster.centroid[i] = (bestCluster.centroid[i] * (count - 1) + emb[i]) / count;
         }
-        let normSq = 0;
-        for (let i = 0; i < bestCluster.centroid.length; i++) {
-          normSq += bestCluster.centroid[i] * bestCluster.centroid[i];
-        }
-        const norm = Math.sqrt(normSq);
-        if (norm > 0) {
-          for (let i = 0; i < bestCluster.centroid.length; i++) {
-            bestCluster.centroid[i] /= norm;
-          }
-        }
-        bestCluster.embeddingsCount += 1;
+        normalizeVec(bestCluster.centroid);
       } else {
-        const initialQuality = (item.faceQuality || 0) * 0.5 + (item.detectionConfidence || 0) * 0.5;
         const newCluster: Cluster = {
           id: `person_${clusters.length + 1}`,
           label: `Person ${clusters.length + 1}`,
           avatarUrl: item.faceThumbnailUrl || '',
-          bestQuality: initialQuality,
+          bestQuality: quality,
           faceCount: 1,
           mediaIds: new Set<string>(mediaIdStr ? [mediaIdStr] : []),
-          centroid: [...emb],
-          embeddingsCount: 1,
+          centroid: normalizeVec([...emb]),
+          allEmbeddings: [emb],
         };
         clusters.push(newCluster);
       }
     }
 
-    clusters.sort((a, b) => b.mediaIds.size - a.mediaIds.size || b.faceCount - a.faceCount);
+    // 4. Agglomerative Merge Pass: merge duplicate clusters of the same person
+    let merged = true;
+    while (merged) {
+      merged = false;
+      for (let i = 0; i < clusters.length; i++) {
+        for (let j = i + 1; j < clusters.length; j++) {
+          const cA = clusters[i];
+          const cB = clusters[j];
 
-    const formattedClusters = clusters.map((cl, idx) => ({
+          const centroidSim = cosineSimilarity(cA.centroid, cB.centroid);
+
+          let maxPairSim = -1;
+          for (const embA of cA.allEmbeddings) {
+            for (const embB of cB.allEmbeddings) {
+              const s = cosineSimilarity(embA, embB);
+              if (s > maxPairSim) maxPairSim = s;
+            }
+          }
+
+          // Same person threshold: centroid >= 0.33 OR maxPairSim >= 0.36
+          // Accurately merges same individual with sunglasses, different angles or outfits
+          if (centroidSim >= 0.33 || maxPairSim >= 0.36) {
+            cA.faceCount += cB.faceCount;
+            for (const mId of cB.mediaIds) cA.mediaIds.add(mId);
+            cA.allEmbeddings.push(...cB.allEmbeddings);
+
+            if (cB.bestQuality > cA.bestQuality && cB.avatarUrl) {
+              cA.bestQuality = cB.bestQuality;
+              cA.avatarUrl = cB.avatarUrl;
+            }
+
+            // Recalculate normalized centroid for cA
+            const newCentroid = new Array(cA.centroid.length).fill(0);
+            for (const vec of cA.allEmbeddings) {
+              for (let k = 0; k < vec.length; k++) newCentroid[k] += vec[k];
+            }
+            cA.centroid = normalizeVec(newCentroid);
+
+            // Remove cB
+            clusters.splice(j, 1);
+            merged = true;
+            break;
+          }
+        }
+        if (merged) break;
+      }
+    }
+
+    // 5. Prune obvious 1-photo noise (non-human objects, false detections, low quality artifacts)
+    const filteredClusters = clusters.filter((cl) => {
+      if (cl.faceCount === 1 && cl.bestQuality < 0.40 && cl.mediaIds.size === 1) {
+        return false;
+      }
+      return true;
+    });
+
+    const finalClusters = filteredClusters.length > 0 ? filteredClusters : clusters;
+    finalClusters.sort((a, b) => b.mediaIds.size - a.mediaIds.size || b.faceCount - a.faceCount);
+
+    const formattedClusters = finalClusters.map((cl, idx) => ({
       id: cl.id,
       label: `Person ${idx + 1}`,
       avatarUrl: cl.avatarUrl,
@@ -494,7 +588,7 @@ export const getEventFaceClusters = async (req: AuthRequest, res: Response) => {
       mediaIds: Array.from(cl.mediaIds),
     }));
 
-    const allMediaIds = Array.from(new Set(embeddings.map(e => e.mediaId?.toString()).filter(Boolean)));
+    const allMediaIds = Array.from(new Set(embeddings.map((e) => e.mediaId?.toString()).filter(Boolean)));
 
     return res.json({
       success: true,

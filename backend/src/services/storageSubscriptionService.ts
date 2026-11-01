@@ -71,7 +71,7 @@ export const seedStoragePlans = async (): Promise<void> => {
     for (const plan of CANONICAL_STORAGE_PLANS) {
       await StoragePlan.findOneAndUpdate(
         { planId: plan.planId },
-        { $set: plan },
+        { $setOnInsert: plan },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
     }

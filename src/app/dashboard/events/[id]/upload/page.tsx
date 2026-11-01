@@ -550,14 +550,14 @@ export default function EventUploadDedicatedPage({
 
           let uploadedSuccessfully = false;
 
-          // Direct parallel PUT to presigned cloud storage URL (photos only; videos stream direct to backend)
-          if (!isVideo && presignedItem?.uploadUrl) {
+          // Direct parallel PUT to presigned cloud storage URL for ultra-fast, high-capacity R2 upload (Photos and Videos)
+          if (presignedItem?.uploadUrl) {
             try {
               const putRes = await fetch(presignedItem.uploadUrl, {
                 method: 'PUT',
                 body: fileToUpload,
                 headers: {
-                  'Content-Type': fileToUpload.type || 'application/octet-stream',
+                  'Content-Type': fileToUpload.type || (isVideo ? 'video/mp4' : 'application/octet-stream'),
                 },
               });
 
@@ -601,6 +601,9 @@ export default function EventUploadDedicatedPage({
               }
               const directUploadBase = getDirectUploadApiUrl();
               const res = await apiClient.post(`${directUploadBase}/media/event/${event._id}/upload`, formData, {
+                headers: {
+                  'Content-Type': 'multipart/form-data',
+                },
                 timeout: 600000, // 10 minutes timeout for ultra-fast, uninterrupted large video & photo uploads
               });
               if (res.data?.media) {
@@ -1669,12 +1672,10 @@ export default function EventUploadDedicatedPage({
                 return isVid ? (
                   <video
                     key={previewSrc}
-                    src={previewSrc}
                     controls
                     autoPlay
                     playsInline
-                    preload="auto"
-                    crossOrigin="anonymous"
+                    preload="metadata"
                     className="w-full h-full max-h-[75vh] object-contain rounded-xl bg-black"
                   >
                     <source src={previewSrc} type={actualPreview?.mimeType || 'video/mp4'} />

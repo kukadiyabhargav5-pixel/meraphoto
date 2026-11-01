@@ -79,7 +79,7 @@ export default function SignupPage() {
   const router = useRouter();
 
   // 2 STEPS for Google User, 3 STEPS for Standard Email/Password User
-  const totalSteps = isGoogleUser ? 2 : 3;
+  const totalSteps = 3;
 
   // Prefetch dashboard routes for instant loading
   useEffect(() => {
@@ -94,6 +94,17 @@ export default function SignupPage() {
       router.replace('/dashboard');
     }
   }, [authLoading, isAuthenticated, router]);
+
+  // Auto-fill email if passed in URL query param (e.g. from login redirect)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const emailParam = params.get('email');
+      if (emailParam && !regEmail) {
+        setRegEmail(emailParam);
+      }
+    }
+  }, []);
 
   // Debounced email check & auto-login if Google user already exists
   useEffect(() => {
@@ -188,7 +199,7 @@ export default function SignupPage() {
 
   // Can submit check based on workflow mode
   const canSubmit = isGoogleUser 
-    ? (isStep1Complete && isStep2Complete && (regPassword.length === 0 || (allPasswordValid && (regConfirmPassword ? passwordsMatch : true))))
+    ? (isStep1Complete && isStep2Complete && (regPassword.trim().length === 0 || (allPasswordValid && passwordsMatch)))
     : (isStep1Complete && isStep2Complete && allPasswordValid && passwordsMatch);
 
   // Step Navigation
@@ -210,7 +221,7 @@ export default function SignupPage() {
         setRegStudioName(`${regName.trim()}'s Studio`);
       }
       goToStep(2);
-    } else if (currentStep === 2 && !isGoogleUser) {
+    } else if (currentStep === 2) {
       if (!isStep2Complete) {
         toast.error('Please enter your Studio Name (minimum 2 characters).');
         return;
@@ -362,17 +373,12 @@ export default function SignupPage() {
     );
   }
 
-  // Dynamic 2 Steps for Google User, 3 Steps for Standard User
-  const stepsMeta = isGoogleUser 
-    ? [
-        { num: 1, title: 'Personal', subtitle: 'Mobile Verification' },
-        { num: 2, title: 'Studio Setup', subtitle: 'Logo & Social Channels' },
-      ]
-    : [
-        { num: 1, title: 'Personal', subtitle: 'Name, Email & Mobile' },
-        { num: 2, title: 'Studio & Links', subtitle: 'Logo & Social Channels' },
-        { num: 3, title: 'Security', subtitle: 'Password Setup' },
-      ];
+  // 3 Steps for All Users (Google Users have Optional Password at Step 3)
+  const stepsMeta = [
+    { num: 1, title: 'Personal', subtitle: isGoogleUser ? 'Google Verified' : 'Name, Email & Mobile' },
+    { num: 2, title: 'Studio Setup', subtitle: 'Brand Name & Logo' },
+    { num: 3, title: 'Security', subtitle: isGoogleUser ? 'Password (Optional)' : 'Password Setup' },
+  ];
 
   return (
     <PublicWrapper>
@@ -431,13 +437,11 @@ export default function SignupPage() {
               })}
             </div>
             {/* Dynamic Progress line */}
-            <div className={`absolute top-4 sm:top-5 h-0.5 bg-slate-100 -z-0 ${isGoogleUser ? 'left-16 right-16' : 'left-10 right-10'}`}>
+            <div className="absolute top-4 sm:top-5 h-0.5 bg-slate-100 -z-0 left-10 right-10">
               <div 
                 className="h-full bg-gradient-to-r from-[#c5a880] to-[#9c7c56] transition-all duration-500 ease-out"
                 style={{ 
-                  width: isGoogleUser 
-                    ? (currentStep === 1 ? '0%' : '100%')
-                    : (currentStep === 1 ? '0%' : currentStep === 2 ? '50%' : '100%')
+                  width: currentStep === 1 ? '0%' : currentStep === 2 ? '50%' : '100%'
                 }}
               />
             </div>
@@ -889,9 +893,9 @@ export default function SignupPage() {
               )}
 
               {/* ========================================================= */}
-              {/* PAGE 3: SECURITY & PASSWORD (Standard Users Only)         */}
+              {/* PAGE 3: SECURITY & PASSWORD (All Users: Required or Opt)  */}
               {/* ========================================================= */}
-              {currentStep === 3 && !isGoogleUser && (
+              {currentStep === 3 && (
                 <motion.div 
                   key="step3" 
                   custom={direction} 
@@ -904,9 +908,35 @@ export default function SignupPage() {
                 >
                   {/* Password Field */}
                   <div className="space-y-1">
+                    {isGoogleUser && (
+                      <div className="p-3.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-2xl mb-3 shadow-xs">
+                        <div className="flex items-start gap-2.5">
+                          <span className="text-base">💡</span>
+                          <div>
+                            <p className="text-xs font-bold text-amber-950">
+                              પાસવર્ડ સેટ કરવો મરજીયાત (Optional) છે
+                            </p>
+                            <p className="text-[11px] text-amber-900/90 leading-relaxed mt-0.5">
+                              Google થી રજીસ્ટ્રેશન કરી રહ્યા છો એટલે પાસવર્ડ નાખો તો પણ ચાલે, ન નાખો તો પણ ચાલે. જો પાસવર્ડ નાખશો તો ભવિષ્યમાં Email & Password થી પણ લોગિન થશે. જો ન નાખવો હોય, તો ખાલી રાખીને સીધું રજીસ્ટ્રેશન પૂર્ણ કરી શકો છો.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
-                      <span>Set Password <span className="text-rose-500">*</span></span>
-                      {allPasswordValid && <span className="text-emerald-600 text-[10px] font-bold flex items-center gap-0.5"><Check className="w-3 h-3" /> Strong</span>}
+                      <span>
+                        {isGoogleUser ? 'Set Password ' : 'Set Password '}
+                        {isGoogleUser ? (
+                          <span className="text-slate-400 font-normal lowercase">(optional - મરજીયાત)</span>
+                        ) : (
+                          <span className="text-rose-500">* (ફરજિયાત)</span>
+                        )}
+                      </span>
+                      {regPassword && allPasswordValid && (
+                        <span className="text-emerald-600 text-[10px] font-bold flex items-center gap-0.5">
+                          <Check className="w-3 h-3" /> Strong
+                        </span>
+                      )}
                     </label>
                     <div className="relative group">
                       <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#c5a880] transition-colors pointer-events-none">
@@ -931,10 +961,11 @@ export default function SignupPage() {
                   </div>
 
                   {/* Confirm Password Field */}
+                  {(!isGoogleUser || regPassword.length > 0) && (
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                        Confirm Password <span className="text-rose-500">*</span>
+                        Confirm Password {!isGoogleUser && <span className="text-rose-500">*</span>}
                       </label>
                       {regConfirmPassword && (
                         <span className={`text-[10px] font-bold flex items-center gap-1 ${
@@ -970,8 +1001,10 @@ export default function SignupPage() {
                       </button>
                     </div>
                   </div>
+                  )}
 
                   {/* Password Security Requirements Box */}
+                  {(!isGoogleUser || regPassword.length > 0) && (
                   <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 mt-2">
                     <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">
                       Password Requirements
@@ -991,6 +1024,7 @@ export default function SignupPage() {
                       ))}
                     </div>
                   </div>
+                  )}
 
                   {/* Summary Review Pill */}
                   <div className="p-3 bg-amber-50/70 border border-amber-200/60 rounded-2xl flex items-center justify-between text-xs">
@@ -1040,7 +1074,7 @@ export default function SignupPage() {
                   {currentStep === 1 ? (
                     <>Continue to Studio Setup <ArrowRight className="w-4 h-4" /></>
                   ) : (
-                    <>Continue to Security <ArrowRight className="w-4 h-4" /></>
+                    <>Continue to Security (Step 3) <ArrowRight className="w-4 h-4" /></>
                   )}
                 </button>
               ) : (
@@ -1061,7 +1095,7 @@ export default function SignupPage() {
                   ) : (
                     <>
                       <ShieldCheck className="w-4 h-4" />
-                      <span>Create Studio Account</span>
+                      <span>{isGoogleUser ? 'Complete Registration & Enter Dashboard' : 'Create Studio Account & Enter Dashboard'}</span>
                     </>
                   )}
                 </button>

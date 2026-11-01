@@ -158,14 +158,21 @@ export default function GlobalLoader() {
 
   const { progress, status, isReady, error, isCriticalFailed, retry } = useApplicationLoader();
 
-  const [displayProgress, setDisplayProgress] = useState(1);
+  // If already ready in session or not on home page, dismiss immediately
+  const [isDismissed, setIsDismissed] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const alreadyReady = sessionStorage.getItem('app_initial_ready') === 'true';
+      const notHome = window.location.pathname !== '/' && window.location.pathname !== '';
+      return alreadyReady || notHome;
+    }
+    return false;
+  });
+
+  const [displayProgress, setDisplayProgress] = useState(15);
   const [isFlashing, setIsFlashing] = useState(false);
-  const [isDismissed, setIsDismissed] = useState(false);
-  const animRef = useRef<number | null>(null);
-  const currentValRef = useRef(1);
   const keepAliveStartedRef = useRef(false);
 
-  // Lock body scroll while loader is visible on home page
+  // Restore body scroll when dismissed
   useEffect(() => {
     if (isHome && !isDismissed) {
       document.body.style.overflow = 'hidden';
@@ -185,53 +192,48 @@ export default function GlobalLoader() {
     }
   }, []);
 
-  // Smooth progress animation from 1% to 100% fast & responsive (~250ms cadence)
-  useEffect(() => {
-    if (!isHome || isDismissed) return;
-    const animate = () => {
-      const target = Math.max(1, Math.min(100, progress));
-      if (currentValRef.current < target) {
-        const diff = target - currentValRef.current;
-        const step = diff < 2 ? diff : Math.max(6, diff * 0.45);
-        currentValRef.current = Math.min(target, currentValRef.current + step);
-        setDisplayProgress(Math.min(100, Math.round(currentValRef.current)));
-      } else if (currentValRef.current >= 100) {
-        setDisplayProgress(100);
-      }
-      animRef.current = requestAnimationFrame(animate);
-    };
-    animRef.current = requestAnimationFrame(animate);
-    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
-  }, [progress, isDismissed, isHome]);
-
-  // Flash + dismiss immediately after displayProgress reaches 100% AND isReady is true
+  // Autonomous, smooth progress animation: 15% -> 100% in 400ms (NEVER STUCK AT 1%)
   useEffect(() => {
     if (!isHome || isDismissed) return;
 
-    if (isReady && displayProgress >= 100) {
-      const holdTimer = setTimeout(() => {
-        setIsFlashing(true);
-        const dismissTimer = setTimeout(() => {
-          setIsDismissed(true);
-        }, 150);
-        return () => clearTimeout(dismissTimer);
-      }, 50);
-      return () => clearTimeout(holdTimer);
-    }
-  }, [isReady, displayProgress, isDismissed, isHome]);
-
-  // Safety fallback: if isReady is true for 350ms, force dismiss so it can NEVER block the user
-  useEffect(() => {
-    if (!isHome || isDismissed || !isReady) return;
-    const forceTimer = setTimeout(() => {
+    // Hard safety timeout: unconditionally dismiss after 650ms
+    const hardSafetyTimer = setTimeout(() => {
       setIsDismissed(true);
-    }, 350);
-    return () => clearTimeout(forceTimer);
-  }, [isReady, isDismissed, isHome]);
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('app_initial_ready', 'true');
+      }
+    }, 650);
+
+    const startTime = Date.now();
+    const duration = 380; // 380ms total animation
+
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const calculated = Math.min(100, Math.round(15 + (elapsed / duration) * 85));
+      const current = Math.max(calculated, Math.min(100, progress || 0));
+      setDisplayProgress(current);
+
+      if (current >= 100) {
+        clearInterval(interval);
+        setIsFlashing(true);
+        setTimeout(() => {
+          setIsDismissed(true);
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('app_initial_ready', 'true');
+          }
+        }, 100);
+      }
+    }, 20);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(hardSafetyTimer);
+    };
+  }, [isHome, isDismissed, progress]);
 
   if (!isHome || isDismissed) return null;
 
-  const completionReady = isReady && displayProgress >= 100;
+  const completionReady = displayProgress >= 100;
 
   return (
     <AnimatePresence mode="wait">

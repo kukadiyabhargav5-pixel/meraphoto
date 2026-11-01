@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Loader, ArrowRight, Mail, Lock } from 'lucide-react';
+import { Eye, EyeOff, Loader, ArrowRight, Mail, Lock, AlertCircle, CheckCircle, LogOut } from 'lucide-react';
 import { useAuth } from '../../lib/AuthContext';
 import PublicWrapper from '../../components/PublicWrapper';
 import toast from 'react-hot-toast';
@@ -15,7 +15,8 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { login, googleLogin, isAuthenticated, loading: authLoading } = useAuth();
+  const [unregisteredEmail, setUnregisteredEmail] = useState('');
+  const { user, login, googleLogin, isAuthenticated, logout } = useAuth();
   const router = useRouter();
 
   // Prefetch targets
@@ -23,23 +24,6 @@ export default function LoginPage() {
     router.prefetch('/dashboard');
     router.prefetch('/admin-choice');
   }, [router]);
-
-  // Redirect to dashboard if already logged in
-  useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        try {
-          const userObj = JSON.parse(userStr);
-          if (userObj.role === 'SUPER_ADMIN') {
-            router.replace('/admin-choice');
-            return;
-          }
-        } catch (e) {}
-      }
-      router.replace('/dashboard');
-    }
-  }, [authLoading, isAuthenticated, router]);
 
   // Load remembered email
   useEffect(() => {
@@ -52,26 +36,28 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setUnregisteredEmail('');
     setLoading(true);
 
-    if (!loginEmail || !loginPassword) {
+    const emailTrimmed = loginEmail.trim();
+    if (!emailTrimmed || !loginPassword) {
       toast.error('Please enter both email and password.');
       setLoading(false);
       return;
     }
 
     try {
-      await login(loginEmail, loginPassword);
-      
+      await login(emailTrimmed, loginPassword);
+
       // Remember email if checkbox is checked
       if (rememberMe) {
-        localStorage.setItem('rememberedEmail', loginEmail);
+        localStorage.setItem('rememberedEmail', emailTrimmed);
       } else {
         localStorage.removeItem('rememberedEmail');
       }
-      
+
       toast.success('Login successful! Entering dashboard...');
-      
+
       const userStr = localStorage.getItem('user');
       let targetPath = '/dashboard';
       if (userStr) {
@@ -82,7 +68,7 @@ export default function LoginPage() {
           }
         } catch (e) {}
       }
-      
+
       router.replace(targetPath);
       setTimeout(() => {
         if (typeof window !== 'undefined' && !window.location.pathname.startsWith(targetPath)) {
@@ -90,106 +76,202 @@ export default function LoginPage() {
         }
       }, 350);
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Login failed. Please check your credentials.');
+      const errMsg =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        'Login failed. Please check your credentials.';
+
+      toast.error(errMsg);
+
+      // If email is not registered in the database, show prominent warning & register prompt
+      if (
+        err?.response?.status === 404 ||
+        errMsg.includes('રજીસ્ટર') ||
+        errMsg.toLowerCase().includes('not found') ||
+        errMsg.toLowerCase().includes('register')
+      ) {
+        setUnregisteredEmail(emailTrimmed);
+      }
+
       setLoading(false);
     }
   };
 
-
-  // Don't render login page if already authenticated
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-[#faf9f6]">
-        <Loader className="w-8 h-8 text-[#c5a880] animate-spin" />
-      </div>
-    );
-  }
-
-  if (isAuthenticated && !authLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-64px)] min-h-[calc(100dvh-64px)] bg-[#faf9f6]">
-        <div className="w-10 h-10 border-4 border-[#c5a880] border-t-transparent rounded-full animate-spin mb-3" />
-        <p className="text-xs font-bold text-slate-600 uppercase tracking-wider font-poppins">Entering Dashboard...</p>
-      </div>
-    );
-  }
-
   return (
     <PublicWrapper>
-      <div className="min-h-[calc(100vh-64px)] min-h-[calc(100dvh-64px)] flex items-center justify-center p-3 xs:p-4 sm:p-6 bg-gradient-to-br from-[#faf9f6] via-[#f5f2eb] to-[#faf9f6] relative overflow-hidden font-poppins">
-        {/* Decorative Orbs */}
-        <div className="absolute top-[-20%] right-[-10%] w-[600px] max-w-full h-[600px] bg-gradient-to-r from-[#c5a880]/15 to-transparent rounded-full blur-[100px] animate-pulse pointer-events-none" />
-        <div className="absolute bottom-[-10%] left-[-10%] w-[400px] max-w-full h-[400px] bg-gradient-to-t from-[#c5a880]/10 to-transparent rounded-full blur-[80px] pointer-events-none" />
-        
+      <div className="min-h-[calc(100vh-64px)] min-h-[calc(100dvh-64px)] flex items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-[#faf9f6] via-[#f5f2eb] to-[#faf9f6] relative overflow-hidden font-poppins">
+        {/* Decorative Ambient Background Orbs */}
+        <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-gradient-to-r from-[#c5a880]/15 to-transparent rounded-full blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] bg-gradient-to-t from-[#c5a880]/10 to-transparent rounded-full blur-[80px] pointer-events-none" />
+
         {/* Login Card */}
-        <div className="w-full max-w-[440px] bg-white/85 backdrop-blur-xl rounded-[24px] border border-white/40 shadow-2xl p-5 xs:p-6 sm:p-10 relative z-10 animate-fade-in-up">
-          
-          <div className="flex justify-center mb-2">
-            <img src="/logo.png" alt="Mara Photo" className="h-9 sm:h-10 object-contain" />
+        <div className="w-full max-w-[460px] bg-white/90 backdrop-blur-xl rounded-[28px] border border-white/60 shadow-2xl p-6 sm:p-10 relative z-10 animate-fade-in-up">
+          {/* Studio Brand Logo */}
+          <div className="flex justify-center mb-3">
+            <img src="/logo.png" alt="Mara Photo" className="h-10 sm:h-11 object-contain" />
           </div>
-          
-          <h1 className="text-2xl sm:text-[28px] font-light text-slate-900 text-center font-serif-luxury mb-1">
+
+          <h1 className="text-2xl sm:text-3xl font-light text-slate-900 text-center font-serif-luxury mb-1">
             Welcome Back
           </h1>
-          <p className="text-xs sm:text-[13px] font-semibold text-slate-400 text-center mb-6 sm:mb-8">
+          <p className="text-xs sm:text-sm font-semibold text-slate-500 text-center mb-6">
             Sign in to your Mara Photo studio
           </p>
 
-          <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5">
-            
-            <div className="relative group">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-4 h-4 pointer-events-none text-slate-400 peer-focus:text-[#c5a880] transition-colors z-10">
-                <Mail className="w-4 h-4" />
+          {/* Active Session Notification (if already logged in) */}
+          {isAuthenticated && user && (
+            <div className="mb-6 p-4 rounded-2xl bg-amber-50/90 border border-amber-200 text-amber-950 text-xs shadow-xs">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <p className="font-bold text-slate-800">
+                  Signed in as: <span className="font-mono text-slate-950">{user.email}</span>
+                </p>
               </div>
-              <input 
-                type="email" id="loginEmail" required placeholder="Email Address"
-                className="peer w-full bg-slate-50/80 border border-slate-200 rounded-xl pl-11 pr-4 pt-6 pb-2 text-base sm:text-sm font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#c5a880]/20 focus:border-[#c5a880] transition-all outline-none shadow-sm placeholder-transparent" 
-                value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} autoComplete="email"
-              />
-              <label htmlFor="loginEmail" className="absolute left-11 top-[6px] text-[9px] font-bold text-slate-400 uppercase tracking-widest transition-all peer-placeholder-shown:top-[15px] peer-placeholder-shown:text-[13px] peer-placeholder-shown:normal-case peer-focus:top-[6px] peer-focus:text-[9px] peer-focus:uppercase peer-focus:text-[#c5a880]">
+              <div className="flex items-center gap-2.5 mt-3">
+                <Link
+                  href={user.role === 'SUPER_ADMIN' ? '/admin-choice' : '/dashboard'}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-[#c5a880] text-white font-bold text-[11px] transition-colors"
+                >
+                  Go to Dashboard →
+                </Link>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await logout();
+                    toast.success('Logged out successfully');
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-[11px] transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <LogOut className="w-3 h-3" />
+                  <span>Switch Account</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Unregistered Email Alert Banner */}
+          {unregisteredEmail && (
+            <div className="mb-5 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-start gap-2.5 min-w-0">
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="font-bold text-sm text-rose-900">આ ઈમેલ રજીસ્ટર થયેલ નથી</p>
+                  <p className="text-[11px] text-rose-700 mt-0.5">
+                    પહેલાં Studio એકાઉન્ટ બનાવો, પછી લોગિન થશે.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href={`/signup?email=${encodeURIComponent(unregisteredEmail)}`}
+                className="w-full sm:w-auto text-center px-4 py-2 rounded-xl bg-slate-900 hover:bg-[#c5a880] text-white text-[11px] font-black uppercase tracking-wider shrink-0 transition-colors shadow-sm"
+              >
+                Register Now →
+              </Link>
+            </div>
+          )}
+
+          {/* Email / Password Form */}
+          <form onSubmit={handleLogin} className="space-y-4">
+            {/* Email Field */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 block mb-1.5">
                 Email Address
               </label>
+              <div className="relative">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <input
+                  type="email"
+                  required
+                  placeholder="yourname@gmail.com"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  autoComplete="email"
+                  className="w-full bg-slate-50/90 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#c5a880]/20 focus:border-[#c5a880] transition-all outline-none"
+                />
+              </div>
             </div>
 
-            <div className="relative group">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-4 h-4 pointer-events-none text-slate-400 peer-focus:text-[#c5a880] transition-colors z-10">
-                <Lock className="w-4 h-4" />
-              </div>
-              <input 
-                id="loginPassword" required placeholder="Password"
-                className="peer w-full bg-slate-50/80 border border-slate-200 rounded-xl pl-11 pr-12 pt-6 pb-2 text-base sm:text-sm font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#c5a880]/20 focus:border-[#c5a880] transition-all outline-none shadow-sm placeholder-transparent" 
-                value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} autoComplete="current-password"
-                type={showPassword ? 'text' : 'password'}
-              />
-              <label htmlFor="loginPassword" className="absolute left-11 top-[6px] text-[9px] font-bold text-slate-400 uppercase tracking-widest transition-all peer-placeholder-shown:top-[15px] peer-placeholder-shown:text-[13px] peer-placeholder-shown:normal-case peer-focus:top-[6px] peer-focus:text-[9px] peer-focus:uppercase peer-focus:text-[#c5a880]">
+            {/* Password Field */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 block mb-1.5">
                 Password
               </label>
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-slate-900 transition-colors bg-white/50 hover:bg-slate-100 rounded-lg min-w-[36px] min-h-[36px] flex items-center justify-center">
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+              <div className="relative">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  placeholder="Enter your password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  autoComplete="current-password"
+                  className="w-full bg-slate-50/90 border border-slate-200 rounded-xl pl-10 pr-11 py-3 text-sm font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#c5a880]/20 focus:border-[#c5a880] transition-all outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
-              <label className="flex items-center gap-2 cursor-pointer group select-none">
-                <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-[#c5a880] focus:ring-[#c5a880] transition-colors" />
-                <span className="text-xs font-semibold text-slate-500 group-hover:text-slate-700 transition-colors">Remember Me</span>
+            {/* Remember Me & Forgot Password */}
+            <div className="flex items-center justify-between pt-1">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 text-[#c5a880] focus:ring-0 cursor-pointer"
+                />
+                <span className="text-xs font-semibold text-slate-600">Remember Me</span>
               </label>
-              <Link href="/auth/forgot-password" className="text-xs font-bold text-[#c5a880] hover:text-slate-900 transition-colors">
+
+              <Link
+                href="/auth/forgot-password"
+                className="text-xs font-bold text-[#c5a880] hover:text-slate-900 transition-colors"
+              >
                 Forgot Password?
               </Link>
             </div>
 
-            <button type="submit" disabled={loading} className="w-full bg-slate-900 hover:bg-[#c5a880] text-white py-3.5 sm:py-4 rounded-xl text-[13px] font-black uppercase tracking-widest shadow-xl shadow-slate-900/10 hover:shadow-[#c5a880]/30 transition-all duration-300 flex items-center justify-center gap-2 mt-2 group disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:bg-slate-900 min-h-[44px]">
-              {loading ? <Loader className="w-4 h-4 animate-spin" /> : <>Sign In <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></>}
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-slate-900 hover:bg-[#c5a880] text-white py-3.5 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider shadow-lg shadow-slate-900/10 hover:shadow-[#c5a880]/30 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer disabled:opacity-60"
+            >
+              {loading ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  <span>Signing in...</span>
+                </>
+              ) : (
+                <>
+                  <span>Sign In to Studio</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </form>
 
-          <div className="flex items-center gap-4 my-5 sm:my-6">
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-5">
             <div className="flex-1 h-px bg-slate-200"></div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Or continue with</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              Or continue with
+            </span>
             <div className="flex-1 h-px bg-slate-200"></div>
           </div>
-          
+
+          {/* Google Auth Button */}
           <div className="w-full">
             <GoogleAuthButton
               text="Continue with Google"
@@ -211,10 +293,16 @@ export default function LoginPage() {
             />
           </div>
 
-          <div className="mt-6 sm:mt-8 text-center text-xs sm:text-[13px] font-semibold text-slate-500">
-            Don&apos;t have an account? <Link href="/signup" className="text-[#c5a880] hover:text-slate-900 font-bold ml-1 transition-colors">Create Account</Link>
+          {/* Footer Link */}
+          <div className="mt-6 text-center text-xs sm:text-sm font-semibold text-slate-500">
+            Don&apos;t have an account?{' '}
+            <Link
+              href="/signup"
+              className="text-[#c5a880] hover:text-slate-900 font-bold transition-colors"
+            >
+              Create Account
+            </Link>
           </div>
-
         </div>
       </div>
     </PublicWrapper>

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import PublicWrapper from '../components/PublicWrapper';
 import Hero from '../components/Hero';
 import {
@@ -109,25 +109,6 @@ type StoragePlanItem = {
 const storagePlansByDuration: Record<'MONTHLY' | '6_MONTHS' | 'YEARLY', StoragePlanItem[]> = {
   MONTHLY: [
     {
-      name: 'Free Starter',
-      price: '₹0',
-      period: '/ forever',
-      storageGb: '15 GB',
-      validity: 'Lifetime Access',
-      desc: '15 GB High-Speed Cloud Storage included free',
-      highlight: false,
-      badge: 'Free Forever',
-      features: [
-        '15 GB Free Cloud Storage',
-        'Upload Photos & Full HD Videos',
-        'Create & Share Unlimited Events',
-        'Instant QR Code Gallery Access',
-        'Quotation & Invoice Generator',
-      ],
-      cta: 'Start Free Account',
-      href: '/signup',
-    },
-    {
       name: '10 GB Storage',
       price: '₹149',
       period: '/ month',
@@ -188,44 +169,6 @@ const storagePlansByDuration: Record<'MONTHLY' | '6_MONTHS' | 'YEARLY', StorageP
   ],
   '6_MONTHS': [
     {
-      name: 'Free Starter',
-      price: '₹0',
-      period: '/ forever',
-      storageGb: '15 GB',
-      validity: 'Lifetime Access',
-      desc: '15 GB High-Speed Cloud Storage included free',
-      highlight: false,
-      badge: 'Free Forever',
-      features: [
-        '15 GB Free Cloud Storage',
-        'Upload Photos & Full HD Videos',
-        'Create & Share Unlimited Events',
-        'Instant QR Code Gallery Access',
-        'Quotation & Invoice Generator',
-      ],
-      cta: 'Start Free Account',
-      href: '/signup',
-    },
-    {
-      name: '50 GB Storage',
-      price: '₹1,499',
-      period: '/ 6 months',
-      storageGb: '50 GB',
-      validity: '6 Full Months',
-      desc: 'Store ~12,500 High-Res Photos',
-      highlight: false,
-      badge: 'Extended Solo',
-      features: [
-        '50 GB Dedicated Cloud Storage',
-        '6 Months Extended Validity',
-        'Store ~12,500 High-Res Photos',
-        'AI Face Search & Live Scanner',
-        'Custom Watermark Protection',
-      ],
-      cta: 'Choose 50 GB',
-      href: '/signup',
-    },
-    {
       name: '75 GB Storage',
       price: '₹6,999',
       period: '/ 6 months',
@@ -245,47 +188,8 @@ const storagePlansByDuration: Record<'MONTHLY' | '6_MONTHS' | 'YEARLY', StorageP
       cta: 'Choose 75 GB',
       href: '/signup',
     },
-    {
-      name: '150 GB Storage',
-      price: '₹11,999',
-      period: '/ 6 months',
-      storageGb: '150 GB',
-      validity: '6 Full Months',
-      desc: 'Store ~37,500 High-Res Photos',
-      highlight: false,
-      badge: 'Pro Agency',
-      features: [
-        '150 GB Dedicated Cloud Storage',
-        '6 Months Extended Validity',
-        'Store ~37,500 High-Res Photos',
-        '4K Video Storage & Streaming',
-        'VIP AI Face Recognition Tier',
-        'Dedicated Priority Support',
-      ],
-      cta: 'Choose 150 GB',
-      href: '/signup',
-    },
   ],
   YEARLY: [
-    {
-      name: 'Free Starter',
-      price: '₹0',
-      period: '/ forever',
-      storageGb: '15 GB',
-      validity: 'Lifetime Access',
-      desc: '15 GB High-Speed Cloud Storage included free',
-      highlight: false,
-      badge: 'Free Forever',
-      features: [
-        '15 GB Free Cloud Storage',
-        'Upload Photos & Full HD Videos',
-        'Create & Share Unlimited Events',
-        'Instant QR Code Gallery Access',
-        'Quotation & Invoice Generator',
-      ],
-      cta: 'Start Free Account',
-      href: '/signup',
-    },
     {
       name: '100 GB Storage',
       price: '₹5,999',
@@ -426,7 +330,53 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 
 export default function HomePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedDuration, setSelectedDuration] = useState<'MONTHLY' | '6_MONTHS' | 'YEARLY'>('YEARLY');
+  const [selectedDuration, setSelectedDuration] = useState<'MONTHLY' | '6_MONTHS' | 'YEARLY'>('MONTHLY');
+  const [livePlans, setLivePlans] = useState<Record<'MONTHLY' | '6_MONTHS' | 'YEARLY', StoragePlanItem[]>>(storagePlansByDuration);
+
+  useEffect(() => {
+    const fetchLivePlans = async () => {
+      try {
+        const res = await fetch('/api/storage/plans');
+        const data = await res.json();
+        if (data?.success && Array.isArray(data.plans) && data.plans.length > 0) {
+          const categorized: Record<'MONTHLY' | '6_MONTHS' | 'YEARLY', StoragePlanItem[]> = {
+            MONTHLY: [],
+            '6_MONTHS': [],
+            YEARLY: [],
+          };
+          data.plans.forEach((p: any) => {
+            const item: StoragePlanItem = {
+              name: p.name,
+              price: p.displayPrice || `₹${Number(p.priceInr).toLocaleString('en-IN')}`,
+              period: p.billingCategory === 'MONTHLY' ? '/ month' : p.billingCategory === '6_MONTHS' ? '/ 6 months' : '/ year',
+              storageGb: `${p.storageGb} GB`,
+              validity: p.durationMonths === 12 ? '1 Full Year (12 Mo)' : p.durationMonths === 6 ? '6 Full Months' : '1 Full Month',
+              desc: p.desc || `Store ~${(p.storageGb * 250).toLocaleString('en-IN')} High-Res Photos`,
+              highlight: Boolean(p.isRecommended),
+              badge: p.badge || (p.isRecommended ? 'Most Popular' : 'Recommended'),
+              features: Array.isArray(p.features) && p.features.length > 0 ? p.features : [
+                `${p.storageGb} GB High-Speed Cloud Storage`,
+                'Full Resolution Direct Downloads',
+                'AI Face Recognition Indexing',
+                'Client QR Code Sharing',
+              ],
+              cta: `Choose ${p.storageGb} GB`,
+              href: '/signup',
+            };
+            if (p.billingCategory === 'MONTHLY') categorized.MONTHLY.push(item);
+            else if (p.billingCategory === '6_MONTHS') categorized['6_MONTHS'].push(item);
+            else if (p.billingCategory === 'YEARLY') categorized.YEARLY.push(item);
+          });
+          if (categorized.MONTHLY.length > 0 || categorized['6_MONTHS'].length > 0 || categorized.YEARLY.length > 0) {
+            setLivePlans(categorized);
+          }
+        }
+      } catch (e) {
+        // Fallback to static storagePlansByDuration
+      }
+    };
+    fetchLivePlans();
+  }, []);
 
   const handleHomeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -812,7 +762,20 @@ export default function HomePage() {
           .pricing-grid { grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 60px; }
         }
         @media (min-width: 1024px) {
-          .pricing-grid { grid-template-columns: repeat(4, 1fr); }
+          .pricing-grid { grid-template-columns: repeat(3, 1fr); }
+        .pricing-grid-single {
+          display: flex !important;
+          justify-content: center !important;
+          max-width: 440px !important;
+          margin: 40px auto 0 !important;
+        }
+        .pricing-grid-single .pricing-card {
+          width: 100% !important;
+        }
+        .pricing-grid-three {
+          max-width: 1100px;
+          margin: 40px auto 0;
+        }
         }
         .pricing-card {
           background: #fff;
@@ -1447,8 +1410,8 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="pricing-grid">
-            {storagePlansByDuration[selectedDuration].map(plan => (
+          <div className={`pricing-grid ${selectedDuration === '6_MONTHS' ? 'pricing-grid-single' : 'pricing-grid-three'}`}>
+            {(livePlans[selectedDuration] || storagePlansByDuration[selectedDuration]).map(plan => (
               <div key={plan.name} className={`pricing-card ${plan.highlight ? 'pricing-card-highlight' : ''}`}>
                 {plan.highlight ? (
                   <div className="pricing-popular">{plan.badge}</div>

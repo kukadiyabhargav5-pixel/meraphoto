@@ -47,7 +47,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
 class LoadingManagerClass {
   private state: LoadingState = {
     currentPhase: 1,
-    progress: 1,
+    progress: 15,
     status: 'Initializing Experience...',
     error: null,
     isCriticalFailed: false,
@@ -97,7 +97,7 @@ class LoadingManagerClass {
         console.warn('[LoadingManager] Safety timeout — forcing completion.');
         this.forceComplete();
       }
-    }, 1200);
+    }, 600);
 
     const startTime = Date.now();
 
@@ -211,17 +211,19 @@ class LoadingManagerClass {
   private async runPhase1_AppCore(): Promise<void> {
     const tasks: Promise<any>[] = [];
 
-    // DOM readiness
+    // DOM readiness (never hangs)
     tasks.push(
-      new Promise<void>((resolve) => {
-        if (typeof document === 'undefined') return resolve();
-        if (document.readyState === 'complete' || document.readyState === 'interactive') {
-          resolve();
-        } else {
+      withTimeout(
+        new Promise<void>((resolve) => {
+          if (typeof document === 'undefined') return resolve();
+          if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            return resolve();
+          }
           const onReady = () => { window.removeEventListener('DOMContentLoaded', onReady); resolve(); };
           window.addEventListener('DOMContentLoaded', onReady);
-        }
-      })
+        }),
+        150
+      )
     );
 
     // Font readiness (fast timeout)

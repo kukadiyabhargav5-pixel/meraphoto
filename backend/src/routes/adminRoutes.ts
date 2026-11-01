@@ -25,6 +25,7 @@ import {
   togglePlanActive,
   archivePlan
 } from '../controllers/pricingController';
+import { adminGetStoragePlans, adminUpdateStoragePlan } from '../controllers/storageController';
 import { authenticateJWT, requireRoles } from '../middlewares/auth';
 
 const router = Router();
@@ -55,6 +56,10 @@ router.put('/events/:id', updateEvent);
 router.delete('/users/:id', deleteUser);
 router.delete('/studios/:id', deleteStudio);
 router.delete('/events/:id', deleteEvent);
+
+// Storage Plans Management (1 Month, 6 Months, 1 Year)
+router.get('/storage-plans', adminGetStoragePlans);
+router.put('/storage-plans/:planId', adminUpdateStoragePlan);
 
 // Pricing Plan Management
 router.get('/plans', getAllPlansAdmin);

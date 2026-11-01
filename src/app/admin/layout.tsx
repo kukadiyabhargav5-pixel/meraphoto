@@ -67,7 +67,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { href: '/admin/users', icon: <Users className="w-5 h-5" />, label: 'Users' },
         { href: '/admin/studios', icon: <Camera className="w-5 h-5" />, label: 'Studios' },
         { href: '/admin/events', icon: <FolderOpen className="w-5 h-5" />, label: 'Events' },
-        { href: '/admin/plans', icon: <CreditCard className="w-5 h-5" />, label: 'Pricing Plans' },
+        { href: '/admin/plans', icon: <CreditCard className="w-5 h-5" />, label: 'Plans & Pricing' },
         { href: '/admin/storage', icon: <Cloud className="w-5 h-5" />, label: 'Storage Subscriptions' },
       ],
     },

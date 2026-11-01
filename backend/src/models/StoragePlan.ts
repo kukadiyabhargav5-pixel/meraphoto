@@ -18,6 +18,8 @@ export interface IStoragePlan extends Document {
   features: string[];
   isActive: boolean;
   sortOrder: number;
+  desc?: string;
+  badge?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -26,6 +28,8 @@ const StoragePlanSchema = new Schema<IStoragePlan>(
   {
     planId: { type: String, required: true, unique: true, index: true },
     name: { type: String, required: true },
+    desc: { type: String, default: '' },
+    badge: { type: String, default: '' },
     storageGb: { type: Number, required: true },
     storageBytes: { type: Number, required: true },
     priceInr: { type: Number, required: true },

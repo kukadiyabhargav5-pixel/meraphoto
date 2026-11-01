@@ -1734,7 +1734,9 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
               <video 
                 controls 
                 autoPlay 
-                src={previewMedia.compressedUrl || previewMedia.r2Url} 
+                playsInline
+                preload="metadata"
+                src={resolveMediaUrl(previewMedia.compressedUrl || previewMedia.r2Url)} 
                 className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl border border-white/10"
               />
             ) : (

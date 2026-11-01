@@ -6,16 +6,10 @@
         "node": ">=20.0.0 <23.0.0"
     },
     "scripts": {
-        "dev": "npm run dev --prefix frontend",
-        "build": "node -e \"if(process.env.RENDER){require('child_process').execSync('cd backend && npm install && npm run build',{stdio:'inherit'})}else{require('child_process').execSync('next build',{stdio:'inherit'})}\"",
-        "start": "node -e \"if(process.env.RENDER){require('child_process').execSync('cd backend && npm start',{stdio:'inherit'})}else{require('child_process').execSync('next start',{stdio:'inherit'})}\"",
-        "lint": "eslint",
-        "dev:frontend": "npm run dev --prefix frontend",
-        "dev:backend": "npm run dev --prefix backend",
-        "dev:all": "concurrently -n \"BACKEND,FRONTEND\" -c \"cyan.bold,green.bold\" \"npm run dev:backend\" \"npm run dev:frontend\"",
-        "build:frontend": "npm run build --prefix frontend",
-        "build:backend": "cd backend && npm install && npm run build",
-        "start:backend": "cd backend && npm start"
+        "dev": "next dev",
+        "build": "next build",
+        "start": "next start",
+        "lint": "eslint"
     },
     "dependencies": {
         "@react-oauth/google": "^0.13.5",

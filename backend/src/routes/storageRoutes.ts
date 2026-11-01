@@ -10,6 +10,8 @@ import {
   adminAdjustUserStorageLimit,
   adminExtendSubscription,
   adminCancelSubscription,
+  adminGetStoragePlans,
+  adminUpdateStoragePlan,
 } from '../controllers/storageController';
 import { authenticateJWT, requireRoles } from '../middlewares/auth';
 
@@ -26,6 +28,8 @@ router.post('/checkout', authenticateJWT, createStorageCheckoutOrder);
 router.post('/verify-payment', authenticateJWT, verifyStoragePayment);
 
 // Super Admin Management Endpoints
+router.get('/admin/plans', authenticateJWT, requireRoles(['SUPER_ADMIN']), adminGetStoragePlans);
+router.put('/admin/plans/:planId', authenticateJWT, requireRoles(['SUPER_ADMIN']), adminUpdateStoragePlan);
 router.get('/admin/overview', authenticateJWT, requireRoles(['SUPER_ADMIN']), getAdminStorageOverview);
 router.post('/admin/adjust-limit', authenticateJWT, requireRoles(['SUPER_ADMIN']), adminAdjustUserStorageLimit);
 router.post('/admin/extend-subscription', authenticateJWT, requireRoles(['SUPER_ADMIN']), adminExtendSubscription);
