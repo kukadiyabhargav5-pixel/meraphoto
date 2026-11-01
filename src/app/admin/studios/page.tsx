@@ -47,13 +47,14 @@ export default function AdminStudiosPage() {
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this studio? All events and media will be permanently deleted.')) return;
+    if (!window.confirm('Are you sure you want to permanently delete this studio? All events, photos, videos, and database records will be permanently wiped from both cloud and database.')) return;
+    const toastId = toast.loading('Permanently purging studio and all cloud data...');
     try {
       await apiClient.delete(`/admin/studios/${id}`);
       setStudios(studios.filter(s => s._id !== id));
-      toast.success('Studio deleted successfully');
+      toast.success('Studio, all events, and cloud storage files permanently deleted!', { id: toastId });
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to delete studio');
+      toast.error(error.response?.data?.error || 'Failed to delete studio', { id: toastId });
     }
   };
 

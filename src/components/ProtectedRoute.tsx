@@ -29,7 +29,7 @@ export default function ProtectedRoute({
     }
   }, [mounted, loading, isAuthenticated, allowedRoles, user, router]);
 
-  if (!mounted || loading) {
+  if (loading && !user) {
     return (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#faf9f6] p-4 overscroll-none select-none">
         <div className="flex flex-col items-center justify-center text-center">

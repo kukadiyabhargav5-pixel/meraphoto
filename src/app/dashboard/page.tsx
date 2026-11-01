@@ -564,6 +564,7 @@ export default function DashboardOverview() {
                 <motion.div
                   key={card.id}
                   variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } } }}
+                  onMouseEnter={() => { if (card.link) router.prefetch(card.link); }}
                   onClick={() => handleBlockClick(card.link)}
                   className={`bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-5 relative overflow-hidden cursor-pointer
                     hover:border-slate-300 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-0.5 active:scale-[0.98]
@@ -738,6 +739,7 @@ export default function DashboardOverview() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.35 + i * 0.06 }}
+                onMouseEnter={() => { if (ql.href) router.prefetch(ql.href); }}
                 onClick={() => handleBlockClick(ql.href)}
                 className={`rounded-2xl p-3.5 sm:p-4 flex items-center gap-3 sm:gap-3.5 cursor-pointer
                   transition-all duration-300 group active:scale-[0.98] ${ql.highlight

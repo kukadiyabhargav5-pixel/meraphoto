@@ -272,9 +272,9 @@ export default function Header() {
               <DropdownMenu items={useCaseItems} />
             </div>
 
-            <Link href="/pricing" className="text-[15px] font-medium text-[#09090b] hover:text-[#c5a880] transition-colors">Pricing</Link>
-            <Link href="/blog"    className="text-[15px] font-medium text-[#09090b] hover:text-[#c5a880] transition-colors">Blog</Link>
-            <Link href="/about"   className="text-[15px] font-medium text-[#09090b] hover:text-[#c5a880] transition-colors">About Us</Link>
+            <Link prefetch={true} href="/pricing" className="text-[15px] font-medium text-[#09090b] hover:text-[#c5a880] transition-colors">Pricing</Link>
+            <Link prefetch={true} href="/blog"    className="text-[15px] font-medium text-[#09090b] hover:text-[#c5a880] transition-colors">Blog</Link>
+            <Link prefetch={true} href="/about"   className="text-[15px] font-medium text-[#09090b] hover:text-[#c5a880] transition-colors">About Us</Link>
             <Link href="/#contact" className="text-[15px] font-medium text-[#09090b] hover:text-[#c5a880] transition-colors">Contact</Link>
           </nav>
 
@@ -282,7 +282,7 @@ export default function Header() {
           <div className="hidden lg:flex items-center gap-3 font-poppins">
             {user ? (
               <>
-                <Link href="/dashboard" className="nav-btn-dashboard">
+                <Link prefetch={true} href="/dashboard" className="nav-btn-dashboard">
                   Dashboard
                 </Link>
                 <button onClick={handleSignOut} className="nav-btn-signout">
@@ -291,10 +291,10 @@ export default function Header() {
               </>
             ) : (
               <>
-                <Link href="/login" className="nav-btn-login">
+                <Link prefetch={true} href="/login" className="nav-btn-login">
                   Login
                 </Link>
-                <Link href="/signup" className="nav-btn-register">
+                <Link prefetch={true} href="/signup" className="nav-btn-register">
                   Register
                 </Link>
               </>
@@ -380,15 +380,15 @@ export default function Header() {
               )}
             </div>
 
-            <Link href="/pricing" onClick={() => setMobileOpen(false)} className="flex px-4 py-3 text-[15px] font-medium text-[#09090b] rounded-xl hover:bg-slate-50 transition-all font-poppins">Pricing</Link>
-            <Link href="/blog"    onClick={() => setMobileOpen(false)} className="flex px-4 py-3 text-[15px] font-medium text-[#09090b] rounded-xl hover:bg-slate-50 transition-all font-poppins">Blog</Link>
-            <Link href="/about"   onClick={() => setMobileOpen(false)} className="flex px-4 py-3 text-[15px] font-medium text-[#09090b] rounded-xl hover:bg-slate-50 transition-all font-poppins">About Us</Link>
+            <Link prefetch={true} href="/pricing" onClick={() => setMobileOpen(false)} className="flex px-4 py-3 text-[15px] font-medium text-[#09090b] rounded-xl hover:bg-slate-50 transition-all font-poppins">Pricing</Link>
+            <Link prefetch={true} href="/blog"    onClick={() => setMobileOpen(false)} className="flex px-4 py-3 text-[15px] font-medium text-[#09090b] rounded-xl hover:bg-slate-50 transition-all font-poppins">Blog</Link>
+            <Link prefetch={true} href="/about"   onClick={() => setMobileOpen(false)} className="flex px-4 py-3 text-[15px] font-medium text-[#09090b] rounded-xl hover:bg-slate-50 transition-all font-poppins">About Us</Link>
             <Link href="/#contact" onClick={() => setMobileOpen(false)} className="flex px-4 py-3 text-[15px] font-medium text-[#09090b] rounded-xl hover:bg-slate-50 transition-all font-poppins">Contact</Link>
 
             <div className="pt-3 border-t border-gray-100 flex flex-col gap-3 font-poppins">
               {user ? (
                 <>
-                  <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="mobile-btn-login">
+                  <Link prefetch={true} href="/dashboard" onClick={() => setMobileOpen(false)} className="mobile-btn-login">
                     Go to Dashboard
                   </Link>
                   <button
@@ -400,8 +400,8 @@ export default function Header() {
                 </>
               ) : (
                 <>
-                  <Link href="/login" onClick={() => setMobileOpen(false)} className="mobile-btn-login">Login</Link>
-                  <Link href="/signup" onClick={() => setMobileOpen(false)} className="mobile-btn-register">Register</Link>
+                  <Link prefetch={true} href="/login" onClick={() => setMobileOpen(false)} className="mobile-btn-login">Login</Link>
+                  <Link prefetch={true} href="/signup" onClick={() => setMobileOpen(false)} className="mobile-btn-register">Register</Link>
                 </>
               )}
             </div>

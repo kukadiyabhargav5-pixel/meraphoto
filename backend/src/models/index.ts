@@ -25,3 +25,4 @@ export { default as PricingPlan } from './PricingPlan';
 export * from './StoragePlan';
 export * from './StorageSubscription';
 export * from './StorageActivity';
+export { default as Team } from './Team';

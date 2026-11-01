@@ -51,13 +51,14 @@ export default function AdminUsersPage() {
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
+    if (!window.confirm('Are you sure you want to permanently delete this user? All studios, events, media, and cloud files owned by this user will be completely wiped.')) return;
+    const toastId = toast.loading('Permanently purging user, studios, and all cloud data...');
     try {
       await apiClient.delete(`/admin/users/${id}`);
       setUsers(users.filter(u => u._id !== id));
-      toast.success('User deleted successfully');
+      toast.success('User and all associated data permanently deleted from cloud & database!', { id: toastId });
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to delete user');
+      toast.error(error.response?.data?.error || 'Failed to delete user', { id: toastId });
     }
   };
 

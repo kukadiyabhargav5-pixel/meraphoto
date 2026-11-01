@@ -42,9 +42,29 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [studio, setStudio] = useState<AuthStudio | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const u = localStorage.getItem('user');
+      const t = localStorage.getItem('accessToken');
+      return t && u ? JSON.parse(u) : null;
+    } catch { return null; }
+  });
+  const [studio, setStudio] = useState<AuthStudio | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const s = localStorage.getItem('studio');
+      return s ? JSON.parse(s) : null;
+    } catch { return null; }
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    try {
+      const t = localStorage.getItem('accessToken');
+      const u = localStorage.getItem('user');
+      return !(t && u);
+    } catch { return true; }
+  });
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const isAuthenticated = !!user;

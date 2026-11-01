@@ -4,6 +4,7 @@ import {
   DeleteObjectCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import dotenv from 'dotenv';
@@ -201,6 +202,37 @@ export const deleteFiles = async (keys: string[]): Promise<void> => {
  * Directly downloads an object from Cloudflare R2 as a Buffer.
  * High-speed internal transfer for video/photo processing workers.
  */
+
+/**
+ * Recursively lists and permanently deletes all files under an R2 folder prefix (e.g. "studios/...", "events/...").
+ */
+export const deleteFolderPrefix = async (prefix: string): Promise<void> => {
+  try {
+    const cleanPrefix = cleanR2Key(prefix).replace(/^\/+/, '');
+    if (!cleanPrefix) return;
+
+    let continuationToken: string | undefined = undefined;
+    do {
+      const listCommand = new ListObjectsV2Command({
+        Bucket: R2_BUCKET,
+        Prefix: cleanPrefix,
+        ContinuationToken: continuationToken,
+      });
+      const listRes: any = await r2Client.send(listCommand);
+      if (listRes.Contents && listRes.Contents.length > 0) {
+        const keys = listRes.Contents.map((obj: any) => obj.Key).filter(Boolean) as string[];
+        if (keys.length > 0) {
+          await deleteFiles(keys);
+        }
+      }
+      continuationToken = listRes.NextContinuationToken;
+    } while (continuationToken);
+    console.log(`[StorageService] Successfully cleared entire R2 prefix: ${cleanPrefix}`);
+  } catch (error) {
+    console.error(`[StorageService] Error deleting prefix "${prefix}":`, error);
+  }
+};
+
 export const getFileBuffer = async (key: string): Promise<Buffer> => {
   try {
     let cleanKey = key;
