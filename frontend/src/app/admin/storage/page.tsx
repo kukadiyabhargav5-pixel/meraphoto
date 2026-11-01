@@ -202,7 +202,7 @@ export default function AdminStoragePage() {
             Storage Subscriptions Management
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Monitor platform-wide Cloudflare R2 storage allocation, enforce storage limits, and manage user subscriptions.
+            Monitor platform-wide Ultra-Fast Cloud Storage storage allocation, enforce storage limits, and manage user subscriptions.
           </p>
         </div>
 
@@ -243,7 +243,7 @@ export default function AdminStoragePage() {
           <div className="text-2xl sm:text-3xl font-black text-slate-900">
             {stats?.platformStorageGb ?? 0} GB
           </div>
-          <div className="text-xs text-slate-500 mt-1">Stored in Cloudflare R2 bucket</div>
+          <div className="text-xs text-slate-500 mt-1">Stored in Secure Cloud Bucket</div>
         </div>
 
         {/* Total Uploaded Media */}

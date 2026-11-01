@@ -280,7 +280,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
         });
       }, 200);
 
-      // ── Step 4: Optimized Parallel Turbo Streams Directly to Cloudflare R2 ──
+      // ── Step 4: Optimized Parallel Turbo Streams Directly to Ultra-Fast Cloud Storage ──
       let imageCompressionModule: any = null;
       try {
         imageCompressionModule = (await import('browser-image-compression')).default;
@@ -302,7 +302,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
           // ⚡ SMART HIGH-SPEED PHOTO COMPRESSION:
           // Photos > 2.5MB: Compress via Web Worker with snappy 2s timeout
-          // Photos <= 2.5MB: Stream raw file straight to Cloudflare R2 for gigabit speed
+          // Photos <= 2.5MB: Stream raw file straight to Ultra-Fast Cloud Storage for gigabit speed
           if (!isVideo && file.size > 2.5 * 1024 * 1024 && imageCompressionModule) {
             try {
               const compPromise = imageCompressionModule(file, {
@@ -331,7 +331,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
           let uploadedSuccessfully = false;
 
-          // Attempt 1: Direct Gigabit Cloudflare R2 PUT
+          // Attempt 1: Direct Gigabit Ultra-Fast Cloud Storage PUT
           if (presignedItem && presignedItem.uploadUrl) {
             try {
               const response = await fetch(presignedItem.uploadUrl, {

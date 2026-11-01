@@ -141,7 +141,7 @@ export default function PrivacyPage() {
               <ul className="space-y-2 mt-3 text-xs sm:text-sm text-gray-600">
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-[#c5a880] shrink-0 mt-0.5" />
-                  <span><strong>Cloudflare R2 Object Storage:</strong> High-durability, S3-compatible cloud storage with enterprise encryption at rest (AES-256) and TLS 1.3 in transit.</span>
+                  <span><strong>Ultra-Fast Cloud Storage Object Storage:</strong> High-durability, S3-compatible cloud storage with enterprise encryption at rest (AES-256) and TLS 1.3 in transit.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-[#c5a880] shrink-0 mt-0.5" />

@@ -172,7 +172,7 @@ export default function AdminDashboardPage() {
     },
     {
       title: 'Studio Profile & Branding',
-      desc: 'Manage studio profile, R2 logo and brand identity.',
+      desc: 'Manage studio profile, logo and brand identity.',
       href: '/dashboard/profile',
       icon: Sparkles,
       actionText: 'Studio Profile'

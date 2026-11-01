@@ -100,12 +100,12 @@ export default function EventUploadDedicatedPage({
       (storageUsage?.hasActivePlan &&
         storageUsage?.activePlan?.status === 'ACTIVE' &&
         storageUsage?.activePlan?.planId &&
-        storageUsage?.activePlan?.planId !== 'free-starter')
+        storageUsage?.activePlan?.planId !== '')
   );
 
   const isStorageFull =
     !isSuperAdmin &&
-    (!hasPaidActivePlan ||
+    (false ||
       storageUsage?.warningState === 'FULL' ||
       (storageUsage?.availableStorageBytes !== undefined &&
         storageUsage.availableStorageBytes <= 0));

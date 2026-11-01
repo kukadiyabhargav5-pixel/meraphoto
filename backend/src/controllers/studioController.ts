@@ -529,6 +529,16 @@ export const getPublicStudio = async (req: Request, res: Response) => {
     const portfolioEvents = await Promise.all(
       portfolioEventsQuery.map(async (ev: any) => {
         const photosCount = await Media.countDocuments({ eventId: ev._id, type: 'PHOTO' });
+        let coverKey = ev.coverImageUrl;
+        const firstPhoto: any = await Media.findOne({ eventId: ev._id, type: 'PHOTO' })
+          .sort({ order: 1, createdAt: 1 })
+          .select('r2Key compressedUrl url')
+          .lean();
+        const firstPhotoUrl = firstPhoto ? getFileUrl(firstPhoto.compressedUrl || firstPhoto.r2Key || firstPhoto.url) : null;
+        if (!coverKey || typeof coverKey !== 'string' || !coverKey.trim()) {
+          coverKey = firstPhoto ? (firstPhoto.compressedUrl || firstPhoto.r2Key || firstPhoto.url) : null;
+        }
+        const resolvedCover = coverKey ? getFileUrl(coverKey) : firstPhotoUrl;
         return {
           id: ev._id,
           name: ev.name,
@@ -537,7 +547,8 @@ export const getPublicStudio = async (req: Request, res: Response) => {
           date: ev.date,
           location: ev.location,
           clientName: ev.clientName,
-          coverImageUrl: ev.coverImageUrl ? getFileUrl(ev.coverImageUrl) : null,
+          coverImageUrl: resolvedCover,
+          firstPhotoUrl,
           photosCount,
         };
       })

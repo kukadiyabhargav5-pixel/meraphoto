@@ -296,6 +296,23 @@ export const getUserStorageUsage = async (
           amountInr: expiredSub.amountInr,
         };
         totalLimitBytes = 0;
+      } else {
+        // Free Basic Starter Tier: 15 GB Free Starter Storage so video and photo uploads work out-of-the-box!
+        hasActivePlan = true;
+        totalLimitBytes = 15 * ONE_GB_BYTES;
+        activePlanInfo = {
+          planId: 'basic-starter',
+          name: 'Starter Storage (15 GB Free)',
+          storageGb: 15,
+          billingCategory: 'MONTHLY',
+          durationMonths: 12,
+          durationText: 'Active Starter Plan',
+          status: 'ACTIVE',
+          startDate: studioDoc?.createdAt || new Date(),
+          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+          daysLeft: 365,
+          isLifetime: false,
+        };
       }
     }
   }

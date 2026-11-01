@@ -74,6 +74,7 @@ interface PortfolioEvent {
   location: string;
   clientName?: string;
   coverImageUrl?: string;
+  firstPhotoUrl?: string;
   photosCount: number;
 }
 
@@ -89,6 +90,7 @@ export default function PublicStudioPage() {
   });
   const [portfolioEvents, setPortfolioEvents] = useState<PortfolioEvent[]>([]);
   const [filterType, setFilterType] = useState<string>('ALL');
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!slug) return;
@@ -517,11 +519,20 @@ export default function PublicStudioPage() {
                 >
                   {/* Event Cover Photo Container - 16:9 Widescreen Ratio */}
                   <div className="relative aspect-video w-full overflow-hidden bg-slate-100">
-                    {cover ? (
+                    {cover && !failedImages[event.id] ? (
                       <img
                         src={cover}
                         alt={event.name}
                         className="w-full h-full object-cover object-center group-hover:scale-108 transition-transform duration-700 ease-out"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          const fallbackUrl = event.firstPhotoUrl ? resolveMediaUrl(event.firstPhotoUrl, '') : '';
+                          if (fallbackUrl && target.src !== fallbackUrl) {
+                            target.src = fallbackUrl;
+                          } else {
+                            setFailedImages((prev) => ({ ...prev, [event.id]: true }));
+                          }
+                        }}
                       />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 bg-slate-100">

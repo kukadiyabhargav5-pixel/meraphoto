@@ -74,7 +74,7 @@ export default function UnifiedProfilePage() {
     }
   }, [sessionUser, authUser, studio, authStudio]);
 
-  // Handle direct Studio Logo upload to Cloudflare R2
+  // Handle direct Studio Logo upload to Ultra-Fast Cloud Storage
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;

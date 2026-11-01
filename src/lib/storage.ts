@@ -103,7 +103,7 @@ export const CANONICAL_STORAGE_PLANS: StoragePlan[] = [
     sortOrder: 1,
     isActive: true,
     features: [
-      '10 GB High-Speed Cloudflare R2 Storage',
+      '10 GB High-Speed Ultra-Fast Cloud Storage',
       'Store ~2,500 High-Res Photos',
       'Full Resolution Downloads',
       'AI Face Recognition Indexing',
@@ -125,7 +125,7 @@ export const CANONICAL_STORAGE_PLANS: StoragePlan[] = [
     sortOrder: 2,
     isActive: true,
     features: [
-      '50 GB High-Speed Cloudflare R2 Storage',
+      '50 GB High-Speed Ultra-Fast Cloud Storage',
       'Store ~12,500 High-Res Photos',
       'Ultra-Fast CDN Delivery',
       'AI Face Search & Live Scanner',
@@ -147,7 +147,7 @@ export const CANONICAL_STORAGE_PLANS: StoragePlan[] = [
     sortOrder: 3,
     isActive: true,
     features: [
-      '100 GB High-Speed Cloudflare R2 Storage',
+      '100 GB High-Speed Ultra-Fast Cloud Storage',
       'Store ~25,000 High-Res Photos',
       'Full Video Storage Support',
       'AI Face Search & Smart Albums',

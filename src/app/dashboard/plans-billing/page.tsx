@@ -462,7 +462,7 @@ export default function PlansBillingPage() {
               </div>
 
               <span className="text-[11px] font-bold text-slate-400">
-                Synced automatically from Cloudflare R2
+                Synced automatically from Ultra-Fast Cloud Storage
               </span>
             </div>
           </div>

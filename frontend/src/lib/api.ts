@@ -306,5 +306,8 @@ export const resolveMediaUrl = (
     return `/api/media/file/${trimmed}`;
   }
 
-  return trimmed;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  return `/api/media/file/${trimmed.replace(/^\/+/, '')}`;
 };
