@@ -46,6 +46,7 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
     if (!uploadCheck.allowed) {
       return res.status(403).json({ error: uploadCheck.reason });
     }
+    const hasActiveStorageSub = uploadCheck.totalBytes > 0;
 
     const uploadedMediaList = [];
 
@@ -62,8 +63,8 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
         const isVideo = file.mimetype.startsWith('video/') || /\.(mp4|mov|avi|mkv|webm|m4v|3gp)$/i.test(file.originalname);
         const type = isVideo ? 'VIDEO' : 'PHOTO';
 
-        // Enforce limits based on plan (Bypass for SUPER_ADMIN)
-        if (!isSuperAdmin(req.user)) {
+        // Enforce limits based on plan (Bypass for SUPER_ADMIN or active storage subscription)
+        if (!isSuperAdmin(req.user) && !hasActiveStorageSub) {
           const planKey = (studio.subscriptionPlan || 'BASIC').toUpperCase();
           const limits = PLAN_STORAGE_LIMITS[planKey] || PLAN_STORAGE_LIMITS.BASIC;
           if (type === 'VIDEO') {
@@ -99,12 +100,22 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
           }
         }
 
+        const ext = path.extname(file.originalname).toLowerCase();
+        let mime = file.mimetype;
+        if (!mime || mime === 'application/octet-stream') {
+          if (ext === '.mp4') mime = 'video/mp4';
+          else if (ext === '.mov') mime = 'video/quicktime';
+          else if (ext === '.webm') mime = 'video/webm';
+          else if (ext === '.mkv') mime = 'video/x-matroska';
+          else mime = isVideo ? 'video/mp4' : 'image/jpeg';
+        }
+
         // Upload buffer directly to Cloudflare R2 with structured studio/album hierarchy
         const folderPathForR2 = `studios/${event.studioId}/albums/${eventId}/${type.toLowerCase()}s`;
         const { url: r2Url, publicId: r2Key } = await uploadFile(
           finalBuffer,
           folderPathForR2,
-          file.mimetype || (type === 'PHOTO' ? 'image/jpeg' : 'video/mp4'),
+          mime,
           file.originalname
         );
 
@@ -117,6 +128,8 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
           eventId: event._id,
           studioId: event.studioId,
           size: finalSize,
+          mimeType: mime,
+          originalName: file.originalname,
           uploadedBy: req.user?._id,
           processedStatus: 'PENDING',
           creditDeducted: false,

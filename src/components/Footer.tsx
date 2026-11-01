@@ -113,6 +113,24 @@ export default function Footer() {
               </li>
             </ul>
           </div>
+          {/* Links Column 4: Contact & Phone Support */}
+          <div className="text-left">
+            <h4 className="font-bold text-[#09090b] text-xs mb-5 tracking-wider uppercase">Contact & Support</h4>
+            <ul className="space-y-3">
+              <li className="text-sm text-gray-700 font-bold flex items-center gap-2">
+                <span>📞</span>
+                <a href="tel:8799495038" className="hover:text-[#c5a880] transition-colors font-bold text-[#09090b]">+91 87994 95038</a>
+              </li>
+              <li className="text-sm text-gray-600 font-medium flex items-center gap-2">
+                <span>✉️</span>
+                <a href="mailto:maraphoto303@gmail.com" className="hover:text-[#c5a880] transition-colors break-all">maraphoto303@gmail.com</a>
+              </li>
+              <li className="text-xs text-gray-500 font-semibold pt-1">
+                Mon – Sat: 9 AM to 8 PM IST
+              </li>
+            </ul>
+          </div>
+
         </div>
 
         <div className="border-t border-[#e3d8c8]/30 pt-7 flex flex-col sm:flex-row justify-between items-center gap-3">

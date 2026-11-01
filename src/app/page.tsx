@@ -212,6 +212,7 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 
 export default function HomePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [billingCycle, setBillingCycle] = useState<'yearly' | 'monthly'>('yearly');
 
   const handleHomeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1167,34 +1168,90 @@ export default function HomePage() {
       {/* ── PRICING ── */}
       <section id="pricing" className="pricing-section">
         <div className="section-container" style={{ textAlign: 'center' }}>
-          <span className="section-badge">Membership</span>
+          <span className="section-badge">Membership &amp; Storage</span>
           <h2 className="section-title">Simple, Transparent Pricing</h2>
-          <p className="section-desc">Start delivering free. Upgrade as your studio grows.</p>
+          <p className="section-desc">Start delivering free with 15 GB storage. Upgrade as your studio grows.</p>
+
+          {/* Billing Cycle Toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginTop: '28px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: billingCycle === 'monthly' ? '#09090b' : '#9ca3af' }}>
+              Monthly
+            </span>
+            <button
+              type="button"
+              onClick={() => setBillingCycle(billingCycle === 'yearly' ? 'monthly' : 'yearly')}
+              style={{
+                position: 'relative',
+                width: '54px',
+                height: '28px',
+                borderRadius: '9999px',
+                background: '#c5a880',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'background-color 0.2s',
+                padding: '2px',
+                display: 'inline-flex',
+                alignItems: 'center'
+              }}
+              role="switch"
+              aria-checked={billingCycle === 'yearly'}
+            >
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  background: '#ffffff',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                  transform: billingCycle === 'yearly' ? 'translateX(26px)' : 'translateX(0px)',
+                  transition: 'transform 0.2s ease-in-out'
+                }}
+              />
+            </button>
+            <span style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', display: 'inline-flex', alignItems: 'center', gap: '6px', color: billingCycle === 'yearly' ? '#09090b' : '#9ca3af' }}>
+              Yearly
+              <span style={{ background: 'rgba(197,168,128,0.25)', color: '#99732e', fontSize: '9px', fontWeight: 900, padding: '2px 8px', borderRadius: '9999px', textTransform: 'uppercase' }}>
+                Save 35%
+              </span>
+            </span>
+          </div>
+
           <div className="pricing-grid">
-            {plans.map(plan => (
-              <div key={plan.name} className={`pricing-card ${plan.highlight ? 'pricing-card-highlight' : ''}`}>
-                {plan.highlight && <div className="pricing-popular">Most Popular</div>}
-                <div style={{ marginBottom: '24px' }}>
-                  <h3 className="pricing-name" style={{ color: plan.highlight ? '#c5a880' : '#09090b' }}>{plan.name}</h3>
-                  <p style={{ fontSize: '12px', fontWeight: 500, color: plan.highlight ? '#9ca3af' : '#6b7280', marginBottom: '16px' }}>{plan.desc}</p>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', borderBottom: '1px solid rgba(227,216,200,0.15)', paddingBottom: '16px' }}>
-                    <span className="pricing-price" style={{ color: plan.highlight ? '#fff' : '#09090b' }}>{plan.price}</span>
-                    <span className="pricing-period" style={{ color: plan.highlight ? '#c5a880' : '#6b7280', marginBottom: '4px' }}>{plan.period}</span>
+            {plans.map(plan => {
+              const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
+              const period = billingCycle === 'yearly' ? plan.yearlyPeriod : plan.monthlyPeriod;
+              return (
+                <div key={plan.name} className={`pricing-card ${plan.highlight ? 'pricing-card-highlight' : ''}`}>
+                  {plan.highlight ? (
+                    <div className="pricing-popular">{plan.badge}</div>
+                  ) : (
+                    <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', padding: '3px 12px', background: '#f5f2eb', border: '1px solid rgba(227,216,200,0.5)', color: '#99732e', fontSize: '8px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', borderRadius: '9999px', whiteSpace: 'nowrap' }}>
+                      {plan.badge}
+                    </div>
+                  )}
+                  <div style={{ marginBottom: '20px', marginTop: '4px' }}>
+                    <h3 className="pricing-name" style={{ color: plan.highlight ? '#c5a880' : '#09090b' }}>{plan.name}</h3>
+                    <p style={{ fontSize: '12px', fontWeight: 500, color: plan.highlight ? '#9ca3af' : '#6b7280', marginBottom: '14px', minHeight: '36px' }}>{plan.desc}</p>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '4px', borderBottom: '1px solid rgba(227,216,200,0.15)', paddingBottom: '14px' }}>
+                      <span className="pricing-price" style={{ color: plan.highlight ? '#fff' : '#09090b' }}>{price}</span>
+                      <span className="pricing-period" style={{ color: plan.highlight ? '#c5a880' : '#6b7280', marginBottom: '4px' }}>{period}</span>
+                    </div>
                   </div>
+                  <ul className="pricing-features" style={{ flex: 1 }}>
+                    {plan.features.map(f => (
+                      <li key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '10px', textAlign: 'left' }}>
+                        <Check className="w-3.5 h-3.5" style={{ color: '#c5a880', flexShrink: 0, marginTop: '2px' }} />
+                        <span style={{ color: plan.highlight ? '#d1d5db' : '#6b7280', fontSize: '12px', fontWeight: 500 }}>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link href={plan.href} className={`pricing-cta ${plan.highlight ? 'pricing-cta-highlight' : 'pricing-cta-default'}`} style={{ marginTop: '16px' }}>
+                    {plan.cta}
+                  </Link>
                 </div>
-                <ul className="pricing-features">
-                  {plan.features.map(f => (
-                    <li key={f}>
-                      <Check className="w-3.5 h-3.5" style={{ color: '#c5a880', flexShrink: 0, marginTop: '2px' }} />
-                      <span style={{ color: plan.highlight ? '#d1d5db' : '#6b7280' }}>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Link href={plan.href} className={`pricing-cta ${plan.highlight ? 'pricing-cta-highlight' : 'pricing-cta-default'}`}>
-                  {plan.cta}
-                </Link>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div style={{ marginTop: '36px', textAlign: 'center' }}>
@@ -1228,7 +1285,7 @@ export default function HomePage() {
                 <div className="contact-info-card">
                   <div className="contact-icon-wrap"><Phone className="w-5 h-5" /></div>
                   <div>
-                    <p style={{ fontSize: '14px', fontWeight: 700, color: '#09090b' }}>+91 87994 95028</p>
+                    <p style={{ fontSize: '14px', fontWeight: 700, color: '#09090b' }}>+91 87994 95038</p>
                     <p style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600, marginTop: '2px' }}>Available 9 AM – 6 PM IST</p>
                   </div>
                 </div>

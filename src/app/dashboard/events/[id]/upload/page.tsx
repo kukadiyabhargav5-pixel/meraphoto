@@ -599,7 +599,6 @@ export default function EventUploadDedicatedPage({
                 formData.append('folderPath', file.webkitRelativePath);
               }
               const res = await apiClient.post(`/media/event/${event._id}/upload`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
                 timeout: 600000, // 10 minutes timeout for ultra-fast, uninterrupted large video & photo uploads
               });
               if (res.data?.media) {
@@ -638,8 +637,10 @@ export default function EventUploadDedicatedPage({
                 refreshStorage();
                 window.dispatchEvent(new Event('storage_updated'));
               }
-            } catch (fallbackErr) {
-              console.error(`Upload failed for ${file.name}:`, fallbackErr);
+            } catch (fallbackErr: any) {
+              const errMsg = fallbackErr.response?.data?.error || fallbackErr.message || 'Upload error';
+              console.error(`Upload failed for ${file.name}:`, errMsg, fallbackErr);
+              lastUploadError = errMsg;
               failed++;
             }
           }
@@ -662,7 +663,7 @@ export default function EventUploadDedicatedPage({
         toast.success(`🎉 Uploaded ${successful} media file(s)! Storage usage updated in real-time.`);
       }
       if (failed > 0) {
-        toast.error(`⚠️ ${failed} file(s) failed to upload.`);
+        toast.error(lastUploadError ? `⚠️ ${failed} file(s) failed: ${lastUploadError}` : `⚠️ ${failed} file(s) failed to upload.`);
       }
 
       refreshStorage();

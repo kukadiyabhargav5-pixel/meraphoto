@@ -108,7 +108,7 @@ export default function ContactPage() {
                     <Phone className="w-5.5 h-5.5 text-[#c5a880]" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-[#09090b]">+91 87994 95028</p>
+                    <p className="text-sm font-bold text-[#09090b]">+91 87994 95038</p>
                     <p className="text-xs text-gray-400 font-semibold mt-0.5">Available 9 AM - 6 PM IST</p>
                   </div>
                 </div>

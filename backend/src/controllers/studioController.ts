@@ -6,12 +6,12 @@ import { getFileUrl } from '../services/StorageService';
 
 export const PLAN_STORAGE_LIMITS: Record<string, { photos: number; videos: number; name: string }> = {
   BASIC: { photos: 5000, videos: 50, name: 'Basic Free' },
-  STARTUP: { photos: 50000, videos: 10, name: 'Startup' },
-  STARTER: { photos: 50000, videos: 10, name: 'Startup' },
-  STANDARD: { photos: 100000, videos: 20, name: 'Standard' },
-  ESSENTIAL: { photos: 150000, videos: 50, name: 'Essential' },
-  PREMIUM: { photos: 300000, videos: 100, name: 'Premium' },
-  ENTERPRISE: { photos: 300000, videos: 100, name: 'Premium' },
+  STARTUP: { photos: 50000, videos: 50, name: 'Startup' },
+  STARTER: { photos: 50000, videos: 50, name: 'Startup' },
+  STANDARD: { photos: 100000, videos: 100, name: 'Standard' },
+  ESSENTIAL: { photos: 150000, videos: 200, name: 'Essential' },
+  PREMIUM: { photos: 300000, videos: 500, name: 'Premium' },
+  ENTERPRISE: { photos: 300000, videos: 500, name: 'Premium' },
   SUPER_ADMIN: { photos: 999999999, videos: 999999999, name: 'VIP Unlimited Admin (Free)' },
 };
 
