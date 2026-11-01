@@ -1649,10 +1649,10 @@ export default function EventUploadDedicatedPage({
           )}
 
           <div
-            className="max-w-5xl w-full max-h-[90vh] relative flex flex-col items-center justify-center"
+            className="max-w-6xl w-full max-h-[92vh] relative flex flex-col items-center justify-center"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="relative w-full max-w-4xl lg:max-w-5xl aspect-video max-h-[75vh] flex items-center justify-center overflow-hidden rounded-2xl bg-black border border-white/15 shadow-2xl">
+            <div className="relative w-full max-w-5xl h-[65vh] sm:h-[75vh] lg:h-[80vh] flex items-center justify-center overflow-hidden rounded-2xl bg-black border border-white/20 shadow-2xl">
               {(() => {
                 const actualPreview = Array.isArray(previewMedia) ? previewMedia[0] : previewMedia;
                 const isVid = actualPreview?.type === 'VIDEO' || (actualPreview?.mimeType && actualPreview.mimeType.startsWith('video/'));
@@ -1672,11 +1672,13 @@ export default function EventUploadDedicatedPage({
                 return isVid ? (
                   <video
                     key={previewSrc}
+                    src={previewSrc}
                     controls
                     autoPlay
                     playsInline
-                    preload="metadata"
-                    className="w-full h-full max-h-[75vh] object-contain rounded-xl bg-black"
+                    preload="auto"
+                    className="w-full h-full max-w-full max-h-full object-contain rounded-xl bg-black outline-hidden"
+                    style={{ minWidth: '100%', minHeight: '100%', maxHeight: '78vh', objectFit: 'contain' }}
                   >
                     <source src={previewSrc} type={actualPreview?.mimeType || 'video/mp4'} />
                     Your browser does not support HTML5 video streaming.
@@ -1685,7 +1687,7 @@ export default function EventUploadDedicatedPage({
                   <img
                     src={previewSrc}
                     alt={actualPreview?.originalName || 'Preview'}
-                    className="max-w-full max-h-[75vh] object-contain rounded-xl select-none"
+                    className="max-w-full max-h-[78vh] object-contain rounded-xl select-none"
                     onError={(e) => {
                       const target = e.currentTarget;
                       const fallbackSrc = resolveMediaUrl(actualPreview?.compressedUrl || actualPreview?.url || actualPreview?.r2Key);

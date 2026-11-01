@@ -80,7 +80,7 @@ export const registerStudioOwner = async (req: Request, res: Response) => {
     return res.status(201).json({
       message: 'Studio registered successfully',
       user: { id: newUser._id, name: newUser.name, email: newUser.email, role: newUser.role, phone: newUser.phone },
-      studio: { id: newStudio._id, name: newStudio.name, logoUrl: newStudio.logoUrl, customDomain: newStudio.customDomain },
+      studio: { id: newStudio._id, name: newStudio.name, logoUrl: newStudio.logoUrl, customDomain: newStudio.customDomain, subscriptionPlan: 'BASIC', subscriptionStatus: 'FREE' },
       ...tokens,
     });
   } catch (err: any) {
@@ -210,8 +210,8 @@ export const login = async (req: Request, res: Response) => {
       studio: studio ? { 
         id: studio._id, 
         name: studio.name, 
-        subscriptionPlan: studio.subscriptionPlan || 'PREMIUM',
-        subscriptionStatus: studio.subscriptionStatus || 'ACTIVE',
+        subscriptionPlan: studio.subscriptionPlan || (isSuperAdmin(user) ? 'PREMIUM' : 'BASIC'),
+        subscriptionStatus: studio.subscriptionStatus || (isSuperAdmin(user) ? 'ACTIVE' : 'FREE'),
         subscriptionStartDate: studio.subscriptionStartDate,
         subscriptionExpiresAt: studio.subscriptionExpiresAt,
         logoUrl: studio.logoUrl,
@@ -404,8 +404,8 @@ export const googleLogin = async (req: Request, res: Response) => {
       studio: studio ? { 
         id: studio._id, 
         name: studio.name, 
-        subscriptionPlan: studio.subscriptionPlan || 'PREMIUM',
-        subscriptionStatus: studio.subscriptionStatus || 'ACTIVE',
+        subscriptionPlan: studio.subscriptionPlan || (isSuperAdmin(user) ? 'PREMIUM' : 'BASIC'),
+        subscriptionStatus: studio.subscriptionStatus || (isSuperAdmin(user) ? 'ACTIVE' : 'FREE'),
         subscriptionStartDate: studio.subscriptionStartDate,
         subscriptionExpiresAt: studio.subscriptionExpiresAt,
         logoUrl: studio.logoUrl,
@@ -456,8 +456,8 @@ export const getMe = async (req: AuthRequest, res: Response) => {
       studio: studio ? { 
         id: studio._id, 
         name: studio.name, 
-        subscriptionPlan: studio.subscriptionPlan || 'PREMIUM',
-        subscriptionStatus: studio.subscriptionStatus || 'ACTIVE',
+        subscriptionPlan: studio.subscriptionPlan || (isSuperAdmin(user) ? 'PREMIUM' : 'BASIC'),
+        subscriptionStatus: studio.subscriptionStatus || (isSuperAdmin(user) ? 'ACTIVE' : 'FREE'),
         subscriptionStartDate: studio.subscriptionStartDate,
         subscriptionExpiresAt: studio.subscriptionExpiresAt,
         logoUrl: studio.logoUrl,

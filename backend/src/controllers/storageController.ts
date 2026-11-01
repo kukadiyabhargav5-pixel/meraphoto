@@ -424,6 +424,14 @@ export const verifyStoragePayment = async (req: AuthRequest, res: Response) => {
       { $set: { status: 'CANCELLED' } }
     );
 
+    // 4b. Synchronize Studio subscription tier so all dashboard features unlock immediately!
+    const purchasedTier = subscription.storageLimitGb >= 100 ? 'PREMIUM' : subscription.storageLimitGb >= 50 ? 'STANDARD' : 'STARTUP';
+    studio.subscriptionPlan = purchasedTier;
+    studio.subscriptionStatus = 'ACTIVE';
+    studio.subscriptionStartDate = now;
+    studio.subscriptionExpiresAt = expiresAt;
+    await studio.save();
+
     // 5. Record Storage Activity
     await recordStorageActivity({
       userId: req.user._id,

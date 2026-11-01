@@ -152,9 +152,15 @@ function SidebarContent({
     storageUsage?.hasActivePlan &&
     storageUsage?.activePlan?.status === 'ACTIVE' &&
     storageUsage?.activePlan?.planId &&
-    storageUsage?.activePlan?.planId !== 'free-starter'
+    storageUsage?.activePlan?.planId !== 'free-starter' &&
+    storageUsage?.activePlan?.planId !== 'basic-starter' &&
+    (storageUsage?.totalStorageGb || 0) > 0
   );
-  const hasStudioPlan = ['STARTUP', 'STARTER', 'STANDARD', 'ESSENTIAL', 'PREMIUM'].includes(studioPlanKey);
+  const hasStudioPlan = Boolean(
+    studioPlanKey &&
+    ['STARTUP', 'STARTER', 'STANDARD', 'ESSENTIAL', 'PREMIUM', 'BUSINESS', 'ENTERPRISE'].includes(studioPlanKey) &&
+    studioPlanKey !== 'BASIC'
+  );
   const hasPaidPlan = Boolean(isSuperAdmin || hasStoragePlan || hasStudioPlan);
   const isStartupPlan = studioPlanKey === 'STARTUP' || studioPlanKey === 'STARTER';
 
@@ -176,10 +182,8 @@ function SidebarContent({
   const isRouteAllowed = (href: string) => {
     if (isSuperAdmin) return true;
     if (!hasPaidPlan) {
+      // ONLY Plans & Billing is allowed when user has no active paid plan!
       return href === `${basePrefix}/plans-billing` || href === '/dashboard/plans-billing' || href === '/admin-dashboard/plans-billing';
-    }
-    if (isStartupPlan) {
-      return allowedStartupRoutes.some(r => href === r || href.startsWith(`${r}/`));
     }
     return true;
   };
@@ -456,9 +460,15 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
     storageUsage?.hasActivePlan &&
     storageUsage?.activePlan?.status === 'ACTIVE' &&
     storageUsage?.activePlan?.planId &&
-    storageUsage?.activePlan?.planId !== 'free-starter'
+    storageUsage?.activePlan?.planId !== 'free-starter' &&
+    storageUsage?.activePlan?.planId !== 'basic-starter' &&
+    (storageUsage?.totalStorageGb || 0) > 0
   );
-  const hasStudioPlan = ['STARTUP', 'STARTER', 'STANDARD', 'ESSENTIAL', 'PREMIUM'].includes(studioPlanKey);
+  const hasStudioPlan = Boolean(
+    studioPlanKey &&
+    ['STARTUP', 'STARTER', 'STANDARD', 'ESSENTIAL', 'PREMIUM', 'BUSINESS', 'ENTERPRISE'].includes(studioPlanKey) &&
+    studioPlanKey !== 'BASIC'
+  );
   const hasPaidPlan = Boolean(isSuperAdmin || hasStoragePlan || hasStudioPlan);
   const isStartupPlan = studioPlanKey === 'STARTUP' || studioPlanKey === 'STARTER';
 
@@ -481,9 +491,6 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
     if (isSuperAdmin) return true;
     if (!hasPaidPlan) {
       return href === `${basePrefix}/plans-billing` || href === '/dashboard/plans-billing' || href === '/admin-dashboard/plans-billing';
-    }
-    if (isStartupPlan) {
-      return allowedStartupRoutes.some(r => href === r || href.startsWith(`${r}/`));
     }
     return true;
   };

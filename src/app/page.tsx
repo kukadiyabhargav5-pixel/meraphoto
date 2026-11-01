@@ -1456,7 +1456,7 @@ export default function HomePage() {
               href="/pricing"
               className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#c5a880] hover:text-[#09090b] transition-colors"
             >
-              View Full Plan Comparison &amp; Free Tier Details <ArrowRight className="w-3.5 h-3.5" />
+              View Full Plan Comparison &amp; Storage Options <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
         </div>

@@ -127,9 +127,21 @@ export default function DashboardOverview() {
 
   const studio = context?.studio || authStudio;
   const studioPlanKey = (stats.subscriptionPlan || studio?.subscriptionPlan || authStudio?.subscriptionPlan || '').toUpperCase();
-  const currentPlan = studioPlanKey || (isSuperAdmin ? 'PREMIUM' : 'BASIC');
-  const isBasicPlan = currentPlan === 'BASIC';
-  const isStartupPlan = currentPlan === 'STARTUP' || currentPlan === 'STARTER';
+  const hasPaidStorage = Boolean(
+    storageUsage?.hasActivePlan &&
+    storageUsage?.activePlan?.status === 'ACTIVE' &&
+    (storageUsage?.totalStorageGb || 0) > 0 &&
+    storageUsage?.activePlan?.planId !== 'free-starter' &&
+    storageUsage?.activePlan?.planId !== 'basic-starter'
+  );
+  const hasPaidStudio = Boolean(
+    studioPlanKey &&
+    ['STARTUP', 'STARTER', 'STANDARD', 'ESSENTIAL', 'PREMIUM', 'BUSINESS', 'ENTERPRISE'].includes(studioPlanKey) &&
+    studioPlanKey !== 'BASIC'
+  );
+  const hasPaidPlan = Boolean(isSuperAdmin || hasPaidStorage || hasPaidStudio);
+  const isBasicPlan = !hasPaidPlan;
+  const isStartupPlan = hasPaidPlan && (studioPlanKey === 'STARTUP' || studioPlanKey === 'STARTER');
 
   const shoots = context?.shoots || [];
   const todayDateStr = React.useMemo(() => {
@@ -179,16 +191,12 @@ export default function DashboardOverview() {
       if (targetLink) router.push(targetLink);
       return;
     }
-    if (loadingStorage) {
-      if (targetLink) router.push(targetLink);
-      return;
-    }
-    if (isBasicPlan) {
-      if (targetLink && ['/dashboard', '/dashboard/plans-billing'].includes(targetLink)) {
+    if (!hasPaidPlan) {
+      if (targetLink === '/dashboard/plans-billing') {
         router.push(targetLink);
         return;
       }
-      toast.error('Please upgrade your plan from Basic to access this feature.', {
+      toast.error('તમારા ડેશબોર્ડના તમામ ફીચર્સ અનલોક કરવા માટે કૃપા કરીને પહેલા પ્લાન પસંદ કરો. (Please choose a plan to unlock all features)', {
         duration: 3500,
         icon: '🔒'
       });

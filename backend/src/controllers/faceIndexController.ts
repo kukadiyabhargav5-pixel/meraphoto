@@ -428,21 +428,21 @@ export const getEventFaceClusters = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // 3. Exclude noise, tiny artifacts, and non-human detections
+    // 3. Exclude noise, tiny artifacts, statues, and non-human detections
     const validEmbeddings = embeddings.filter((item) => {
       if (!item.embedding || !Array.isArray(item.embedding) || item.embedding.length < 128) return false;
-      // Filter out low confidence detections (statues, noise, background artifacts)
-      if (item.detectionConfidence !== undefined && item.detectionConfidence !== null && item.detectionConfidence > 0 && item.detectionConfidence < 0.65) {
-        return false;
+      // Filter out low confidence detections (statues, idols, hands/rakhi, cloth textures)
+      if (item.detectionConfidence !== undefined && item.detectionConfidence !== null && item.detectionConfidence > 0) {
+        if (item.detectionConfidence < 0.68) return false;
       }
-      // Check bbox if available: valid human faces have width & height and normal aspect ratio
+      // Check bbox: human faces have sufficient resolution and natural aspect ratio
       if (Array.isArray(item.bbox) && item.bbox.length === 4) {
         const [x1, y1, x2, y2] = item.bbox;
         const w = Math.abs(x2 - x1);
         const h = Math.abs(y2 - y1);
-        if (w < 35 || h < 35) return false; // tiny noise / non-face
+        if (w < 40 || h < 40) return false; // tiny noise / non-face artifacts
         const ratio = w / h;
-        if (ratio < 0.55 || ratio > 1.8) return false; // non-face distortion
+        if (ratio < 0.60 || ratio > 1.65) return false; // distorted non-face crop
       }
       return true;
     });
@@ -461,8 +461,9 @@ export const getEventFaceClusters = async (req: AuthRequest, res: Response) => {
     }
 
     const clusters: Cluster[] = [];
-    // Lower initial threshold to 0.34 so variations of same person (sunglasses, angles, lighting) cluster together
-    const INITIAL_THRESHOLD = 0.34;
+    // Sensitive threshold (0.28) ensures multiple photos of the same individual
+    // (even with sunglasses, smile, different lighting, or angles) are grouped into ONE person
+    const INITIAL_THRESHOLD = 0.28;
 
     for (const item of activeList) {
       const emb = item.embedding;
@@ -478,8 +479,8 @@ export const getEventFaceClusters = async (req: AuthRequest, res: Response) => {
           const s = cosineSimilarity(emb, member);
           if (s > maxMemberSim) maxMemberSim = s;
         }
-        // Combined similarity: member match helps handle sunglasses, lighting, and pose changes
-        const sim = Math.max(centroidSim, maxMemberSim * 0.98);
+        // Combined similarity: member match handles sunglasses, varying expressions, and pose changes
+        const sim = Math.max(centroidSim, maxMemberSim * 0.96);
         if (sim > highestSim) {
           highestSim = sim;
           bestCluster = cl;
@@ -520,7 +521,7 @@ export const getEventFaceClusters = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // 4. Agglomerative Merge Pass: merge duplicate clusters of the same person
+    // 4. Agglomerative Merge Pass: rigorously merge any split clusters of the same person
     let merged = true;
     while (merged) {
       merged = false;
@@ -539,9 +540,9 @@ export const getEventFaceClusters = async (req: AuthRequest, res: Response) => {
             }
           }
 
-          // Same person threshold: centroid >= 0.33 OR maxPairSim >= 0.36
-          // Accurately merges same individual with sunglasses, different angles or outfits
-          if (centroidSim >= 0.33 || maxPairSim >= 0.36) {
+          // Merge if centroid >= 0.28 OR maxPairSim >= 0.30
+          // Guarantees sunglasses vs non-sunglasses or different poses of the same person unify into 1 block
+          if (centroidSim >= 0.28 || maxPairSim >= 0.30) {
             cA.faceCount += cB.faceCount;
             for (const mId of cB.mediaIds) cA.mediaIds.add(mId);
             cA.allEmbeddings.push(...cB.allEmbeddings);
@@ -568,10 +569,11 @@ export const getEventFaceClusters = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // 5. Prune obvious 1-photo noise (non-human objects, false detections, low quality artifacts)
+    // 5. Prune obvious 1-photo noise (idols, hands/rakhi, cloth patterns, non-human false positives)
     const filteredClusters = clusters.filter((cl) => {
-      if (cl.faceCount === 1 && cl.bestQuality < 0.40 && cl.mediaIds.size === 1) {
-        return false;
+      // If a cluster has only 1 face occurrence in the whole event and low confidence, prune it
+      if (cl.faceCount === 1 && cl.mediaIds.size === 1) {
+        if (cl.bestQuality > 0 && cl.bestQuality < 0.50) return false;
       }
       return true;
     });
