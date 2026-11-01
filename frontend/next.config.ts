@@ -40,7 +40,7 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/dashboard/studio-branding',
-        destination: '/dashboard/profile',
+        destination: '/dashboard/branding',
         permanent: true,
       },
       {

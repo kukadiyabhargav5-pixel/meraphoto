@@ -136,6 +136,9 @@ apiClient.interceptors.response.use(
         invalidateCache('/event');
         invalidateCache('/dashboard/stats');
       }
+      if (url.includes('/media')) {
+        invalidateCache('/media');
+      }
     }
 
     return response;
@@ -238,25 +241,31 @@ export const resolveMediaUrl = (
     return typeof fallbackOrIsThumbnail === 'string' ? fallbackOrIsThumbnail : '';
   }
 
+  // Handle case where media item is wrapped in an array [doc]
+  const target = Array.isArray(urlOrMedia) ? urlOrMedia[0] : urlOrMedia;
+  if (!target) {
+    return typeof fallbackOrIsThumbnail === 'string' ? fallbackOrIsThumbnail : '';
+  }
+
   let candidate = '';
   const isThumbnail = typeof fallbackOrIsThumbnail === 'boolean' ? fallbackOrIsThumbnail : false;
   const fallback = typeof fallbackOrIsThumbnail === 'string' ? fallbackOrIsThumbnail : '';
 
-  if (typeof urlOrMedia === 'object') {
-    if (urlOrMedia.type === 'VIDEO' && isThumbnail) {
-      if (urlOrMedia.thumbnailUrl && !urlOrMedia.thumbnailUrl.endsWith('.mp4')) {
-        candidate = urlOrMedia.thumbnailUrl;
+  if (typeof target === 'object') {
+    if (target.type === 'VIDEO' && isThumbnail) {
+      if (target.thumbnailUrl && !target.thumbnailUrl.endsWith('.mp4')) {
+        candidate = target.thumbnailUrl;
       } else {
-        const base = urlOrMedia.compressedUrl || urlOrMedia.url || urlOrMedia.r2Url || '';
-        candidate = base.includes('imagekit.io') ? `${base}/ik-thumbnail.jpg` : (urlOrMedia.thumbnailUrl || base);
+        const base = target.compressedUrl || target.url || target.r2Url || '';
+        candidate = base.includes('imagekit.io') ? `${base}/ik-thumbnail.jpg` : (target.thumbnailUrl || base);
       }
     } else if (isThumbnail) {
-      candidate = urlOrMedia.thumbnailUrl || urlOrMedia.compressedUrl || urlOrMedia.r2Url || urlOrMedia.url || urlOrMedia.r2Key || '';
+      candidate = target.thumbnailUrl || target.compressedUrl || target.r2Url || target.url || target.r2Key || '';
     } else {
-      candidate = urlOrMedia.compressedUrl || urlOrMedia.r2Url || urlOrMedia.url || urlOrMedia.r2Key || urlOrMedia.thumbnailUrl || '';
+      candidate = target.compressedUrl || target.r2Url || target.url || target.r2Key || target.thumbnailUrl || '';
     }
-  } else if (typeof urlOrMedia === 'string') {
-    candidate = urlOrMedia;
+  } else if (typeof target === 'string') {
+    candidate = target;
   }
 
   if (!candidate || typeof candidate !== 'string' || !candidate.trim()) {

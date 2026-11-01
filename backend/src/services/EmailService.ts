@@ -168,3 +168,99 @@ export const sendAdminNotificationEmail = async (subject: string, html: string):
   const adminEmail = process.env.SMTP_FROM || 'maraphoto303@gmail.com';
   return sendEmail(adminEmail, subject, html);
 };
+
+
+/**
+ * Sends an email notification to the studio when a shoot is scheduled for Today
+ */
+export const sendTodayShootAlert = async (
+  to: string,
+  studioName: string,
+  shoot: {
+    eventName: string;
+    eventType: string;
+    time: string;
+    date: Date | string;
+    location?: string;
+    photographersNames?: string[];
+    videographersNames?: string[];
+    notes?: string;
+  }
+): Promise<any> => {
+  const shootDateStr = new Date(shoot.date).toLocaleDateString('en-IN', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  const subject = `📸 Today's Shoot Reminder: ${shoot.eventName} (${shoot.eventType}) at ${shoot.time}`;
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #ebd9c2; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+      <div style="background: linear-gradient(135deg, #1e1b18 0%, #2d261e 100%); padding: 32px 24px; text-align: center;">
+        <span style="display: inline-block; padding: 6px 14px; background: rgba(197, 168, 128, 0.2); border: 1px solid #c5a880; border-radius: 9999px; color: #c5a880; font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px;">
+          Today's Scheduled Event
+        </span>
+        <h1 style="color: #ffffff; font-size: 24px; font-weight: 800; margin: 0; letter-spacing: -0.5px;">
+          ${shoot.eventName}
+        </h1>
+        <p style="color: #c5a880; font-size: 14px; margin: 8px 0 0 0; font-weight: 600;">
+          ${studioName} • Photography Schedule
+        </p>
+      </div>
+
+      <div style="padding: 28px 24px;">
+        <div style="background: #faf8f5; border-radius: 12px; border: 1px solid #e8dfd3; padding: 20px; margin-bottom: 24px;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; font-weight: 600; width: 35%;">📅 Date:</td>
+              <td style="padding: 8px 0; color: #1e293b; font-weight: 700;">${shootDateStr} <span style="background: #ef4444; color: #ffffff; font-size: 10px; padding: 2px 8px; border-radius: 9999px; font-weight: 800; text-transform: uppercase; margin-left: 6px;">TODAY</span></td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; font-weight: 600;">⏰ Time:</td>
+              <td style="padding: 8px 0; color: #1e293b; font-weight: 700;">${shoot.time}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; font-weight: 600;">🎉 Event Type:</td>
+              <td style="padding: 8px 0; color: #1e293b; font-weight: 700;">${shoot.eventType}</td>
+            </tr>
+            ${shoot.location ? `
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; font-weight: 600;">📍 Location:</td>
+              <td style="padding: 8px 0; color: #1e293b; font-weight: 700;">${shoot.location}</td>
+            </tr>` : ''}
+            ${shoot.photographersNames && shoot.photographersNames.length > 0 ? `
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; font-weight: 600;">📷 Photographers:</td>
+              <td style="padding: 8px 0; color: #1e293b; font-weight: 700;">${shoot.photographersNames.join(', ')}</td>
+            </tr>` : ''}
+            ${shoot.videographersNames && shoot.videographersNames.length > 0 ? `
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; font-weight: 600;">🎥 Videographers:</td>
+              <td style="padding: 8px 0; color: #1e293b; font-weight: 700;">${shoot.videographersNames.join(', ')}</td>
+            </tr>` : ''}
+            ${shoot.notes ? `
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; font-weight: 600;">📝 Notes:</td>
+              <td style="padding: 8px 0; color: #1e293b; font-weight: 500;">${shoot.notes}</td>
+            </tr>` : ''}
+          </table>
+        </div>
+
+        <div style="text-align: center;">
+          <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/calendar" style="display: inline-block; background: linear-gradient(135deg, #c5a880 0%, #b89665 100%); color: #ffffff; padding: 12px 32px; font-size: 14px; font-weight: 800; text-decoration: none; border-radius: 10px; box-shadow: 0 4px 12px rgba(197, 168, 128, 0.35);">
+            Open Studio Calendar
+          </a>
+        </div>
+      </div>
+
+      <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 24px; text-align: center;">
+        <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+          Sent automatically by Mara Photo Studio Management
+        </p>
+      </div>
+    </div>
+  `;
+
+  return sendEmail(to, subject, html);
+};

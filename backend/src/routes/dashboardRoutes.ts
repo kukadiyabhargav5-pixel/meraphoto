@@ -14,6 +14,8 @@ import { Event } from '../models/Event';
 import { Media } from '../models/Media';
 import { Studio } from '../models/Studio';
 import GalleryVisitor from '../models/GalleryVisitor';
+import { User } from '../models/User';
+import { sendTodayShootAlert } from '../services/EmailService';
 import { authenticateJWT, AuthRequest, isSuperAdmin } from '../middlewares/auth';
 import { uploadFile } from '../services/StorageService';
 
@@ -332,12 +334,53 @@ router.put('/bills/:id', async (req: AuthRequest, res) => {
 // --- SHOOTS (Calendar) ---
 router.get('/shoots', async (req: AuthRequest, res) => {
   try {
-    const studio = await Studio.findOne({ ownerId: req.user!._id }).select('_id').lean();
+    const studio = await Studio.findOne({ ownerId: req.user!._id }).select('_id name').lean();
     if (!studio) return res.json([]);
-    const limit = parseInt(req.query.limit as string) || 100;
-    const data = await ShootLog.find({ studioId: studio._id }).sort({ date: 1 }).limit(limit).lean();
-    res.json(data);
+    const limit = parseInt(req.query.limit as string) || 500;
+    const shoots = await ShootLog.find({ studioId: studio._id }).sort({ date: 1 }).limit(limit);
+
+    // Check if any shoots are for TODAY and trigger email if not sent yet
+    const now = new Date();
+    const todayStr = String(now.getFullYear()) + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    let ownerUser: any = null;
+
+    for (const shoot of shoots) {
+      const sDate = new Date(shoot.date);
+      const sStr = String(sDate.getFullYear()) + '-' + String(sDate.getMonth() + 1).padStart(2, '0') + '-' + String(sDate.getDate()).padStart(2, '0');
+      const isToday = sStr === todayStr;
+
+      if (isToday) {
+        let changed = false;
+        if (shoot.status === 'Upcoming') {
+          shoot.status = 'Today';
+          changed = true;
+        }
+
+        if (!shoot.todayEmailSent) {
+          if (!ownerUser) {
+            ownerUser = await User.findById(req.user!._id);
+          }
+          const email = ownerUser?.email;
+          if (email) {
+            try {
+              await sendTodayShootAlert(email, studio.name || 'Studio', shoot as any);
+              shoot.todayEmailSent = true;
+              changed = true;
+            } catch (mailErr) {
+              console.error('Failed to dispatch today shoot alert email:', mailErr);
+            }
+          }
+        }
+
+        if (changed) {
+          await shoot.save();
+        }
+      }
+    }
+
+    res.json(shoots);
   } catch (error) {
+    console.error('Shoots fetch error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -346,11 +389,114 @@ router.post('/shoots', async (req: AuthRequest, res) => {
   try {
     const studio = await Studio.findOne({ ownerId: req.user!._id });
     if (!studio) return res.status(404).json({ error: 'No studio profile found. Please set up your studio first.' });
-    const shoot = new ShootLog({ ...req.body, studioId: studio._id });
+
+    const now = new Date();
+    const todayStr = String(now.getFullYear()) + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    const shootDate = new Date(req.body.date);
+    const shootDateStr = String(shootDate.getFullYear()) + '-' + String(shootDate.getMonth() + 1).padStart(2, '0') + '-' + String(shootDate.getDate()).padStart(2, '0');
+
+    let initialStatus = 'Upcoming';
+    let sendMailNow = false;
+
+    if (shootDateStr === todayStr) {
+      initialStatus = 'Today';
+      sendMailNow = true;
+    } else if (shootDate < new Date(todayStr)) {
+      initialStatus = req.body.status || 'Due';
+    } else {
+      initialStatus = 'Upcoming';
+    }
+
+    const shoot = new ShootLog({
+      ...req.body,
+      studioId: studio._id,
+      status: initialStatus,
+      todayEmailSent: sendMailNow
+    });
+
     await shoot.save();
+
+    if (sendMailNow) {
+      const ownerUser = await User.findById(req.user!._id);
+      const email = ownerUser?.email;
+      if (email) {
+        try {
+          await sendTodayShootAlert(email, studio.name || 'Studio', shoot as any);
+        } catch (mailErr) {
+          console.error('Failed to send immediate shoot alert:', mailErr);
+        }
+      }
+    }
+
     res.json(shoot);
   } catch (error) {
+    console.error('Shoot creation error:', error);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.put('/shoots/:id', async (req: AuthRequest, res) => {
+  try {
+    const {
+      status,
+      date,
+      time,
+      eventName,
+      eventType,
+      photographersCount,
+      videographersCount,
+      photographersNames,
+      videographersNames,
+      location,
+      notes,
+      reminder
+    } = req.body;
+
+    const updateData: any = {};
+    if (status !== undefined) {
+      updateData.status = status;
+      if (status === 'Completed') {
+        updateData.completedAt = new Date();
+      }
+    }
+    if (date !== undefined) updateData.date = date;
+    if (time !== undefined) updateData.time = time;
+    if (eventName !== undefined) updateData.eventName = eventName;
+    if (eventType !== undefined) updateData.eventType = eventType;
+    if (photographersCount !== undefined) updateData.photographersCount = photographersCount;
+    if (videographersCount !== undefined) updateData.videographersCount = videographersCount;
+    if (photographersNames !== undefined) updateData.photographersNames = photographersNames;
+    if (videographersNames !== undefined) updateData.videographersNames = videographersNames;
+    if (location !== undefined) updateData.location = location;
+    if (notes !== undefined) updateData.notes = notes;
+    if (reminder !== undefined) updateData.reminder = reminder;
+
+    const updated = await ShootLog.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    if (!updated) return res.status(404).json({ error: 'Shoot not found' });
+    res.json(updated);
+  } catch (error) {
+    console.error('Shoot update error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post('/shoots/:id/send-email', async (req: AuthRequest, res) => {
+  try {
+    const shoot = await ShootLog.findById(req.params.id);
+    if (!shoot) return res.status(404).json({ error: 'Shoot not found' });
+    const studio = await Studio.findById(shoot.studioId);
+    const ownerUser = await User.findById(req.user!._id);
+    const email = ownerUser?.email;
+    if (!email) return res.status(400).json({ error: 'No email found for studio owner' });
+
+    await sendTodayShootAlert(email, studio?.name || 'Studio', shoot as any);
+    shoot.todayEmailSent = true;
+    await shoot.save();
+
+    res.json({ success: true, message: 'Email alert sent to ' + email });
+  } catch (error: any) {
+    console.error('Manual email alert error:', error);
+    res.status(500).json({ error: error.message || 'Failed to send email' });
   }
 });
 

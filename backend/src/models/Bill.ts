@@ -16,7 +16,7 @@ const billSchema = new mongoose.Schema({
   dueDate: { type: Date },
   eventDate: { type: Date },
   tokenPaymentDate: { type: Date },
-  paymentMethod: { type: String, enum: ['Cash', 'Online'], default: 'Online' },
+  paymentMethod: { type: String, default: 'Cash' },
   createdAt: { type: Date, default: Date.now }
 });
 

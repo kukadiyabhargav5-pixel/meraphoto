@@ -358,3 +358,153 @@ export const retryFailedIndexing = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+/**
+ * Cosine similarity helper for normalized 512-d vectors
+ */
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (!a || !b || a.length === 0 || b.length === 0) return 0;
+  let dot = 0;
+  const len = Math.min(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    dot += a[i] * b[i];
+  }
+  return dot;
+}
+
+/**
+ * Get clustered faces for an event
+ * Groups all detected faces into distinct person identities
+ * GET /api/face-index/clusters/:eventId
+ */
+export const getEventFaceClusters = async (req: AuthRequest, res: Response) => {
+  try {
+    const { eventId } = req.params;
+
+    // 1. Fetch active media for this event
+    const activeMedia = await Media.find({ eventId }).select('_id').lean();
+    const activeMediaIdSet = new Set(activeMedia.map((m) => m._id.toString()));
+
+    // Clean up any orphan face embeddings from previously deleted media
+    FaceEmbedding.deleteMany({
+      eventId,
+      mediaId: { $nin: activeMedia.map((m) => m._id) },
+    }).catch(() => {});
+
+    // 2. Fetch face embeddings for active media
+    const embeddings = await FaceEmbedding.find({
+      eventId,
+      mediaId: { $in: activeMedia.map((m) => m._id) },
+    })
+      .select('_id mediaId embedding faceThumbnailUrl bbox detectionConfidence faceQuality')
+      .lean();
+
+    if (!embeddings || embeddings.length === 0) {
+      return res.json({
+        success: true,
+        clusters: [],
+        totalFaces: 0,
+        totalPersons: 0,
+        message: 'No face embeddings found for this event yet.',
+      });
+    }
+
+    // 2. Cluster face embeddings using greedy cosine similarity
+    const SIMILARITY_THRESHOLD = 0.48; // Face verification threshold
+    
+    interface Cluster {
+      id: string;
+      label: string;
+      avatarUrl: string;
+      bestQuality: number;
+      faceCount: number;
+      mediaIds: Set<string>;
+      centroid: number[];
+      embeddingsCount: number;
+    }
+
+    const clusters: Cluster[] = [];
+
+    for (const item of embeddings) {
+      const emb = item.embedding;
+      if (!emb || !Array.isArray(emb) || emb.length === 0) continue;
+
+      let bestCluster: Cluster | null = null;
+      let highestSim = -1;
+
+      for (const cl of clusters) {
+        const sim = cosineSimilarity(emb, cl.centroid);
+        if (sim > highestSim) {
+          highestSim = sim;
+          bestCluster = cl;
+        }
+      }
+
+      const mediaIdStr = item.mediaId?.toString();
+
+      if (bestCluster && highestSim >= SIMILARITY_THRESHOLD) {
+        bestCluster.faceCount += 1;
+        if (mediaIdStr) bestCluster.mediaIds.add(mediaIdStr);
+
+        const quality = (item.faceQuality || 0) * 0.5 + (item.detectionConfidence || 0) * 0.5;
+        if (quality > bestCluster.bestQuality && item.faceThumbnailUrl) {
+          bestCluster.bestQuality = quality;
+          bestCluster.avatarUrl = item.faceThumbnailUrl;
+        }
+
+        const count = bestCluster.embeddingsCount;
+        for (let i = 0; i < bestCluster.centroid.length; i++) {
+          bestCluster.centroid[i] = (bestCluster.centroid[i] * count + emb[i]) / (count + 1);
+        }
+        let normSq = 0;
+        for (let i = 0; i < bestCluster.centroid.length; i++) {
+          normSq += bestCluster.centroid[i] * bestCluster.centroid[i];
+        }
+        const norm = Math.sqrt(normSq);
+        if (norm > 0) {
+          for (let i = 0; i < bestCluster.centroid.length; i++) {
+            bestCluster.centroid[i] /= norm;
+          }
+        }
+        bestCluster.embeddingsCount += 1;
+      } else {
+        const initialQuality = (item.faceQuality || 0) * 0.5 + (item.detectionConfidence || 0) * 0.5;
+        const newCluster: Cluster = {
+          id: `person_${clusters.length + 1}`,
+          label: `Person ${clusters.length + 1}`,
+          avatarUrl: item.faceThumbnailUrl || '',
+          bestQuality: initialQuality,
+          faceCount: 1,
+          mediaIds: new Set<string>(mediaIdStr ? [mediaIdStr] : []),
+          centroid: [...emb],
+          embeddingsCount: 1,
+        };
+        clusters.push(newCluster);
+      }
+    }
+
+    clusters.sort((a, b) => b.mediaIds.size - a.mediaIds.size || b.faceCount - a.faceCount);
+
+    const formattedClusters = clusters.map((cl, idx) => ({
+      id: cl.id,
+      label: `Person ${idx + 1}`,
+      avatarUrl: cl.avatarUrl,
+      faceCount: cl.faceCount,
+      photoCount: cl.mediaIds.size,
+      mediaIds: Array.from(cl.mediaIds),
+    }));
+
+    const allMediaIds = Array.from(new Set(embeddings.map(e => e.mediaId?.toString()).filter(Boolean)));
+
+    return res.json({
+      success: true,
+      clusters: formattedClusters,
+      totalFaces: embeddings.length,
+      totalPersons: formattedClusters.length,
+      allMediaIds,
+    });
+  } catch (err: any) {
+    console.error('[FaceIndex] getEventFaceClusters error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to get face clusters' });
+  }
+};

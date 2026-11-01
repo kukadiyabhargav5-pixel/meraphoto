@@ -22,7 +22,7 @@ const generateTokens = (userId: string, role: string) => {
  * Register a new Studio Owner and auto-initialize their Studio profile
  */
 export const registerStudioOwner = async (req: Request, res: Response) => {
-  const { name, email, password, phone, studioName, websiteLink, logoUrl, instagramUrl, facebookUrl } = req.body;
+  const { name, email, password, phone, studioName, websiteLink, logoUrl, instagramUrl, facebookUrl, whatsappUrl, whatsappNumber } = req.body;
 
   try {
     if (!name || !email || !password || !phone || !studioName) {
@@ -67,6 +67,7 @@ export const registerStudioOwner = async (req: Request, res: Response) => {
       logoUrl: logoUrl || undefined,
       instagramUrl: instagramUrl || undefined,
       facebookUrl: facebookUrl || undefined,
+      whatsappUrl: whatsappUrl || whatsappNumber || undefined,
     });
 
     const tokens = generateTokens(newUser._id.toString(), newUser.role);
@@ -222,6 +223,8 @@ export const googleLogin = async (req: Request, res: Response) => {
     websiteLink,
     instagramUrl,
     facebookUrl,
+    whatsappUrl,
+    whatsappNumber,
     logoUrl,
     password,
   } = req.body;
@@ -334,6 +337,7 @@ export const googleLogin = async (req: Request, res: Response) => {
       const finalDomain = websiteLink && typeof websiteLink === 'string' && websiteLink.trim() ? websiteLink.trim() : undefined;
       const finalInsta = instagramUrl && typeof instagramUrl === 'string' && instagramUrl.trim() ? instagramUrl.trim() : undefined;
       const finalFb = facebookUrl && typeof facebookUrl === 'string' && facebookUrl.trim() ? facebookUrl.trim() : undefined;
+      const finalWa = (whatsappUrl || whatsappNumber) && typeof (whatsappUrl || whatsappNumber) === 'string' && (whatsappUrl || whatsappNumber).trim() ? (whatsappUrl || whatsappNumber).trim() : undefined;
       const finalLogo = logoUrl && typeof logoUrl === 'string' && logoUrl.trim() ? logoUrl.trim() : undefined;
 
       if (!studio) {
@@ -345,6 +349,7 @@ export const googleLogin = async (req: Request, res: Response) => {
           customDomain: finalDomain,
           instagramUrl: finalInsta,
           facebookUrl: finalFb,
+          whatsappUrl: finalWa,
           logoUrl: finalLogo,
         });
       } else {

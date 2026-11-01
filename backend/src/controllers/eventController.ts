@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import QRCode from 'qrcode';
 import { AuthRequest, isSuperAdmin } from '../middlewares/auth';
 import { Event, Studio, User, Media } from '../models';
+import { StorageSubscription } from '../models/StorageSubscription';
 import Customer from '../models/Customer';
 import { sendAdminNotificationEmail, sendEventInviteEmail } from '../services/EmailService';
 import { getFileUrl } from '../services/StorageService';
@@ -180,11 +181,10 @@ export const getMyEvents = async (req: AuthRequest, res: Response) => {
         const enrichedEvents = events.map(ev => {
           const evObj = ev.toObject();
           if (evObj.coverImageUrl) evObj.coverImageUrl = getFileUrl(evObj.coverImageUrl);
-          const { daysLeft, autoDeleteAt } = calculateEventDaysLeft(ev);
+          const { daysLeft, autoDeleteAt } = calculateEventDaysLeft(ev, new Date('2099-12-31'));
           return { ...evObj, daysLeft, autoDeleteAt };
         });
 
-        // Sort: highest days remaining first (e.g. 30 -> 29 -> ... -> 1 -> 0), then newest created
         enrichedEvents.sort((a, b) => {
           if (b.daysLeft !== a.daysLeft) return b.daysLeft - a.daysLeft;
           const timeA = new Date(a.createdAt || 0).getTime();
@@ -197,6 +197,22 @@ export const getMyEvents = async (req: AuthRequest, res: Response) => {
       return res.json({ events: [] });
     }
 
+    // Determine active subscription expiry for this studio
+    const activeSub = await StorageSubscription.findOne({
+      studioId: studio._id,
+      status: 'ACTIVE',
+      paymentStatus: 'paid',
+      expiresAt: { $gt: new Date() }
+    }).sort({ expiresAt: -1 }).lean();
+
+    let planExpiresAt: any = activeSub?.expiresAt || studio.subscriptionExpiresAt;
+    if (isSuperAdmin(req.user)) {
+      planExpiresAt = new Date('2099-12-31');
+    } else if (!planExpiresAt && studio.subscriptionPlan && studio.subscriptionPlan !== 'BASIC') {
+      const start = studio.subscriptionStartDate || new Date();
+      planExpiresAt = new Date(new Date(start).getTime() + 180 * 24 * 60 * 60 * 1000);
+    }
+
     let query: any = { studioId: studio._id };
     if (req.user.role === 'TEAM_MEMBER') {
       query = { studioId: studio._id, assignedTeamMembers: req.user._id };
@@ -206,7 +222,7 @@ export const getMyEvents = async (req: AuthRequest, res: Response) => {
     const enrichedEvents = events.map(ev => {
       const evObj = ev.toObject();
       if (evObj.coverImageUrl) evObj.coverImageUrl = getFileUrl(evObj.coverImageUrl);
-      const { daysLeft, autoDeleteAt } = calculateEventDaysLeft(ev);
+      const { daysLeft, autoDeleteAt } = calculateEventDaysLeft(ev, planExpiresAt);
       return { ...evObj, daysLeft, autoDeleteAt };
     });
 

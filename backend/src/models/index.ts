@@ -21,3 +21,7 @@ export { default as GalleryVisitor } from './GalleryVisitor';
 export { default as Order } from './Order';
 export * from './PricingPlan';
 export { default as PricingPlan } from './PricingPlan';
+
+export * from './StoragePlan';
+export * from './StorageSubscription';
+export * from './StorageActivity';

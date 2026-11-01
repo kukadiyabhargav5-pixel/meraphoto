@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Lock, Key, AlertCircle, Loader, ChevronLeft, ChevronRight, X, Camera, ScanFace, Download, UploadCloud, CheckCircle2, ImagePlus, Video, Sparkles, CheckCircle, RefreshCw, Check, ShieldCheck, Upload, Play } from 'lucide-react';
+import { Heart, Lock, Key, AlertCircle, Loader, ChevronLeft, ChevronRight, X, Camera, ScanFace, Download, UploadCloud, CheckCircle2, ImagePlus, Video, Sparkles, CheckCircle, RefreshCw, Check, ShieldCheck, Upload, Play } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -57,6 +57,77 @@ export default function EventPhotosPage() {
   const [otpVals, setOtpVals] = useState(['', '', '', '']);
   const [authError, setAuthError] = useState('');
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  // Favorite photos state (persisted per event in localStorage)
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const storageKey = `mara_favs_${slug || 'default'}`;
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setFavoriteIds(parsed);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load favorites', e);
+    }
+
+    const handleFavUpdate = () => {
+      try {
+        const storageKey = `mara_favs_${slug || 'default'}`;
+        const raw = localStorage.getItem(storageKey);
+        if (raw) {
+          const ids = JSON.parse(raw);
+          if (Array.isArray(ids)) setFavoriteIds(ids);
+        } else {
+          setFavoriteIds([]);
+        }
+      } catch (e) {}
+    };
+
+    window.addEventListener('favorites_updated', handleFavUpdate);
+    window.addEventListener('storage', handleFavUpdate);
+    return () => {
+      window.removeEventListener('favorites_updated', handleFavUpdate);
+      window.removeEventListener('storage', handleFavUpdate);
+    };
+  }, [slug]);
+
+  const toggleFavorite = useCallback(async (id: string | any) => {
+    if (!id) return;
+    const cleanId = String(id);
+    const exists = favoriteIds.includes(cleanId);
+    const updated = exists ? favoriteIds.filter((favId) => favId !== cleanId) : [...favoriteIds, cleanId];
+    setFavoriteIds(updated);
+    try {
+      if (typeof window !== 'undefined') {
+        const storageKey = `mara_favs_${slug || 'default'}`;
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+      }
+    } catch (e) {
+      console.warn('Failed to save favorites', e);
+    }
+    if (!exists) {
+      toast.success('Added to favorites ❤️', { id: `fav-${cleanId}`, duration: 2000 });
+    } else {
+      toast('Removed from favorites', { id: `fav-${cleanId}`, duration: 2000, icon: '🤍' });
+    }
+
+    // Persist to backend database so studio owner sees it immediately in favorites page!
+    try {
+      await apiClient.put(`/media/${cleanId}/favorite`, { isFavorite: !exists });
+    } catch (err) {
+      console.error('Failed to sync favorite with server:', err);
+    }
+  }, [favoriteIds, slug]);
+
+  const isFavorite = useCallback((id: any) => {
+    if (!id) return false;
+    return favoriteIds.includes(String(id));
+  }, [favoriteIds]);
 
   // Download State
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
@@ -152,12 +223,21 @@ export default function EventPhotosPage() {
 
   const fetchPhotos = async (eventId: string) => {
     try {
-      const res = await apiClient.get(`/media/event/${eventId}`);
+      const res = await apiClient.get(`/media/event/${eventId}`, { params: { _t: Date.now() } });
       const allMedia = res.data.media || [];
       const valid = allMedia.filter((m: any) => m.processedStatus !== 'FAILED');
       const finalMedia = valid.length > 0 ? valid : allMedia;
       setMedia(finalMedia);
       setFullMedia(finalMedia);
+
+      // Synchronize favoriteIds directly from server media (removes un-favorited photos)
+      const serverFavs = finalMedia
+        .filter((m: any) => m && (m.isFavorite === true || (m.favoriteCount || 0) > 0))
+        .map((m: any) => String(m._id));
+      setFavoriteIds(serverFavs);
+      try {
+        localStorage.setItem(`mara_favs_${slug}`, JSON.stringify(serverFavs));
+      } catch (e) {}
     } catch (err) {
       console.error(err);
     }
@@ -166,7 +246,7 @@ export default function EventPhotosPage() {
   const fetchEventData = async () => {
     setLoading(true);
     try {
-      const res = await apiClient.get(`/event/code/${slug}`);
+      const res = await apiClient.get(`/event/code/${slug}`, { params: { _t: Date.now() } });
       setEvent(res.data.event);
 
       if (res.data.event.accessType === 'PASSWORD' || res.data.event.accessType === 'OTP') {
@@ -178,6 +258,15 @@ export default function EventPhotosPage() {
           const finalMedia = valid.length > 0 ? valid : allMedia;
           setMedia(finalMedia);
           setFullMedia(finalMedia);
+
+          // Synchronize favoriteIds directly from server media (removes un-favorited photos)
+          const serverFavs = finalMedia
+            .filter((m: any) => m && (m.isFavorite === true || (m.favoriteCount || 0) > 0))
+            .map((m: any) => String(m._id));
+          setFavoriteIds(serverFavs);
+          try {
+            localStorage.setItem(`mara_favs_${slug}`, JSON.stringify(serverFavs));
+          } catch (e) {}
         } else {
           fetchPhotos(res.data.event._id);
         }
@@ -821,7 +910,7 @@ export default function EventPhotosPage() {
               return (
                 <div
                   key={m._id}
-                  className="smooth-photo-zoom-card relative aspect-[3/4] rounded-xl sm:rounded-2xl overflow-hidden shadow-xs hover:shadow-xl border border-slate-200 cursor-pointer active:scale-[0.98] transition-all bg-slate-100"
+                  className="smooth-photo-zoom-card group relative aspect-[3/4] rounded-xl sm:rounded-2xl overflow-hidden shadow-xs hover:shadow-xl border border-slate-200 cursor-pointer active:scale-[0.98] transition-all bg-slate-100"
                   onClick={() => setLightboxIndex(index)}
                 >
                   <img
@@ -836,6 +925,30 @@ export default function EventPhotosPage() {
                       }
                     }}
                   />
+                  {/* Face Scan Match Percentage Badge */}
+                  {isFiltered && (m as any).similarityPercent && (
+                    <div className="absolute bottom-2.5 left-2.5 z-20 px-2.5 py-1 rounded-full bg-black/80 backdrop-blur-md border border-[#c5a880]/70 text-[#c5a880] text-[10px] sm:text-xs font-black flex items-center gap-1 shadow-lg">
+                      <Sparkles className="w-3 h-3 text-[#c5a880]" />
+                      <span>{(m as any).similarityPercent}% Match</span>
+                    </div>
+                  )}
+                  {/* Favorite Heart Button on Hover / Active */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFavorite(m._id);
+                    }}
+                    className={`absolute top-2.5 right-2.5 z-30 p-2 rounded-full backdrop-blur-md transition-all duration-300 shadow-md cursor-pointer ${
+                      isFavorite(m._id)
+                        ? 'bg-white/95 text-rose-500 opacity-100 scale-100 hover:scale-110 shadow-rose-500/20'
+                        : 'bg-black/40 text-white/90 opacity-0 group-hover:opacity-100 hover:bg-black/70 hover:text-rose-400 hover:scale-110'
+                    }`}
+                    title={isFavorite(m._id) ? "Remove from Favorites" : "Add to Favorites"}
+                  >
+                    <Heart className={`h-4 w-4 transition-transform duration-200 active:scale-125 ${isFavorite(m._id) ? 'fill-rose-500 text-rose-500' : ''}`} />
+                  </button>
+
                   {m.type === 'VIDEO' && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/25 pointer-events-none">
                       <div className="w-10 h-10 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center shadow-lg">
@@ -884,13 +997,32 @@ export default function EventPhotosPage() {
             <span className="text-xs sm:text-sm text-white/60 font-mono font-medium tracking-widest pointer-events-auto">
               {lightboxIndex + 1} / {media.length}
             </span>
-            <button
-              onClick={closeLightbox}
-              className="p-2 sm:p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all pointer-events-auto min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
-              title="Close (Esc)"
-            >
-              <X className="h-5 w-5 sm:h-6 sm:w-6" />
-            </button>
+            <div className="flex items-center gap-2 sm:gap-3 pointer-events-auto">
+              {/* Favorite Button in Lightbox */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (currentLightboxMedia?._id) toggleFavorite(currentLightboxMedia._id);
+                }}
+                className={`px-3 sm:px-4 py-2 rounded-xl flex items-center gap-2 font-bold text-xs sm:text-sm transition-all border min-h-[40px] cursor-pointer shadow-md ${
+                  isFavorite(currentLightboxMedia._id)
+                    ? 'bg-rose-500/25 text-rose-400 border-rose-500/40 hover:bg-rose-500/35'
+                    : 'bg-white/10 text-white hover:bg-white/20 border-white/10 hover:text-rose-300'
+                }`}
+                title={isFavorite(currentLightboxMedia._id) ? "Remove from Favorites" : "Add to Favorites"}
+              >
+                <Heart className={`h-4 w-4 transition-transform duration-200 active:scale-125 ${isFavorite(currentLightboxMedia._id) ? 'fill-rose-500 text-rose-500' : ''}`} />
+                <span className="hidden xs:inline">{isFavorite(currentLightboxMedia._id) ? 'Favorited' : 'Favorite'}</span>
+              </button>
+              <button
+                onClick={closeLightbox}
+                className="p-2 sm:p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all pointer-events-auto min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
+                title="Close (Esc)"
+              >
+                <X className="h-5 w-5 sm:h-6 sm:w-6" />
+              </button>
+            </div>
           </div>
 
           <div className="w-full h-full p-2 sm:p-16 flex items-center justify-center relative">
@@ -1357,7 +1489,8 @@ export default function EventPhotosPage() {
                             </button>
                           </div>
                         </div>
-                      ) : (                          <div className={`w-full min-h-[260px] rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-500 flex flex-col items-center justify-center gap-4 p-8 relative overflow-hidden group ${
+                      ) : (
+                          <div className={`w-full min-h-[260px] rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-500 flex flex-col items-center justify-center gap-4 p-8 relative overflow-hidden group ${
                             isDragOver 
                               ? 'border-[#c5a880] bg-[#c5a880]/10 scale-[1.01]' 
                               : 'border-slate-300 bg-[#faf9f6] hover:border-[#c5a880] hover:bg-[#c5a880]/5'

@@ -26,26 +26,7 @@ export default function EventsManagementPage() {
   // Helper to calculate exact live days left out of 30 days based strictly on creation date
   const getDaysLeft = (event: any) => {
     if (typeof event?.daysLeft === 'number') return event.daysLeft;
-    const baseDateStr = event?.createdAt || (event?._id ? null : event?.date);
-    let createdDate: Date;
-    if (baseDateStr) {
-      createdDate = new Date(baseDateStr);
-    } else if (event?._id && typeof event._id === 'string' && event._id.length === 24) {
-      try {
-        createdDate = new Date(parseInt(event._id.substring(0, 8), 16) * 1000);
-      } catch {
-        createdDate = new Date();
-      }
-    } else {
-      return 30;
-    }
-
-    const now = new Date();
-    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const createdMidnight = new Date(createdDate.getFullYear(), createdDate.getMonth(), createdDate.getDate()).getTime();
-
-    const diffDays = Math.max(0, Math.floor((todayMidnight - createdMidnight) / (1000 * 60 * 60 * 24)));
-    return Math.max(0, 30 - diffDays);
+    return 180;
   };
 
   useEffect(() => {
@@ -199,7 +180,7 @@ export default function EventsManagementPage() {
                       {/* 30-Day Auto Delete Badge */}
                       {(() => {
                         const days = getDaysLeft(event);
-                        const label = days === 0 ? 'Expires today' : `${days} ${days === 1 ? 'day' : 'days'} left`;
+                        const label = days >= 9000 ? 'Active Lifetime' : days === 0 ? 'Plan Expired' : `${days} ${days === 1 ? 'day' : 'days'} left`;
                         const isUrgent = days <= 1;
                         const isWarning = days <= 5;
                         return (

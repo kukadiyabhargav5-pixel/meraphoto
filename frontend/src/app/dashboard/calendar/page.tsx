@@ -1,10 +1,33 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useDashboard } from '../DashboardContext';
 import { apiClient } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Plus, X, Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRight, Edit2, Trash2, Camera, Video, Bell, AlertTriangle, Loader } from 'lucide-react';
-import CustomDatePicker from '../../../components/CustomDatePicker';
+import {
+  Calendar as CalendarIcon,
+  Clock,
+  MapPin,
+  User,
+  ChevronLeft,
+  ChevronRight,
+  Edit2,
+  Trash2,
+  Camera,
+  Video,
+  Bell,
+  CheckCircle2,
+  AlertCircle,
+  Plus,
+  X,
+  Mail,
+  Sparkles,
+  Filter,
+  Check,
+  RefreshCw,
+  CalendarCheck2,
+  ArrowRight
+} from 'lucide-react';
 
 const EVENT_TYPES = [
   'Wedding', 'Pre-Wedding', 'Reception', 'Engagement', 'Birthday',
@@ -27,26 +50,42 @@ function getFirstDayOfMonth(year: number, month: number) {
   return new Date(year, month, 1).getDay();
 }
 
-export default function CalendarPage() {
-  const context = useDashboard();
-  if (!context) return null;
-  const { shoots, setShoots } = context;
+// Format date to YYYY-MM-DD
+function formatDateKey(date: Date | string): string {
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
-  const today = new Date();
+type ShootCategory = 'upcoming' | 'today' | 'complete' | 'due';
+
+function CalendarContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const context = useDashboard();
+  const { shoots = [], setShoots } = context || {};
+
+  const today = useMemo(() => new Date(), []);
+  const todayStr = useMemo(() => formatDateKey(today), [today]);
+
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+  const [activeFilter, setActiveFilter] = useState<'all' | ShootCategory>('all');
+  
+  // Modal states
+  const [showFormModal, setShowFormModal] = useState(false);
+  const [editingShootId, setEditingShootId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [workType, setWorkType] = useState<'Event' | 'Other'>('Event');
-  const [viewingShoot, setViewingShoot] = useState<any>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
-  // Reminder popup
-  const [reminderShoots, setReminderShoots] = useState<any[]>([]);
-  const [showReminderPopup, setShowReminderPopup] = useState(false);
-
-  // Form state
+  // Form State
   const [formData, setFormData] = useState({
+    date: todayStr,
     time: '09:00',
     eventName: '',
     eventType: 'Wedding',
@@ -56,88 +95,159 @@ export default function CalendarPage() {
     videographersNames: [] as string[],
     location: '',
     notes: '',
-    reminder: 'none' as 'none' | '24h' | '72h'
+    reminder: '24h' as 'none' | '24h' | '72h'
   });
 
-  // Check for reminder shoots on mount
+  // Handle URL query filter on initial load (e.g. ?filter=today)
   useEffect(() => {
-    const now = new Date();
-    const upcoming = shoots.filter((s: any) => {
-      if (!s.reminder || s.reminder === 'none') return false;
-      const shootDate = new Date(s.date);
-      const diffMs = shootDate.getTime() - now.getTime();
-      const diffH = diffMs / (1000 * 60 * 60);
-      if (s.reminder === '24h' && diffH > 0 && diffH <= 24) return true;
-      if (s.reminder === '72h' && diffH > 0 && diffH <= 72) return true;
-      return false;
-    });
-    if (upcoming.length > 0) {
-      setReminderShoots(upcoming);
-      setShowReminderPopup(true);
+    const urlFilter = searchParams.get('filter');
+    if (urlFilter && ['upcoming', 'today', 'complete', 'due'].includes(urlFilter.toLowerCase())) {
+      setActiveFilter(urlFilter.toLowerCase() as ShootCategory);
     }
-  }, [shoots]);
+  }, [searchParams]);
 
-  // Calendar calculations
-  const daysInMonth = getDaysInMonth(currentYear, currentMonth);
-  const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
-  const prevMonthDays = getDaysInMonth(currentYear, currentMonth - 1);
+  // Refresh shoots from server
+  const fetchShoots = async () => {
+    try {
+      setRefreshing(true);
+      const res = await apiClient.get('/dashboard/shoots');
+      if (res.data && Array.isArray(res.data)) {
+        setShoots(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to refresh shoots:', err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
-  // Navigate months
+  // Determine shoot category
+  const getShootCategory = (s: any): ShootCategory => {
+    if (s.status === 'Completed') return 'complete';
+    if (s.status === 'Due') return 'due';
+    
+    const sDateStr = formatDateKey(s.date);
+    if (sDateStr === todayStr || s.status === 'Today') {
+      return 'today';
+    }
+    if (sDateStr > todayStr || s.status === 'Upcoming') {
+      return 'upcoming';
+    }
+    // Past date not completed
+    return 'due';
+  };
+
+  // Month navigation
   const goToPrevMonth = () => {
     if (currentMonth === 0) {
       setCurrentMonth(11);
-      setCurrentYear(currentYear - 1);
+      setCurrentYear(prev => prev - 1);
     } else {
-      setCurrentMonth(currentMonth - 1);
+      setCurrentMonth(prev => prev - 1);
     }
   };
 
   const goToNextMonth = () => {
     if (currentMonth === 11) {
       setCurrentMonth(0);
-      setCurrentYear(currentYear + 1);
+      setCurrentYear(prev => prev + 1);
     } else {
-      setCurrentMonth(currentMonth + 1);
+      setCurrentMonth(prev => prev + 1);
     }
   };
 
-  // Get shoots for a specific date
-  const getShootsForDate = (day: number) => {
-    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return shoots.filter((s: any) => {
-      const sDate = new Date(s.date);
-      const sStr = `${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, '0')}-${String(sDate.getDate()).padStart(2, '0')}`;
-      return sStr === dateStr;
+  const goToTodayMonth = () => {
+    setCurrentMonth(today.getMonth());
+    setCurrentYear(today.getFullYear());
+    setSelectedDate(todayStr);
+  };
+
+  // Filtered shoots for the selected month
+  const shootsInSelectedMonth = useMemo(() => {
+    return (shoots || []).filter((s: any) => {
+      const d = new Date(s.date);
+      if (isNaN(d.getTime())) return false;
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     });
-  };
+  }, [shoots, currentMonth, currentYear]);
 
-  // Handle date click
-  const handleDateClick = (day: number) => {
-    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    setSelectedDate(dateStr);
-    
-    const shootsOnDate = getShootsForDate(day);
-    if (shootsOnDate.length > 0) {
-      setShowForm(false);
-    } else {
-      setWorkType('Event');
-      setFormData({
-        time: '09:00',
-        eventName: '',
-        eventType: 'Wedding',
-        photographersCount: 0,
-        videographersCount: 0,
-        photographersNames: [],
-        videographersNames: [],
-        location: '',
-        notes: '',
-        reminder: 'none'
-      });
-      setShowForm(true);
+  // Counts for the 4 boxes based on the currently selected month
+  const monthlyCounts = useMemo(() => {
+    let upcoming = 0;
+    let todayCount = 0;
+    let complete = 0;
+    let due = 0;
+
+    shootsInSelectedMonth.forEach((s: any) => {
+      const cat = getShootCategory(s);
+      if (cat === 'upcoming') upcoming++;
+      else if (cat === 'today') todayCount++;
+      else if (cat === 'complete') complete++;
+      else if (cat === 'due') due++;
+    });
+
+    return { upcoming, today: todayCount, complete, due, total: shootsInSelectedMonth.length };
+  }, [shootsInSelectedMonth, todayStr]);
+
+  // Filtered shoots display list based on activeFilter and selectedDate
+  const displayedShoots = useMemo(() => {
+    let list = shootsInSelectedMonth;
+
+    if (activeFilter !== 'all') {
+      list = list.filter((s: any) => getShootCategory(s) === activeFilter);
+    } else if (selectedDate) {
+      // If no specific status filter, filter by selected date
+      list = list.filter((s: any) => formatDateKey(s.date) === selectedDate);
     }
+
+    // Sort by date asc, then time
+    return [...list].sort((a: any, b: any) => {
+      const diff = new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (diff !== 0) return diff;
+      return (a.time || '').localeCompare(b.time || '');
+    });
+  }, [shootsInSelectedMonth, activeFilter, selectedDate]);
+
+  // Open Add Shoot modal
+  const handleOpenAddModal = (dateStr?: string) => {
+    const targetDate = dateStr || selectedDate || todayStr;
+    setEditingShootId(null);
+    setFormData({
+      date: targetDate,
+      time: '09:00',
+      eventName: '',
+      eventType: 'Wedding',
+      photographersCount: 1,
+      videographersCount: 0,
+      photographersNames: [''],
+      videographersNames: [],
+      location: '',
+      notes: '',
+      reminder: '24h'
+    });
+    setShowFormModal(true);
   };
 
-  // Update photographer/videographer name arrays when count changes
+  // Open Edit modal
+  const handleOpenEditModal = (shoot: any) => {
+    setEditingShootId(shoot._id);
+    setFormData({
+      date: formatDateKey(shoot.date) || todayStr,
+      time: shoot.time || '09:00',
+      eventName: shoot.eventName || '',
+      eventType: shoot.eventType || 'Wedding',
+      photographersCount: shoot.photographersCount || (shoot.photographersNames?.length || 0),
+      videographersCount: shoot.videographersCount || (shoot.videographersNames?.length || 0),
+      photographersNames: shoot.photographersNames || [],
+      videographersNames: shoot.videographersNames || [],
+      location: shoot.location || '',
+      notes: shoot.notes || '',
+      reminder: shoot.reminder || '24h'
+    });
+    setShowFormModal(true);
+  };
+
+  // Update photographer / videographer counts & names
   const updatePhotographerCount = (count: number) => {
     const c = Math.max(0, Math.min(20, count));
     const names = [...formData.photographersNames];
@@ -152,734 +262,1057 @@ export default function CalendarPage() {
     setFormData({ ...formData, videographersCount: c, videographersNames: names.slice(0, c) });
   };
 
-  const updatePhotographerName = (index: number, value: string) => {
-    const names = [...formData.photographersNames];
-    names[index] = value;
-    setFormData({ ...formData, photographersNames: names });
-  };
-
-  const updateVideographerName = (index: number, value: string) => {
-    const names = [...formData.videographersNames];
-    names[index] = value;
-    setFormData({ ...formData, videographersNames: names });
-  };
-
-  // Submit form
+  // Submit Add or Edit shoot
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDate || !formData.eventName.trim()) return;
+    if (!formData.eventName.trim()) {
+      toast.error('Please enter an event name');
+      return;
+    }
 
     try {
       setSaving(true);
       const payload = {
-        date: selectedDate,
+        date: formData.date,
         time: formData.time,
-        eventName: formData.eventName,
-        eventType: workType === 'Other' ? 'Other Work' : formData.eventType,
-        photographersCount: workType === 'Other' ? 0 : formData.photographersNames.length,
-        videographersCount: workType === 'Other' ? 0 : formData.videographersNames.length,
+        eventName: formData.eventName.trim(),
+        eventType: formData.eventType,
+        photographersCount: formData.photographersNames.filter(n => n.trim()).length,
+        videographersCount: formData.videographersNames.filter(n => n.trim()).length,
         photographersNames: formData.photographersNames.filter(n => n.trim()),
-        videographersNames: workType === 'Other' ? [] : formData.videographersNames.filter(n => n.trim()),
-        location: formData.location,
-        notes: formData.notes,
+        videographersNames: formData.videographersNames.filter(n => n.trim()),
+        location: formData.location.trim(),
+        notes: formData.notes.trim(),
         reminder: formData.reminder
       };
 
-      const res = await apiClient.post('/dashboard/shoots', payload);
-      setShoots([...shoots, res.data]);
-      setShowForm(false);
-      // Stay on the selected date to show the updated list
-    } catch (err) {
-      toast.error('Error saving shoot. Please try again.');
+      if (editingShootId) {
+        const res = await apiClient.put(`/dashboard/shoots/${editingShootId}`, payload);
+        setShoots((prev: any[]) => prev.map((s: any) => s._id === editingShootId ? res.data : s));
+        toast.success('Shoot updated successfully!');
+      } else {
+        const res = await apiClient.post('/dashboard/shoots', payload);
+        setShoots((prev: any[]) => [...prev, res.data]);
+        const shootCat = getShootCategory(res.data);
+        if (shootCat === 'today') {
+          toast.success('🎉 Scheduled for Today! Notification email sent to studio.');
+        } else {
+          toast.success('📅 Shoot added to Upcoming schedule!');
+        }
+      }
+
+      setShowFormModal(false);
+      setSelectedDate(formData.date);
+    } catch (err: any) {
+      console.error('Error saving shoot:', err);
+      toast.error(err?.response?.data?.error || 'Failed to save shoot');
     } finally {
       setSaving(false);
     }
   };
 
-  // Delete shoot
-  const handleDeleteShoot = async (shootId: string) => {
-    if (!window.confirm('Are you sure you want to delete this shoot?')) return;
+  // ACTION 1: Complete Shoot (Moves to Complete Box)
+  const handleMarkComplete = async (shootId: string, eventName: string) => {
     try {
-      await apiClient.delete(`/dashboard/shoots/${shootId}`);
-      setShoots(shoots.filter((s: any) => s._id !== shootId));
-    } catch (err) {
-      toast.error('Error deleting shoot.');
+      setActionLoadingId(shootId);
+      const res = await apiClient.put(`/dashboard/shoots/${shootId}`, { status: 'Completed' });
+      setShoots((prev: any[]) => prev.map((s: any) => s._id === shootId ? res.data : s));
+      toast.success(`🎉 "${eventName}" marked as Completed! Moved to Complete box.`, {
+        icon: '✅',
+        duration: 3500
+      });
+    } catch (err: any) {
+      console.error('Failed to complete shoot:', err);
+      toast.error('Failed to update shoot status');
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
-  // Check if a day is today
-  const isToday = (day: number) => {
-    return day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear();
+  // ACTION 2: Move to Due Date (User clicks Delete / Move to Due on Today shoot)
+  const handleMoveToDue = async (shootId: string, eventName: string) => {
+    try {
+      setActionLoadingId(shootId);
+      const res = await apiClient.put(`/dashboard/shoots/${shootId}`, { status: 'Due' });
+      setShoots((prev: any[]) => prev.map((s: any) => s._id === shootId ? res.data : s));
+      toast.success(`Shoot "${eventName}" moved to Due Date list.`, {
+        icon: '⏳',
+        duration: 3500
+      });
+    } catch (err: any) {
+      console.error('Failed to move shoot to due:', err);
+      toast.error('Failed to update shoot status');
+    } finally {
+      setActionLoadingId(null);
+    }
   };
 
-  // Upcoming shoots (from today onward, sorted)
-  const upcomingShoots = shoots
-    .filter((s: any) => new Date(s.date) >= new Date(today.toDateString()))
-    .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .slice(0, 5);
+  // Resend Email Alert to studio
+  const handleResendEmail = async (shootId: string, eventName: string) => {
+    try {
+      setActionLoadingId(shootId);
+      const res = await apiClient.post(`/dashboard/shoots/${shootId}/send-email`);
+      toast.success(res.data?.message || `Alert email sent for "${eventName}"!`, {
+        icon: '📧',
+        duration: 3500
+      });
+      // update state
+      setShoots((prev: any[]) => prev.map((s: any) => s._id === shootId ? { ...s, todayEmailSent: true } : s));
+    } catch (err: any) {
+      console.error('Email send error:', err);
+      toast.error(err?.response?.data?.error || 'Failed to dispatch email');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
 
-  // Build calendar grid cells
+  // Permanent Delete
+  const handlePermanentDelete = async (shootId: string, eventName: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete shoot "${eventName}"?`)) return;
+    try {
+      setActionLoadingId(shootId);
+      await apiClient.delete(`/dashboard/shoots/${shootId}`);
+      setShoots((prev: any[]) => prev.filter((s: any) => s._id !== shootId));
+      toast.success('Shoot permanently removed.');
+    } catch (err) {
+      console.error('Delete error:', err);
+      toast.error('Failed to delete shoot');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Calendar Grid Cells calculations
+  const daysInMonth = getDaysInMonth(currentYear, currentMonth);
+  const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
+  const prevMonthDays = getDaysInMonth(currentYear, currentMonth - 1);
+
   const calendarCells = [];
-
-  // Previous month trailing days
+  // Trailing previous month days
   for (let i = firstDay - 1; i >= 0; i--) {
-    calendarCells.push({ day: prevMonthDays - i, isCurrentMonth: false, shoots: [] });
+    const day = prevMonthDays - i;
+    const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+    const dateStr = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    calendarCells.push({
+      day,
+      dateStr,
+      isCurrentMonth: false,
+      shoots: (shoots || []).filter((s: any) => formatDateKey(s.date) === dateStr)
+    });
   }
 
   // Current month days
   for (let d = 1; d <= daysInMonth; d++) {
-    calendarCells.push({ day: d, isCurrentMonth: true, shoots: getShootsForDate(d) });
+    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    calendarCells.push({
+      day: d,
+      dateStr,
+      isCurrentMonth: true,
+      shoots: (shoots || []).filter((s: any) => formatDateKey(s.date) === dateStr)
+    });
   }
 
-  // Next month leading days (fill remaining cells to complete the grid row)
+  // Leading next month days to complete 35 or 42 grid cells
   const remaining = 7 - (calendarCells.length % 7);
   if (remaining < 7) {
     for (let i = 1; i <= remaining; i++) {
-      calendarCells.push({ day: i, isCurrentMonth: false, shoots: [] });
+      const nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
+      const nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
+      const dateStr = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      calendarCells.push({
+        day: i,
+        dateStr,
+        isCurrentMonth: false,
+        shoots: (shoots || []).filter((s: any) => formatDateKey(s.date) === dateStr)
+      });
     }
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#f8f7f4] text-slate-900 p-4 md:p-8">
-      <style dangerouslySetInnerHTML={{ __html: `
-        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
-        .cal-cell {
-          min-height: 90px;
-          border: 1px solid #e2e8f0;
-          padding: 6px 8px;
-          cursor: pointer;
-          transition: all 0.15s ease;
-          position: relative;
-          background: #fff;
-        }
-        .cal-cell:hover { background: #f8fafc; border-color: #c5a880; z-index: 1; }
-        .cal-cell.today { background: linear-gradient(135deg, #fdf6ee 0%, #fef9f3 100%); border-color: #c5a880; }
-        .cal-cell.other-month { background: #f8fafc; opacity: 0.5; }
-        .cal-cell.selected { background: #c5a880/10; border-color: #c5a880; box-shadow: inset 0 0 0 2px #c5a880; }
-        .cal-day-num {
-          font-size: 13px;
-          font-weight: 700;
-          color: #334155;
-          font-family: 'Inter', sans-serif;
-        }
-        .cal-cell.other-month .cal-day-num { color: #94a3b8; }
-        .cal-cell.today .cal-day-num { 
-          color: #fff; 
-          background: #c5a880; 
-          width: 26px; height: 26px; 
-          border-radius: 50%; 
-          display: flex; align-items: center; justify-content: center;
-        }
-        .shoot-pill {
-          display: block;
-          font-size: 9px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.3px;
-          padding: 2px 6px;
-          border-radius: 4px;
-          margin-top: 3px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          background: linear-gradient(135deg, #c5a880 0%, #d4b896 100%);
-          color: #1e1b18;
-        }
-        .form-label {
-          font-size: 10px;
-          font-weight: 800;
-          color: #475569;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          margin-bottom: 6px;
-          display: block;
-        }
-        .form-input {
-          width: 100%;
-          background: #fff;
-          border: 1px solid #e2e8f0;
-          color: #0f172a;
-          padding: 10px 12px;
-          border-radius: 10px;
-          font-size: 13px;
-          outline: none;
-          transition: border-color 0.2s, box-shadow 0.2s;
-        }
-        .form-input:focus {
-          border-color: #c5a880;
-          box-shadow: 0 0 0 3px rgba(197, 168, 128, 0.15);
-        }
-        .form-input::placeholder { color: #94a3b8; }
-        .crew-name-input {
-          width: 100%;
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          color: #0f172a;
-          padding: 8px 10px;
-          border-radius: 8px;
-          font-size: 12px;
-          outline: none;
-          transition: border-color 0.2s;
-        }
-        .crew-name-input:focus { border-color: #c5a880; background: #fff; }
-        .form-panel {
-          animation: slideIn 0.25s ease-out;
-        }
-        @keyframes slideIn {
-          from { opacity: 0; transform: translateX(20px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-        .upcoming-card {
-          padding: 14px;
-          border-radius: 12px;
-          border: 1px solid #e2e8f0;
-          background: #fff;
-          transition: all 0.2s;
-        }
-        .upcoming-card:hover {
-          border-color: #c5a880;
-          box-shadow: 0 4px 12px rgba(197, 168, 128, 0.12);
-        }
-      ` }} />
-
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-extrabold text-slate-900">Studio Shoot CalendarLog</h1>
-          <p className="text-xs text-slate-500 mt-1 font-semibold">
-            View upcoming shoots, manage bookings, and track your photography schedule.
-          </p>
-        </div>
-
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Calendar */}
-          <div className="flex-1">
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-              {/* Month Header */}
-              <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-[#f8f7f4] text-slate-900/50">
-                <div className="flex items-center gap-3">
-                  <CalendarIcon className="h-5 w-5 text-[#c5a880]" />
-                  <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">
-                    {MONTH_NAMES[currentMonth]} {currentYear}
-                  </h2>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={goToPrevMonth}
-                    className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={() => { setCurrentMonth(today.getMonth()); setCurrentYear(today.getFullYear()); }}
-                    className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#c5a880] hover:bg-[#c5a880]/10 rounded-lg transition-colors"
-                  >
-                    Today
-                  </button>
-                  <button
-                    onClick={goToNextMonth}
-                    className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
-                  >
-                    <ChevronRight className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Grid Scroll Wrapper */}
-              <div className="overflow-x-auto w-full">
-                <div className="min-w-[600px]">
-                  {/* Day Names Header */}
-                  <div className="cal-grid border-b border-slate-100">
-                    {DAY_NAMES.map(d => (
-                      <div key={d} className="text-center py-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest bg-[#f8f7f4] text-slate-900/30">
-                        {d}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Calendar Grid */}
-                  <div className="cal-grid">
-                    {calendarCells.map((cell, idx) => (
-                      <div
-                        key={idx}
-                        className={`cal-cell ${!cell.isCurrentMonth ? 'other-month' : ''} ${cell.isCurrentMonth && isToday(cell.day) ? 'today' : ''} ${selectedDate === `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(cell.day).padStart(2, '0')}` && cell.isCurrentMonth ? 'selected' : ''}`}
-                        onClick={() => cell.isCurrentMonth && handleDateClick(cell.day)}
-                      >
-                        <span className="cal-day-num">{cell.day}</span>
-                        {cell.shoots.length > 0 && (
-                          <div className="mt-1 flex flex-col gap-1 w-full overflow-hidden">
-                            {cell.shoots.slice(0, 2).map((s: any, i: number) => (
-                              <span key={i} className="shoot-pill truncate w-full block">{s.eventName || 'Shoot'}</span>
-                            ))}
-                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 bg-[#c5a880]/10 text-[#b59a72] text-[9px] font-extrabold rounded w-full mt-0.5 border border-[#c5a880]/20">
-                              {cell.shoots.length} {cell.shoots.length === 1 ? 'Work' : 'Works'}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+    <div className="flex-1 overflow-y-auto bg-[#faf8f5] text-slate-900 min-h-screen p-3 xs:p-4 sm:p-6 lg:p-8">
+      {/* ═══ Header ═══ */}
+      <div className="max-w-7xl mx-auto mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#e8dfd3]/80">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#c5a880]/15 text-[#8c6d3f] border border-[#c5a880]/30">
+                Studio Planner
+              </span>
+              <span className="text-xs font-semibold text-slate-400">• Automated Sync & Alerts</span>
             </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-1 flex items-center gap-2.5">
+              <CalendarIcon className="w-7 h-7 text-[#c5a880]" />
+              Event & Shoot Calendar
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
+              Automated 4-status tracking for upcoming, today, completed, and due shoots.
+            </p>
           </div>
 
-          {/* Right Panel: Form or Upcoming Shoots */}
-          <div className="w-full lg:w-[380px] shrink-0">
-            {showForm && selectedDate ? (
-              <div className="form-panel bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                {/* Form Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-[#f8f7f4] text-slate-900/50">
-                  <div className="flex flex-col gap-2">
-                    <h3 className="text-sm font-extrabold text-slate-900">
-                      {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-GB')}
-                    </h3>
-                    <div className="flex bg-slate-200/60 rounded-lg p-1 w-fit">
-                      <button 
-                        type="button" 
-                        onClick={() => setWorkType('Event')}
-                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${workType === 'Event' ? 'bg-[#f8f7f4] text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-600'}`}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              onClick={fetchShoots}
+              disabled={refreshing}
+              className="p-2.5 rounded-xl bg-white border border-[#e8dfd3] text-slate-600 hover:text-slate-900 hover:border-[#c5a880] transition-all shadow-xs flex items-center gap-1.5 text-xs font-bold"
+              title="Refresh Shoots"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-[#c5a880]' : ''}`} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+
+            <button
+              onClick={() => handleOpenAddModal(selectedDate || todayStr)}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#c5a880] via-[#cbb08c] to-[#b89665] text-white text-xs sm:text-sm font-black shadow-md hover:shadow-lg hover:brightness-105 active:scale-95 transition-all flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Schedule New Shoot
+            </button>
+          </div>
+        </div>
+
+        {/* ═══ Top 4 KPI Status Boxes ═══ */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6">
+          {/* BOX 1: UPCOMING */}
+          <div
+            onClick={() => setActiveFilter(activeFilter === 'upcoming' ? 'all' : 'upcoming')}
+            className={`cursor-pointer rounded-2xl p-4 sm:p-5 transition-all relative overflow-hidden border ${
+              activeFilter === 'upcoming'
+                ? 'bg-blue-50/80 border-blue-500 shadow-md ring-2 ring-blue-500/30'
+                : 'bg-white border-[#e8dfd3] hover:border-blue-400 hover:shadow-sm'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-100/70 text-blue-600 flex items-center justify-center shadow-xs">
+                <Clock className="w-5 h-5" />
+              </div>
+              <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                activeFilter === 'upcoming' ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700'
+              }`}>
+                Upcoming
+              </span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              {monthlyCounts.upcoming}
+            </div>
+            <p className="text-xs font-semibold text-slate-500 mt-0.5">
+              Scheduled future shoots in {MONTH_NAMES[currentMonth].slice(0, 3)}
+            </p>
+            {activeFilter === 'upcoming' && (
+              <div className="mt-2 text-[11px] font-bold text-blue-700 flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" /> Filtering list
+              </div>
+            )}
+          </div>
+
+          {/* BOX 2: TODAY */}
+          <div
+            onClick={() => setActiveFilter(activeFilter === 'today' ? 'all' : 'today')}
+            className={`cursor-pointer rounded-2xl p-4 sm:p-5 transition-all relative overflow-hidden border ${
+              activeFilter === 'today'
+                ? 'bg-amber-50/90 border-amber-500 shadow-md ring-2 ring-amber-500/30'
+                : 'bg-white border-[#e8dfd3] hover:border-amber-400 hover:shadow-sm'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-100/80 text-amber-700 flex items-center justify-center shadow-xs">
+                <Sparkles className="w-5 h-5 text-amber-600" />
+              </div>
+              <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                activeFilter === 'today' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800'
+              }`}>
+                Today
+              </span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              {monthlyCounts.today}
+              {monthlyCounts.today > 0 && (
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping inline-block" />
+              )}
+            </div>
+            <p className="text-xs font-semibold text-slate-500 mt-0.5">
+              Action required today • Email alerts sent
+            </p>
+            {activeFilter === 'today' && (
+              <div className="mt-2 text-[11px] font-bold text-amber-700 flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" /> Filtering list
+              </div>
+            )}
+          </div>
+
+          {/* BOX 3: COMPLETE */}
+          <div
+            onClick={() => setActiveFilter(activeFilter === 'complete' ? 'all' : 'complete')}
+            className={`cursor-pointer rounded-2xl p-4 sm:p-5 transition-all relative overflow-hidden border ${
+              activeFilter === 'complete'
+                ? 'bg-emerald-50/80 border-emerald-500 shadow-md ring-2 ring-emerald-500/30'
+                : 'bg-white border-[#e8dfd3] hover:border-emerald-400 hover:shadow-sm'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-100/70 text-emerald-600 flex items-center justify-center shadow-xs">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                activeFilter === 'complete' ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-800'
+              }`}>
+                Complete
+              </span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              {monthlyCounts.complete}
+            </div>
+            <p className="text-xs font-semibold text-slate-500 mt-0.5">
+              Successfully finished shoots
+            </p>
+            {activeFilter === 'complete' && (
+              <div className="mt-2 text-[11px] font-bold text-emerald-700 flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" /> Filtering list
+              </div>
+            )}
+          </div>
+
+          {/* BOX 4: DUE DATE */}
+          <div
+            onClick={() => setActiveFilter(activeFilter === 'due' ? 'all' : 'due')}
+            className={`cursor-pointer rounded-2xl p-4 sm:p-5 transition-all relative overflow-hidden border ${
+              activeFilter === 'due'
+                ? 'bg-rose-50/80 border-rose-500 shadow-md ring-2 ring-rose-500/30'
+                : 'bg-white border-[#e8dfd3] hover:border-rose-400 hover:shadow-sm'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-rose-100/70 text-rose-600 flex items-center justify-center shadow-xs">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                activeFilter === 'due' ? 'bg-rose-600 text-white' : 'bg-rose-100 text-rose-800'
+              }`}>
+                Due Date
+              </span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              {monthlyCounts.due}
+            </div>
+            <p className="text-xs font-semibold text-slate-500 mt-0.5">
+              Overdue or deleted from today
+            </p>
+            {activeFilter === 'due' && (
+              <div className="mt-2 text-[11px] font-bold text-rose-700 flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" /> Filtering list
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ═══ Month Switcher Bar ═══ */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6 p-3 sm:p-4 rounded-2xl bg-white border border-[#e8dfd3] shadow-xs">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              onClick={goToPrevMonth}
+              className="p-2 rounded-xl bg-[#faf8f5] hover:bg-[#ebd9c2]/50 text-slate-700 transition-colors cursor-pointer border border-[#e8dfd3]"
+              title="Previous Month"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <div className="text-base sm:text-lg font-black text-slate-900 tracking-tight min-w-[170px] text-center">
+              {MONTH_NAMES[currentMonth]} {currentYear}
+            </div>
+
+            <button
+              onClick={goToNextMonth}
+              className="p-2 rounded-xl bg-[#faf8f5] hover:bg-[#ebd9c2]/50 text-slate-700 transition-colors cursor-pointer border border-[#e8dfd3]"
+              title="Next Month"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={goToTodayMonth}
+              className="text-xs font-black px-3 py-1.5 rounded-xl bg-[#c5a880]/15 text-[#8c6d3f] border border-[#c5a880]/30 hover:bg-[#c5a880]/25 transition-colors cursor-pointer ml-1"
+            >
+              This Month
+            </button>
+          </div>
+
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+            <button
+              onClick={() => setActiveFilter('all')}
+              className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                activeFilter === 'all'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-[#faf8f5] text-slate-600 hover:bg-slate-100 border border-[#e8dfd3]'
+              }`}
+            >
+              All Shoots ({monthlyCounts.total})
+            </button>
+            <button
+              onClick={() => setActiveFilter('upcoming')}
+              className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                activeFilter === 'upcoming'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-[#faf8f5] text-blue-700 hover:bg-blue-50 border border-blue-200'
+              }`}
+            >
+              Upcoming ({monthlyCounts.upcoming})
+            </button>
+            <button
+              onClick={() => setActiveFilter('today')}
+              className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                activeFilter === 'today'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-[#faf8f5] text-amber-800 hover:bg-amber-50 border border-amber-200'
+              }`}
+            >
+              Today ({monthlyCounts.today})
+            </button>
+            <button
+              onClick={() => setActiveFilter('complete')}
+              className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                activeFilter === 'complete'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-[#faf8f5] text-emerald-700 hover:bg-emerald-50 border border-emerald-200'
+              }`}
+            >
+              Complete ({monthlyCounts.complete})
+            </button>
+            <button
+              onClick={() => setActiveFilter('due')}
+              className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                activeFilter === 'due'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'bg-[#faf8f5] text-rose-700 hover:bg-rose-50 border border-rose-200'
+              }`}
+            >
+              Due Date ({monthlyCounts.due})
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ Main Calendar & Shoots Section ═══ */}
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left: Full Interactive Calendar Matrix (7 Cols on desktop) */}
+        <div className="lg:col-span-8 bg-white rounded-2xl border border-[#e8dfd3] p-4 sm:p-5 shadow-xs">
+          {/* Day of Week Headers */}
+          <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center pb-2 border-b border-slate-100 mb-2">
+            {DAY_NAMES.map((d, idx) => (
+              <div
+                key={d}
+                className={`text-[11px] sm:text-xs font-black uppercase tracking-wider py-1 ${
+                  idx === 0 || idx === 6 ? 'text-amber-700' : 'text-slate-500'
+                }`}
+              >
+                {d}
+              </div>
+            ))}
+          </div>
+
+          {/* Days Matrix */}
+          <div className="grid grid-cols-7 gap-1 sm:gap-2">
+            {calendarCells.map((cell, idx) => {
+              const isSelected = selectedDate === cell.dateStr;
+              const isDayToday = cell.dateStr === todayStr;
+              const hasShoots = cell.shoots.length > 0;
+
+              return (
+                <div
+                  key={idx}
+                  onClick={() => {
+                    setSelectedDate(cell.dateStr);
+                    if (activeFilter !== 'all') {
+                      setActiveFilter('all');
+                    }
+                  }}
+                  className={`min-h-[85px] sm:min-h-[105px] p-1.5 sm:p-2 rounded-xl transition-all cursor-pointer relative flex flex-col justify-between border ${
+                    !cell.isCurrentMonth
+                      ? 'bg-slate-50/60 text-slate-300 border-slate-100 opacity-60'
+                      : isSelected
+                      ? 'bg-[#c5a880]/10 border-[#c5a880] ring-2 ring-[#c5a880]/40 shadow-xs'
+                      : isDayToday
+                      ? 'bg-amber-50/70 border-amber-300/80 shadow-xs'
+                      : 'bg-white border-slate-100 hover:border-[#c5a880]/60 hover:bg-[#faf8f5]'
+                  }`}
+                >
+                  {/* Top: Day Number + Add button */}
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={`text-xs sm:text-sm font-black flex items-center justify-center rounded-lg ${
+                        isDayToday
+                          ? 'w-6 h-6 bg-amber-500 text-white shadow-xs'
+                          : isSelected
+                          ? 'w-6 h-6 bg-[#c5a880] text-white'
+                          : cell.isCurrentMonth
+                          ? 'text-slate-800'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {cell.day}
+                    </span>
+
+                    {cell.isCurrentMonth && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedDate(cell.dateStr);
+                          handleOpenAddModal(cell.dateStr);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 hover:opacity-100 p-1 text-slate-400 hover:text-[#c5a880] transition-opacity cursor-pointer"
+                        title="Add Shoot on this Date"
                       >
-                        Event Shoot
+                        <Plus className="w-3 h-3" />
                       </button>
-                      <button 
-                        type="button" 
-                        onClick={() => setWorkType('Other')}
-                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${workType === 'Other' ? 'bg-[#f8f7f4] text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-600'}`}
-                      >
-                        Other Work
-                      </button>
-                    </div>
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => { setShowForm(false); setSelectedDate(null); }}
-                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors self-start"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
 
-                {/* Form */}
-                <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-                  {workType === 'Other' ? (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="form-label">Task Name</label>
-                        <input type="text" className="form-input"  value={formData.eventName} onChange={e => setFormData({ ...formData, eventName: e.target.value })} required />
-                      </div>
-                      <div>
-                        <label className="form-label">
-                          <Clock className="inline h-3 w-3 mr-1 -mt-0.5" /> Time
-                        </label>
-                        <CustomDatePicker type="time" className="form-input" value={formData.time} onChange={val => setFormData({ ...formData, time: val })} required />
-                      </div>
-                      <div className="border border-slate-100 rounded-xl p-4 bg-[#f8f7f4] text-slate-900/50">
-                        <label className="form-label mb-3 text-slate-600">Assigned To</label>
-                        <div className="flex flex-col gap-2">
-                           {formData.photographersNames.map((name, idx) => (
-                              <div key={`o-${idx}`} className="flex items-center justify-between bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm text-slate-800 font-medium shadow-sm">
-                                 {name}
-                                 <button type="button" onClick={() => setFormData({...formData, photographersNames: formData.photographersNames.filter((_, i) => i !== idx)})} className="text-slate-400 hover:text-red-500 p-1"><X className="w-3.5 h-3.5"/></button>
-                              </div>
-                           ))}
-                           <select 
-                             className="form-input text-sm text-slate-400 bg-white" 
-                             value=""
-                             onChange={(e) => {
-                                if(e.target.value && !formData.photographersNames.includes(e.target.value)) {
-                                   setFormData({...formData, photographersNames: [...formData.photographersNames, e.target.value]});
-                                }
-                             }}
-                           >
-                             <option value="">+ Assign team member</option>
-                             <option value="Studio">Studio (Unassigned)</option>
-                             {context.team?.map((t: any) => (
-                               <option key={t._id} value={t.name}>{t.name} ({t.role})</option>
-                             ))}
-                           </select>
+                  {/* Shoot Badges Preview */}
+                  <div className="mt-1 space-y-1 overflow-hidden">
+                    {cell.shoots.slice(0, 2).map((s: any) => {
+                      const cat = getShootCategory(s);
+                      let badgeBg = 'bg-blue-100 text-blue-800 border-blue-200';
+                      if (cat === 'today') badgeBg = 'bg-amber-200/90 text-amber-900 border-amber-300 font-extrabold';
+                      else if (cat === 'complete') badgeBg = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                      else if (cat === 'due') badgeBg = 'bg-rose-100 text-rose-800 border-rose-200';
+
+                      return (
+                        <div
+                          key={s._id}
+                          className={`text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded truncate border ${badgeBg}`}
+                          title={`${s.eventName} (${s.time})`}
+                        >
+                          {s.time} {s.eventName}
                         </div>
+                      );
+                    })}
+                    {cell.shoots.length > 2 && (
+                      <div className="text-[9px] font-extrabold text-slate-500 text-center">
+                        +{cell.shoots.length - 2} more
                       </div>
-                      <div>
-                        <label className="form-label">
-                          <MapPin className="inline h-3 w-3 mr-1 -mt-0.5" /> Location (Optional)
-                        </label>
-                        <input type="text" className="form-input"  value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} />
-                      </div>
-                      <div>
-                        <label className="form-label">Notes (Optional)</label>
-                        <textarea className="form-input" rows={2}  value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
-                      </div>
+                    )}
+                  </div>
 
-                      {/* Reminder */}
-                      <div>
-                        <label className="form-label flex items-center gap-1.5">
-                          <Bell className="h-3 w-3 text-[#c5a880]" /> Reminder
-                        </label>
-                        <div className="flex gap-2">
-                          {[
-                            { val: 'none', label: 'None' },
-                            { val: '24h', label: '24h Before' },
-                            { val: '72h', label: '72h Before' },
-                          ].map(opt => (
-                            <button
-                              key={opt.val}
-                              type="button"
-                              onClick={() => setFormData({ ...formData, reminder: opt.val as any })}
-                              className={`flex-1 py-2.5 px-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all ${
-                                formData.reminder === opt.val
-                                  ? 'bg-[#c5a880]/10 border-[#c5a880]/30 text-[#a07c4c] shadow-sm'
-                                  : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'
-                              }`}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {/* Time */}
-                      <div>
-                        <label className="form-label">
-                          <Clock className="inline h-3 w-3 mr-1 -mt-0.5" /> Shoot Time
-                        </label>
-                        <CustomDatePicker type="time" className="form-input" value={formData.time} onChange={val => setFormData({ ...formData, time: val })} required />
-                      </div>
-
-                      {/* Event Name */}
-                      <div>
-                        <label className="form-label">Event Name</label>
-                        <input type="text" className="form-input"  value={formData.eventName} onChange={e => setFormData({ ...formData, eventName: e.target.value })} required />
-                      </div>
-
-                      {/* Event Type */}
-                      <div>
-                        <label className="form-label">Event Type</label>
-                        <select className="form-input" value={formData.eventType} onChange={e => setFormData({ ...formData, eventType: e.target.value })}>
-                          {EVENT_TYPES.map(t => (
-                            <option key={t} value={t}>{t}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Photographers */}
-                      <div className="border border-slate-100 rounded-xl p-4 bg-[#f8f7f4] text-slate-900/50">
-                        <label className="form-label mb-3 flex items-center gap-1.5">
-                          <Camera className="h-3.5 w-3.5 text-[#c5a880]" /> Photographers
-                        </label>
-                        <div className="flex flex-col gap-2">
-                           {formData.photographersNames.map((name, idx) => (
-                              <div key={`p-${idx}`} className="flex items-center justify-between bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm text-slate-800 font-medium shadow-sm">
-                                 {name}
-                                 <button type="button" onClick={() => setFormData({...formData, photographersNames: formData.photographersNames.filter((_, i) => i !== idx)})} className="text-slate-400 hover:text-red-500 p-1"><X className="w-3.5 h-3.5"/></button>
-                              </div>
-                           ))}
-                           <select 
-                             className="form-input text-sm text-slate-400 bg-white" 
-                             value=""
-                             onChange={(e) => {
-                                if(e.target.value && !formData.photographersNames.includes(e.target.value)) {
-                                   setFormData({...formData, photographersNames: [...formData.photographersNames, e.target.value]});
-                                }
-                             }}
-                           >
-                             <option value="">+ Add Photographer</option>
-                             <option value="Studio">Studio (Unassigned)</option>
-                             {context.team?.filter((t: any) => t.role.toLowerCase().includes('photo') || t.role.toLowerCase().includes('studio')).map((t: any) => (
-                               <option key={t._id} value={t.name}>{t.name} ({t.role})</option>
-                             ))}
-                           </select>
-                        </div>
-                      </div>
-
-                      {/* Videographers */}
-                      <div className="border border-slate-100 rounded-xl p-4 bg-[#f8f7f4] text-slate-900/50">
-                        <label className="form-label mb-3 flex items-center gap-1.5">
-                          <Video className="h-3.5 w-3.5 text-[#c5a880]" /> Videographers
-                        </label>
-                        <div className="flex flex-col gap-2">
-                           {formData.videographersNames.map((name, idx) => (
-                              <div key={`v-${idx}`} className="flex items-center justify-between bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm text-slate-800 font-medium shadow-sm">
-                                 {name}
-                                 <button type="button" onClick={() => setFormData({...formData, videographersNames: formData.videographersNames.filter((_, i) => i !== idx)})} className="text-slate-400 hover:text-red-500 p-1"><X className="w-3.5 h-3.5"/></button>
-                              </div>
-                           ))}
-                           <select 
-                             className="form-input text-sm text-slate-400 bg-white" 
-                             value=""
-                             onChange={(e) => {
-                                if(e.target.value && !formData.videographersNames.includes(e.target.value)) {
-                                   setFormData({...formData, videographersNames: [...formData.videographersNames, e.target.value]});
-                                }
-                             }}
-                           >
-                             <option value="">+ Add Videographer</option>
-                             <option value="Studio">Studio (Unassigned)</option>
-                             {context.team?.filter((t: any) => t.role.toLowerCase().includes('video') || t.role.toLowerCase().includes('cine') || t.role.toLowerCase().includes('studio')).map((t: any) => (
-                               <option key={t._id} value={t.name}>{t.name} ({t.role})</option>
-                             ))}
-                           </select>
-                        </div>
-                      </div>
-
-                      {/* Location */}
-                      <div>
-                        <label className="form-label">
-                          <MapPin className="inline h-3 w-3 mr-1 -mt-0.5" /> Location (Optional)
-                        </label>
-                        <input type="text" className="form-input"  value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} />
-                      </div>
-
-                      {/* Notes */}
-                      <div>
-                        <label className="form-label">Notes (Optional)</label>
-                        <textarea className="form-input" rows={2}  value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
-                      </div>
-
-                      {/* Reminder */}
-                      <div>
-                        <label className="form-label flex items-center gap-1.5">
-                          <Bell className="h-3 w-3 text-[#c5a880]" /> Reminder
-                        </label>
-                        <div className="flex gap-2">
-                          {[
-                            { val: 'none', label: 'None' },
-                            { val: '24h', label: '24h Before' },
-                            { val: '72h', label: '72h Before' },
-                          ].map(opt => (
-                            <button
-                              key={opt.val}
-                              type="button"
-                              onClick={() => setFormData({ ...formData, reminder: opt.val as any })}
-                              className={`flex-1 py-2.5 px-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all ${
-                                formData.reminder === opt.val
-                                  ? 'bg-[#c5a880]/10 border-[#c5a880]/30 text-[#a07c4c] shadow-sm'
-                                  : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'
-                              }`}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                  {/* Bottom Indicator Dot */}
+                  {hasShoots && (
+                    <div className="flex items-center justify-center gap-1 pt-0.5">
+                      {cell.shoots.some((s: any) => getShootCategory(s) === 'today') && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                      )}
+                      {cell.shoots.some((s: any) => getShootCategory(s) === 'upcoming') && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                      )}
+                      {cell.shoots.some((s: any) => getShootCategory(s) === 'complete') && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      )}
+                      {cell.shoots.some((s: any) => getShootCategory(s) === 'due') && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                      )}
                     </div>
                   )}
+                </div>
+              );
+            })}
+          </div>
 
-                  {/* Submit */}
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="w-full bg-[#c5a880] hover:bg-[#b59a72] text-[#1e1b18] font-extrabold py-3.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-sm hover:shadow-md"
-                  >
-                    {saving ? <Loader className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    {saving ? 'Saving...' : 'Add Shoot'}
-                  </button>
-                </form>
+          {/* Color Legend */}
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2 text-xs">
+            <div className="flex items-center gap-4 flex-wrap">
+              <span className="flex items-center gap-1.5 text-slate-600 font-medium">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Upcoming
+              </span>
+              <span className="flex items-center gap-1.5 text-slate-600 font-medium">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Today (Active)
+              </span>
+              <span className="flex items-center gap-1.5 text-slate-600 font-medium">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Complete
+              </span>
+              <span className="flex items-center gap-1.5 text-slate-600 font-medium">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Due Date
+              </span>
+            </div>
+            <span className="text-[11px] text-slate-400 font-semibold">
+              Click any date to inspect details
+            </span>
+          </div>
+        </div>
+
+        {/* Right: Shoot Details & Action Panel */}
+        <div className="lg:col-span-4 flex flex-col gap-4">
+          <div className="bg-white rounded-2xl border border-[#e8dfd3] p-4 sm:p-5 shadow-xs">
+            {/* Header for shoots view */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <CalendarCheck2 className="w-4 h-4 text-[#c5a880]" />
+                  {activeFilter === 'all'
+                    ? selectedDate === todayStr
+                      ? "Today's Schedule"
+                      : `Shoots on ${selectedDate}`
+                    : `${activeFilter.toUpperCase()} Shoots`}
+                </h3>
+                <span className="text-[11px] font-semibold text-slate-400">
+                  {displayedShoots.length} shoot(s) found
+                </span>
+              </div>
+
+              <button
+                onClick={() => handleOpenAddModal(selectedDate || todayStr)}
+                className="px-2.5 py-1.5 rounded-xl bg-[#c5a880]/15 text-[#8c6d3f] border border-[#c5a880]/30 hover:bg-[#c5a880]/25 text-xs font-black transition-colors cursor-pointer flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add
+              </button>
+            </div>
+
+            {/* Shoots List */}
+            {displayedShoots.length === 0 ? (
+              <div className="py-12 px-4 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-[#faf8f5] text-slate-400 flex items-center justify-center mx-auto mb-3 border border-[#e8dfd3]">
+                  <CalendarIcon className="w-6 h-6 text-slate-400" />
+                </div>
+                <p className="text-sm font-bold text-slate-700">No shoots found</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {activeFilter !== 'all'
+                    ? `No ${activeFilter} shoots for this month.`
+                    : 'No shoots scheduled on this date.'}
+                </p>
+                <button
+                  onClick={() => handleOpenAddModal(selectedDate || todayStr)}
+                  className="mt-4 px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-black hover:bg-slate-800 transition-colors"
+                >
+                  + Add Shoot Here
+                </button>
               </div>
             ) : (
-              <div className="space-y-4">
-                {/* Upcoming Shoots */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                  <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-4">
-                    Upcoming Shoots
-                  </h3>
-                  {upcomingShoots.length === 0 ? (
-                    <div className="text-center py-8">
-                      <CalendarIcon className="h-8 w-8 text-slate-700 mx-auto mb-3" />
-                      <p className="text-xs text-slate-400 font-semibold">No upcoming shoots scheduled</p>
-                      <p className="text-[10px] text-slate-600 mt-1">Click on a date to add a new shoot</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {upcomingShoots.map((shoot: any) => {
-                        const shootDate = new Date(shoot.date);
-                        return (
-                          <div key={shoot._id} className="upcoming-card group cursor-pointer" onClick={() => setViewingShoot(shoot)}>
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <p className="font-bold text-sm text-slate-900">{shoot.eventName}</p>
-                                <p className="text-[10px] text-slate-400 font-mono mt-1">
-                                  {shootDate.toLocaleDateString('en-GB')} • {shoot.time || '09:00'}
-                                  {shoot.location && <span className="ml-2"><MapPin className="inline h-2.5 w-2.5 -mt-0.5" /> {shoot.location}</span>}
-                                </p>
-                                <div className="flex flex-wrap items-center gap-2 mt-2.5">
-                                  <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">{shoot.eventType}</span>
-                                  
-                                  {shoot.photographersNames?.map((name: string, i: number) => (
-                                    <span key={`p-${i}`} className={`text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 border ${shoot.eventType === 'Other Work' ? 'text-slate-400 bg-[#f8f7f4] text-slate-900 border-slate-200' : 'text-[#c5a880] bg-[#c5a880]/10 border-[#c5a880]/20'}`}>
-                                      {shoot.eventType !== 'Other Work' && <Camera className="h-2.5 w-2.5" />} {name}
-                                    </span>
-                                  ))}
+              <div className="space-y-3.5 max-h-[600px] overflow-y-auto pr-1">
+                {displayedShoots.map((shoot: any) => {
+                  const cat = getShootCategory(shoot);
+                  const isActionLoading = actionLoadingId === shoot._id;
 
-                                  {shoot.videographersNames?.map((name: string, i: number) => (
-                                    <span key={`v-${i}`} className="text-[9px] font-bold text-indigo-500 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md flex items-center gap-1">
-                                      <Video className="h-2.5 w-2.5" /> {name}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleDeleteShoot(shoot._id); }}
-                                className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 text-slate-600 hover:text-red-500 transition-all"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
+                  return (
+                    <div
+                      key={shoot._id}
+                      className={`rounded-2xl p-4 border transition-all ${
+                        cat === 'today'
+                          ? 'bg-amber-50/50 border-amber-300 shadow-xs'
+                          : cat === 'complete'
+                          ? 'bg-emerald-50/40 border-emerald-200'
+                          : cat === 'due'
+                          ? 'bg-rose-50/40 border-rose-200'
+                          : 'bg-white border-[#e8dfd3]'
+                      }`}
+                    >
+                      {/* Top Row: Event name + Category Pill */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                              {shoot.eventType || 'Event'}
+                            </span>
+                            {cat === 'today' && (
+                              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500 text-white animate-pulse">
+                                ★ Today's Shoot
+                              </span>
+                            )}
+                            {cat === 'complete' && (
+                              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-600 text-white">
+                                ✓ Completed
+                              </span>
+                            )}
+                            {cat === 'due' && (
+                              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-600 text-white">
+                                ⚠ Due Date
+                              </span>
+                            )}
+                            {cat === 'upcoming' && (
+                              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-600 text-white">
+                                Upcoming
+                              </span>
+                            )}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                          <h4 className="text-base font-black text-slate-900 mt-1">
+                            {shoot.eventName}
+                          </h4>
+                        </div>
 
-                {/* Shoots on Selected Date */}
-                {selectedDate && !showForm && (
-                  <button
-                    onClick={() => setShowForm(true)}
-                    className="w-full bg-white border-2 border-dashed border-slate-300 hover:border-[#c5a880] hover:bg-[#c5a880]/5 text-slate-500 hover:text-[#c5a880] rounded-2xl p-6 shadow-sm transition-all flex flex-col items-center justify-center gap-3 form-panel group"
-                  >
-                    <div className="h-12 w-12 rounded-full bg-slate-100 group-hover:bg-[#c5a880]/20 flex items-center justify-center transition-colors">
-                      <Plus className="h-6 w-6" />
+                        {/* Edit & Delete icons */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => handleOpenEditModal(shoot)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                            title="Edit Shoot"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handlePermanentDelete(shoot._id, shoot.eventName)}
+                            className="p-1.5 rounded-lg text-rose-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            title="Permanent Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Shoot Details Info */}
+                      <div className="mt-3 space-y-1.5 text-xs text-slate-600 border-t border-slate-100 pt-2.5">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="font-semibold text-slate-700">{shoot.time}</span>
+                          <span className="text-slate-400">•</span>
+                          <span>{formatDateKey(shoot.date)}</span>
+                        </div>
+
+                        {shoot.location && (
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate">{shoot.location}</span>
+                          </div>
+                        )}
+
+                        {/* Photographers & Videographers */}
+                        {(shoot.photographersNames?.length > 0 || shoot.videographersNames?.length > 0) && (
+                          <div className="flex items-center gap-3 pt-1 flex-wrap text-[11px]">
+                            {shoot.photographersNames?.length > 0 && (
+                              <span className="flex items-center gap-1 text-slate-700 font-semibold bg-slate-100 px-2 py-0.5 rounded-md">
+                                <Camera className="w-3 h-3 text-[#c5a880]" />
+                                {shoot.photographersNames.join(', ')}
+                              </span>
+                            )}
+                            {shoot.videographersNames?.length > 0 && (
+                              <span className="flex items-center gap-1 text-slate-700 font-semibold bg-slate-100 px-2 py-0.5 rounded-md">
+                                <Video className="w-3 h-3 text-indigo-500" />
+                                {shoot.videographersNames.join(', ')}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {shoot.notes && (
+                          <p className="text-[11px] text-slate-500 italic bg-white/70 p-2 rounded-lg border border-slate-100 mt-1">
+                            "{shoot.notes}"
+                          </p>
+                        )}
+                      </div>
+
+                      {/* ═══ TODAY'S TWO PRIMARY ACTION BUTTONS: Complete & Delete (Move to Due) ═══ */}
+                      {cat === 'today' && (
+                        <div className="mt-4 pt-3 border-t border-amber-200/60 flex flex-col gap-2">
+                          <div className="text-[10px] font-black uppercase tracking-wider text-amber-800">
+                            Action for Today's Event
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            {/* Complete Button */}
+                            <button
+                              onClick={() => handleMarkComplete(shoot._id, shoot.eventName)}
+                              disabled={isActionLoading}
+                              className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-black shadow-sm hover:shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            >
+                              <CheckCircle2 className="w-4 h-4 shrink-0" />
+                              <span>Complete</span>
+                            </button>
+
+                            {/* Delete / Move to Due Button */}
+                            <button
+                              onClick={() => handleMoveToDue(shoot._id, shoot.eventName)}
+                              disabled={isActionLoading}
+                              className="w-full py-2 px-3 rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-300 text-xs font-black active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                              title="Delete or reschedule: moves to Due Date box"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>Move to Due</span>
+                            </button>
+                          </div>
+
+                          {/* Email notification status and resend button */}
+                          <div className="flex items-center justify-between text-[11px] pt-1">
+                            <span className="text-emerald-700 font-bold flex items-center gap-1">
+                              <Mail className="w-3 h-3 text-emerald-600" />
+                              {shoot.todayEmailSent ? 'Email sent to Studio' : 'Auto email scheduled'}
+                            </span>
+                            <button
+                              onClick={() => handleResendEmail(shoot._id, shoot.eventName)}
+                              disabled={isActionLoading}
+                              className="text-[#8c6d3f] hover:underline font-bold text-[10px] cursor-pointer"
+                            >
+                              Resend Alert
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* DUE DATE CARD ACTIONS: Complete or Reschedule */}
+                      {cat === 'due' && (
+                        <div className="mt-3 pt-2.5 border-t border-rose-200/60 flex items-center justify-between gap-2">
+                          <button
+                            onClick={() => handleMarkComplete(shoot._id, shoot.eventName)}
+                            disabled={isActionLoading}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-black hover:bg-emerald-700 transition-colors flex items-center gap-1 cursor-pointer"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            Mark Complete
+                          </button>
+                          <button
+                            onClick={() => handleOpenEditModal(shoot)}
+                            className="text-xs font-bold text-slate-700 hover:text-slate-900 underline"
+                          >
+                            Reschedule Date
+                          </button>
+                        </div>
+                      )}
+
+                      {/* UPCOMING CARD ACTIONS */}
+                      {cat === 'upcoming' && (
+                        <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                          <span>Status: Scheduled</span>
+                          <button
+                            onClick={() => handleOpenEditModal(shoot)}
+                            className="text-blue-600 hover:underline font-bold"
+                          >
+                            Edit Shoot
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    <div className="text-center">
-                      <span className="font-bold text-sm block">Add Shoot for</span>
-                      <span className="text-[11px] font-extrabold uppercase tracking-widest mt-1 opacity-70">
-                        {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-GB')}
-                      </span>
-                    </div>
-                  </button>
-                )}
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Shoot Details Modal */}
-      {viewingShoot && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
-            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-[#f8f7f4] text-slate-900/50">
-              <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Shoot Details</h2>
-              <button onClick={() => setViewingShoot(null)} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="p-6 space-y-5">
+      {/* ═══ Add / Edit Shoot Modal ═══ */}
+      {showFormModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border border-[#ebd9c2] shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto p-5 sm:p-7 relative">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
               <div>
-                <h3 className="text-xl font-bold text-slate-900 mb-1">{viewingShoot.eventName}</h3>
-                <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400 font-medium">
-                  <span>{new Date(viewingShoot.date).toLocaleDateString('en-GB')}</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-                  <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {viewingShoot.time || '09:00'}</span>
-                </div>
+                <h3 className="text-lg sm:text-xl font-black text-slate-900">
+                  {editingShootId ? 'Edit Shoot Details' : 'Schedule New Shoot'}
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  Shoots on today's date auto-alert the studio owner via email.
+                </p>
               </div>
-
-              <div className="flex flex-wrap gap-2">
-                <span className="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg border border-slate-200">{viewingShoot.eventType}</span>
-                {viewingShoot.location && (
-                  <span className="px-3 py-1 bg-[#c5a880]/10 text-[#c5a880] text-xs font-bold rounded-lg border border-[#c5a880]/20 flex items-center gap-1">
-                    <MapPin className="h-3.5 w-3.5" /> {viewingShoot.location}
-                  </span>
-                )}
-              </div>
-
-              {(viewingShoot.photographersNames?.length > 0 || viewingShoot.videographersNames?.length > 0) && (
-                <div className="space-y-3 pt-3 border-t border-slate-100">
-                  <h4 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">Assigned Team</h4>
-                  <div className="flex flex-col gap-2">
-                    {viewingShoot.photographersNames?.map((name: string, idx: number) => (
-                      <div key={`p-${idx}`} className={`flex items-center gap-2 p-2 rounded-lg border ${viewingShoot.eventType === 'Other Work' ? 'bg-[#f8f7f4] text-slate-900 border-slate-200 text-slate-600' : 'bg-[#c5a880]/5 border-[#c5a880]/20 text-[#c5a880]'}`}>
-                        {viewingShoot.eventType !== 'Other Work' ? <Camera className="h-4 w-4" /> : <div className="h-4 w-4" />}
-                        <span className="text-sm font-bold">{name}</span>
-                      </div>
-                    ))}
-                    {viewingShoot.videographersNames?.map((name: string, idx: number) => (
-                      <div key={`v-${idx}`} className="flex items-center gap-2 p-2 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600">
-                        <Video className="h-4 w-4" />
-                        <span className="text-sm font-bold">{name}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {viewingShoot.notes && (
-                <div className="pt-3 border-t border-slate-100">
-                  <h4 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Notes</h4>
-                  <p className="text-sm text-slate-400 bg-[#f8f7f4] text-slate-900 p-3 rounded-xl border border-slate-100 whitespace-pre-wrap leading-relaxed">
-                    {viewingShoot.notes}
-                  </p>
-                </div>
-              )}
-            </div>
-            <div className="p-6 border-t border-slate-100 bg-[#f8f7f4] text-slate-900/50 flex justify-end">
-              <button 
-                onClick={() => setViewingShoot(null)} 
-                className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors cursor-pointer"
-              >
-                Close Details
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══ Reminder Popup ═══ */}
-      {showReminderPopup && reminderShoots.length > 0 && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
-            <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-amber-50 to-orange-50 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-                <Bell className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Upcoming Reminders</h2>
-                <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">{reminderShoots.length} shoot(s) coming up</p>
-              </div>
-            </div>
-            <div className="p-5 space-y-3 max-h-[50vh] overflow-y-auto">
-              {reminderShoots.map((shoot: any) => {
-                const shootDate = new Date(shoot.date);
-                const diffH = Math.round((shootDate.getTime() - Date.now()) / (1000 * 60 * 60));
-                return (
-                  <div key={shoot._id} className="p-4 rounded-2xl border border-amber-100 bg-amber-50/50">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h4 className="font-bold text-sm text-slate-900">{shoot.eventName}</h4>
-                        <p className="text-[10px] text-slate-500 font-medium mt-1 flex items-center gap-1">
-                          <CalendarIcon className="w-3 h-3" />
-                          {shootDate.toLocaleDateString('en-GB')}
-                          <span className="mx-1">•</span>
-                          <Clock className="w-3 h-3" /> {shoot.time}
-                        </p>
-                        {shoot.location && (
-                          <p className="text-[10px] text-slate-400 font-medium mt-0.5 flex items-center gap-1">
-                            <MapPin className="w-3 h-3" /> {shoot.location}
-                          </p>
-                        )}
-                      </div>
-                      <span className="shrink-0 px-2 py-1 rounded-lg bg-amber-200/60 text-amber-800 text-[9px] font-black uppercase tracking-wider">
-                        In {diffH}h
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="p-5 border-t border-slate-100 bg-slate-50/50">
               <button
-                onClick={() => setShowReminderPopup(false)}
-                className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors"
+                onClick={() => setShowFormModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
               >
-                Got it, thanks!
+                <X className="w-4 h-4" />
               </button>
             </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Event Name */}
+              <div>
+                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                  Event Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Bhargav & Priya Wedding"
+                  value={formData.eventName}
+                  onChange={(e) => setFormData({ ...formData, eventName: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-900 text-sm focus:outline-hidden focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20"
+                />
+              </div>
+
+              {/* Event Type & Date */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                    Event Type
+                  </label>
+                  <select
+                    value={formData.eventType}
+                    onChange={(e) => setFormData({ ...formData, eventType: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 text-sm focus:outline-hidden focus:border-[#c5a880]"
+                  >
+                    {EVENT_TYPES.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                    Shoot Date *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.date}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 text-sm focus:outline-hidden focus:border-[#c5a880]"
+                  >
+                  </input>
+                </div>
+              </div>
+
+              {/* Time & Location */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                    Start Time
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={formData.time}
+                    onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 text-sm focus:outline-hidden focus:border-[#c5a880]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                    Location / Venue
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Grand Bhagwati, Surat"
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-900 text-sm focus:outline-hidden focus:border-[#c5a880]"
+                  />
+                </div>
+              </div>
+
+              {/* Photographers Section */}
+              <div className="p-3.5 rounded-2xl bg-[#faf8f5] border border-[#e8dfd3]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-[#c5a880]" />
+                    Photographers ({formData.photographersNames.length})
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updatePhotographerCount(formData.photographersNames.length - 1)}
+                      className="w-6 h-6 rounded-md bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-100"
+                    >
+                      -
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updatePhotographerCount(formData.photographersNames.length + 1)}
+                      className="w-6 h-6 rounded-md bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-100"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {formData.photographersNames.map((name, idx) => (
+                  <input
+                    key={idx}
+                    type="text"
+                    placeholder={`Photographer #${idx + 1} Name`}
+                    value={name}
+                    onChange={(e) => {
+                      const updated = [...formData.photographersNames];
+                      updated[idx] = e.target.value;
+                      setFormData({ ...formData, photographersNames: updated });
+                    }}
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-slate-900 text-xs mb-1.5 bg-white focus:outline-hidden focus:border-[#c5a880]"
+                  />
+                ))}
+              </div>
+
+              {/* Videographers Section */}
+              <div className="p-3.5 rounded-2xl bg-[#faf8f5] border border-[#e8dfd3]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                    <Video className="w-3.5 h-3.5 text-indigo-500" />
+                    Videographers ({formData.videographersNames.length})
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateVideographerCount(formData.videographersNames.length - 1)}
+                      className="w-6 h-6 rounded-md bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-100"
+                    >
+                      -
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateVideographerCount(formData.videographersNames.length + 1)}
+                      className="w-6 h-6 rounded-md bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-100"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {formData.videographersNames.map((name, idx) => (
+                  <input
+                    key={idx}
+                    type="text"
+                    placeholder={`Videographer #${idx + 1} Name`}
+                    value={name}
+                    onChange={(e) => {
+                      const updated = [...formData.videographersNames];
+                      updated[idx] = e.target.value;
+                      setFormData({ ...formData, videographersNames: updated });
+                    }}
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-slate-900 text-xs mb-1.5 bg-white focus:outline-hidden focus:border-[#c5a880]"
+                  />
+                ))}
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                  Special Notes / Client Requirements
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Drone needed, candid shots priority, arrive 30 mins early"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-900 text-xs focus:outline-hidden focus:border-[#c5a880]"
+                />
+              </div>
+
+              {/* Modal Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowFormModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#c5a880] to-[#b89665] text-white text-xs font-black shadow-md hover:brightness-105 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {saving ? 'Saving...' : editingShootId ? 'Update Shoot' : 'Save Shoot'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+export default function CalendarPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex-1 flex items-center justify-center p-12 text-slate-400">
+          <RefreshCw className="w-6 h-6 animate-spin text-[#c5a880]" />
+        </div>
+      }
+    >
+      <CalendarContent />
+    </Suspense>
   );
 }

@@ -128,7 +128,7 @@ export default function Hero() {
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                 </div>
                 <div className="text-[10px] sm:text-[11px] text-gray-300 font-semibold">
-                  99.8% Accuracy
+                  99.8% Accuracy                 
                 </div>
               </div>
             </div>

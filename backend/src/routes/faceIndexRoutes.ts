@@ -1,8 +1,11 @@
 import { Router } from 'express';
-import { rebuildFaceIndex, retryFailedIndexing, getFaceIndexStatus, getPhotoFaces } from '../controllers/faceIndexController';
+import { rebuildFaceIndex, retryFailedIndexing, getFaceIndexStatus, getPhotoFaces, getEventFaceClusters } from '../controllers/faceIndexController';
 import { authenticateJWT, requireRoles } from '../middlewares/auth';
 
 const router = Router();
+
+// Event face clusters (accessible to studio dashboard and event viewers)
+router.get('/clusters/:eventId', getEventFaceClusters);
 
 // These routes should be restricted to Studio Owners and Admins
 router.use(authenticateJWT);

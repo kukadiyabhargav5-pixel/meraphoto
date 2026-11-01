@@ -25,9 +25,21 @@ export interface IStudio extends Document {
   name: string;
   logoUrl?: string;
   logoKey?: string;
+  bannerUrl?: string;
+  bannerKey?: string;
+  tagline?: string;
+  bio?: string;
+  phone?: string;
+  mobile?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  customEventsCount?: string;
+  customCustomersCount?: string;
   customDomain?: string; // e.g. "gallery.dreamstudio.com"
   instagramUrl?: string;
   facebookUrl?: string;
+  whatsappUrl?: string;
   ownerId: mongoose.Types.ObjectId;
   watermark: IWatermarkSettings;
   subscriptionPlan: 'BASIC' | 'STARTUP' | 'STANDARD' | 'ESSENTIAL' | 'PREMIUM' | 'STARTER' | 'PROFESSIONAL' | 'BUSINESS' | 'ENTERPRISE';
@@ -46,10 +58,22 @@ const StudioSchema = new Schema<IStudio>({
   name: { type: String, required: true },
   logoUrl: { type: String },
   logoKey: { type: String },
+  bannerUrl: { type: String },
+  bannerKey: { type: String },
+  tagline: { type: String },
+  bio: { type: String },
+  phone: { type: String },
+  mobile: { type: String },
+  email: { type: String },
+  address: { type: String },
+  city: { type: String },
+  customEventsCount: { type: String },
+  customCustomersCount: { type: String },
   branding: { type: Schema.Types.Mixed },
   customDomain: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
   instagramUrl: { type: String },
   facebookUrl: { type: String },
+  whatsappUrl: { type: String },
   ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   watermark: {
     type: { type: String, enum: ['TEXT', 'LOGO', 'NONE'], default: 'NONE' },

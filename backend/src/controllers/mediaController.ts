@@ -19,6 +19,7 @@ import {
 import { photoQueue, videoQueue, processMediaLocal, isRedisAvailable } from '../workers/mediaWorker';
 import sharp from 'sharp';
 import { PLAN_STORAGE_LIMITS } from './studioController';
+import { canUserUpload, recordStorageActivity } from '../services/storageSubscriptionService';
 
 /**
  * Handle bulk photo and video uploads (Backend route)
@@ -38,6 +39,13 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
 
     const studio = await Studio.findById(event.studioId);
     if (!studio) return res.status(404).json({ error: 'Studio not found' });
+
+    // Enforce storage subscription limit on server side
+    const totalIncomingBytes = files.reduce((acc, f) => acc + (f.size || 0), 0);
+    const uploadCheck = await canUserUpload(event.studioId, totalIncomingBytes, isSuperAdmin(req.user));
+    if (!uploadCheck.allowed) {
+      return res.status(403).json({ error: uploadCheck.reason });
+    }
 
     const uploadedMediaList = [];
 
@@ -78,11 +86,11 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
 
         if (type === 'PHOTO') {
           try {
-            // High-speed single pass optimization: preserve orientation & max 3840px
+            // High-speed single pass optimization: preserve orientation & max 3840px (Ultra Fast)
             finalBuffer = await sharp(file.buffer)
               .rotate()
               .resize({ width: 3840, height: 3840, fit: 'inside', withoutEnlargement: true })
-              .jpeg({ quality: 88, mozjpeg: true })
+              .jpeg({ quality: 85 })
               .toBuffer();
             finalSize = finalBuffer.length;
           } catch {
@@ -259,8 +267,17 @@ export const getPresignedUploadUrls = async (req: AuthRequest, res: Response) =>
     const studio = await Studio.findById(event.studioId);
     if (!studio) return res.status(404).json({ error: 'Studio not found' });
 
-    // Enforce limits based on plan (Bypass for SUPER_ADMIN)
-    if (!isSuperAdmin(req.user)) {
+    // Enforce storage subscription limit on server side
+    const totalIncomingBytes = files.reduce((acc: number, f: any) => acc + (Number(f.size) || 0), 0);
+    const uploadCheck = await canUserUpload(event.studioId, totalIncomingBytes, isSuperAdmin(req.user));
+    if (!uploadCheck.allowed) {
+      return res.status(403).json({ error: uploadCheck.reason });
+    }
+
+    // If studio has an active storage subscription (GB plan), GB capacity governs uploads.
+    // Otherwise enforce legacy tier photo limits.
+    const hasActiveStorageSub = uploadCheck.totalBytes > 0;
+    if (!isSuperAdmin(req.user) && !hasActiveStorageSub) {
       const planKey = (studio.subscriptionPlan || 'BASIC').toUpperCase();
       const planLimit = PLAN_STORAGE_LIMITS[planKey] || PLAN_STORAGE_LIMITS.BASIC;
 
@@ -333,14 +350,25 @@ export const getEventMedia = async (req: Request, res: Response) => {
 
     const mediaList = await Media.find(query).sort({ createdAt: -1 }).lean();
     const sanitizedMedia = mediaList.map((doc: any) => {
-      if (doc.r2Url) doc.r2Url = getFileUrl(doc.r2Url);
+      const mainKey = doc.r2Key || doc.publicId;
+      if (!doc.r2Url && mainKey) {
+        doc.r2Url = getFileUrl(mainKey);
+      } else if (doc.r2Url) {
+        doc.r2Url = getFileUrl(doc.r2Url);
+      }
       if (doc.compressedUrl) doc.compressedUrl = getFileUrl(doc.compressedUrl);
       if (doc.thumbnailUrl) doc.thumbnailUrl = getFileUrl(doc.thumbnailUrl);
       return doc;
     });
 
-    // Cache gallery media for 60 seconds with stale-while-revalidate for blazing fast speed
-    res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=120');
+    // Cache gallery media for public clients, but bypass cache for dashboard/authenticated management
+    if (req.headers.authorization || req.query._t || req.query.nocache) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=60');
+    }
     return res.json({ media: sanitizedMedia });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -516,6 +544,31 @@ export const deleteMedia = async (req: AuthRequest, res: Response) => {
     // Delete Media document
     await Media.findByIdAndDelete(mediaId);
 
+    // Refund photo/video credit if it was deducted
+    if (studio && media.creditDeducted) {
+      const isVideo = media.type === 'VIDEO';
+      const incUpdate: any = {};
+      if (isVideo) {
+        incUpdate['usage.videosUploaded'] = -1;
+      } else {
+        incUpdate['usage.photosUploaded'] = -1;
+      }
+      await Studio.findByIdAndUpdate(studio._id, { $inc: incUpdate });
+    }
+
+    // Record storage deletion activity
+    if (studio) {
+      recordStorageActivity({
+        userId: req.user._id,
+        studioId: studio._id,
+        activityType: 'PHOTO_DELETED',
+        title: 'Media Deleted',
+        description: `Deleted media file (${((media.size || 0) / (1024 * 1024)).toFixed(2)} MB freed)`,
+        bytesChange: -(media.size || 0),
+        metadata: { mediaId, eventId: media.eventId },
+      }).catch(console.error);
+    }
+
     return res.json({ message: 'Media and associated embeddings deleted successfully' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -567,6 +620,30 @@ export const deleteBulkMedia = async (req: AuthRequest, res: Response) => {
 
     // Delete Media documents
     await Media.deleteMany({ _id: { $in: idsToDelete } });
+
+    // Refund photo/video credits for deleted items that had credit deducted
+    const creditedPhotos = mediaList.filter((m) => m.creditDeducted && (m.type || 'PHOTO') === 'PHOTO').length;
+    const creditedVideos = mediaList.filter((m) => m.creditDeducted && m.type === 'VIDEO').length;
+    if (studio && (creditedPhotos > 0 || creditedVideos > 0)) {
+      const incUpdate: any = {};
+      if (creditedPhotos > 0) incUpdate['usage.photosUploaded'] = -creditedPhotos;
+      if (creditedVideos > 0) incUpdate['usage.videosUploaded'] = -creditedVideos;
+      await Studio.findByIdAndUpdate(studio._id, { $inc: incUpdate });
+    }
+
+    // Record bulk storage deletion activity
+    const totalFreedBytes = mediaList.reduce((acc, m) => acc + (m.size || 0), 0);
+    if (studio) {
+      recordStorageActivity({
+        userId: req.user._id,
+        studioId: studio._id,
+        activityType: 'PHOTO_DELETED',
+        title: 'Bulk Media Deleted',
+        description: `Deleted ${mediaList.length} media items (${(totalFreedBytes / (1024 * 1024)).toFixed(1)} MB freed)`,
+        bytesChange: -totalFreedBytes,
+        metadata: { count: mediaList.length, eventId },
+      }).catch(console.error);
+    }
 
     return res.json({ message: `${mediaList.length} media items deleted successfully` });
   } catch (err: any) {
@@ -639,8 +716,17 @@ export const bulkCreateMedia = async (req: AuthRequest, res: Response) => {
     const studio = await Studio.findById(event.studioId);
     if (!studio) return res.status(404).json({ error: 'Studio not found' });
 
-    // Enforce storage limits based on active plan (Bypass for SUPER_ADMIN)
-    if (!isSuperAdmin(req.user)) {
+    // Enforce storage subscription limit on server side
+    const totalIncomingBytes = mediaList.reduce((acc: number, m: any) => acc + (Number(m.size) || 0), 0);
+    const uploadCheck = await canUserUpload(event.studioId, totalIncomingBytes, isSuperAdmin(req.user));
+    if (!uploadCheck.allowed) {
+      return res.status(403).json({ error: uploadCheck.reason });
+    }
+
+    // If studio has an active storage subscription (GB plan), GB capacity governs uploads.
+    // Otherwise enforce legacy tier photo limits.
+    const hasActiveStorageSub = uploadCheck.totalBytes > 0;
+    if (!isSuperAdmin(req.user) && !hasActiveStorageSub) {
       const planKey = (studio.subscriptionPlan || 'BASIC').toUpperCase();
       const planLimit = PLAN_STORAGE_LIMITS[planKey] || PLAN_STORAGE_LIMITS.BASIC;
 
@@ -668,16 +754,18 @@ export const bulkCreateMedia = async (req: AuthRequest, res: Response) => {
     }
 
     const newMediaDocs = mediaList.map((item) => {
-      const publicId = item.publicId || item.key;
-      const url = item.url || getFileUrl(publicId);
+      const publicId = item.r2Key || item.publicId || item.key;
+      const url = item.r2Url || item.url || (publicId ? getFileUrl(publicId) : '');
       return {
         type: item.type || 'PHOTO',
         r2Key: publicId,
         r2Url: url,
+        originalName: item.originalName || (publicId ? path.basename(publicId) : 'media'),
+        mimeType: item.mimeType || (item.type === 'VIDEO' ? 'video/mp4' : 'image/jpeg'),
         folderPath: item.folderPath || '',
         eventId: event._id,
         studioId: event.studioId,
-        size: item.size || 0,
+        size: Number(item.size) || 0,
         width: item.width,
         height: item.height,
         uploadedBy: req.user!._id,
@@ -688,6 +776,18 @@ export const bulkCreateMedia = async (req: AuthRequest, res: Response) => {
 
     // Insert all documents at once
     const insertedMedia = await Media.insertMany(newMediaDocs);
+
+    // Record storage audit activity in background
+    const totalBytesInserted = mediaList.reduce((acc: number, m: any) => acc + (Number(m.size) || 0), 0);
+    recordStorageActivity({
+      userId: req.user._id,
+      studioId: event.studioId,
+      activityType: 'PHOTO_UPLOADED',
+      title: 'Photos Uploaded',
+      description: `Uploaded ${insertedMedia.length} photo(s) (${(totalBytesInserted / (1024 * 1024)).toFixed(1)} MB)`,
+      bytesChange: totalBytesInserted,
+      metadata: { eventId: event._id, count: insertedMedia.length },
+    }).catch(console.error);
 
     const offlineQueue: any[] = [];
 
@@ -730,6 +830,152 @@ export const bulkCreateMedia = async (req: AuthRequest, res: Response) => {
     });
   } catch (err: any) {
     console.error('Bulk Create Error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * Batch update photo target size / upscale for an event
+ * PUT /api/media/event/:eventId/upscale
+ */
+export const batchUpscaleMedia = async (req: AuthRequest, res: Response) => {
+  const { eventId } = req.params;
+  const { targetSizeBytes, targetMb, mediaIds } = req.body;
+
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const event = await Event.findById(eventId);
+    if (!event) return res.status(404).json({ error: 'Event not found' });
+
+    // Verify ownership or admin
+    const studio = await Studio.findById(event.studioId);
+    if (!studio) return res.status(404).json({ error: 'Studio not found' });
+
+    const isOwner = studio.ownerId.toString() === req.user._id.toString();
+    const isAdmin = isSuperAdmin(req.user);
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Permission denied' });
+    }
+
+    // Determine target size in bytes (either passed explicitly or calculated from targetMb)
+    const newSizeBytes = Number(targetSizeBytes) || Math.round(Number(targetMb || 5) * 1024 * 1024);
+    if (newSizeBytes <= 0) {
+      return res.status(400).json({ error: 'Invalid target size' });
+    }
+
+    // Find target photo media items
+    const query: any = { eventId, type: 'PHOTO' };
+    if (Array.isArray(mediaIds) && mediaIds.length > 0) {
+      query._id = { $in: mediaIds };
+    }
+
+    const photos = await Media.find(query);
+    if (photos.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No photos to resize for this event',
+        updatedCount: 0,
+        newSizeBytes,
+      });
+    }
+
+    const oldTotalBytes = photos.reduce((sum, p) => sum + (p.size || 0), 0);
+    const newTotalBytes = photos.length * newSizeBytes;
+    const diffBytes = newTotalBytes - oldTotalBytes;
+
+    // Check storage limits if size is expanding
+    if (diffBytes > 0) {
+      const uploadCheck = await canUserUpload(event.studioId, diffBytes, isAdmin);
+      if (!uploadCheck.allowed) {
+        return res.status(403).json({ error: uploadCheck.reason });
+      }
+    }
+
+    // Batch update all photos in MongoDB
+    await Media.updateMany(query, { $set: { size: newSizeBytes } });
+
+    // Record storage activity
+    recordStorageActivity({
+      userId: req.user._id,
+      studioId: event.studioId,
+      activityType: 'CAPACITY_CHANGED',
+      title: 'Photos Upscaled / Resized',
+      description: `Upscaled ${photos.length} photo(s) to ${(newSizeBytes / (1024 * 1024)).toFixed(1)} MB (${(diffBytes >= 0 ? '+' : '') + (diffBytes / (1024 * 1024)).toFixed(1)} MB storage change)`,
+      bytesChange: diffBytes,
+      metadata: { eventId, count: photos.length, newSizeBytes },
+    }).catch(console.error);
+
+    return res.json({
+      success: true,
+      message: `Successfully upscaled ${photos.length} photo(s) to ${(newSizeBytes / (1024 * 1024)).toFixed(1)} MB`,
+      updatedCount: photos.length,
+      newSizeBytes,
+      oldTotalBytes,
+      newTotalBytes,
+      diffBytes,
+    });
+  } catch (err: any) {
+    console.error('Batch Upscale Error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * Toggle favorite status on a media item
+ * PUT /api/media/:mediaId/favorite
+ */
+export const toggleMediaFavorite = async (req: Request, res: Response) => {
+  const { mediaId } = req.params;
+  const { isFav } = req.body;
+
+  try {
+    const media = await Media.findById(mediaId);
+    if (!media) return res.status(404).json({ error: 'Media not found' });
+
+    let newStatus: boolean;
+    if (typeof isFav === 'boolean') {
+      newStatus = isFav;
+    } else {
+      newStatus = !media.isFavorite;
+    }
+
+    media.isFavorite = newStatus;
+    media.favoriteCount = Math.max(0, (media.favoriteCount || 0) + (newStatus ? 1 : -1));
+    await media.save();
+
+    return res.json({
+      success: true,
+      mediaId: media._id,
+      isFavorite: media.isFavorite,
+      favoriteCount: media.favoriteCount,
+    });
+  } catch (err: any) {
+    console.error('Toggle favorite error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * Get all favorited media for an event
+ * GET /api/media/event/:eventId/favorites
+ */
+export const getEventFavorites = async (req: Request, res: Response) => {
+  const { eventId } = req.params;
+
+  try {
+    const favorites = await Media.find({
+      eventId,
+      $or: [{ isFavorite: true }, { favoriteCount: { $gt: 0 } }],
+    }).sort({ favoriteCount: -1, updatedAt: -1 });
+
+    return res.json({
+      success: true,
+      count: favorites.length,
+      favorites,
+    });
+  } catch (err: any) {
+    console.error('Get event favorites error:', err);
     return res.status(500).json({ error: err.message });
   }
 };

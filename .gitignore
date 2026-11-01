@@ -22,3 +22,8 @@ backend/start_*.bat
 frontend/start_*.bat
 *.bat
 mongo_log.txt
+.env.local
+.env*.local
+scratch/
+*.tsbuildinfo
+.next/

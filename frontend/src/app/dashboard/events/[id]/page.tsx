@@ -7,6 +7,8 @@ import { apiClient, resolveMediaUrl } from '@/lib/api';
 import toast from 'react-hot-toast';
 import CustomDatePicker from '../../../../components/CustomDatePicker';
 import { useAuth } from '../../../../lib/AuthContext';
+import { useStorageUsage, formatBytes, ONE_GB_BYTES } from '@/lib/storage';
+import { HardDrive, Cloud } from 'lucide-react';
 
 export default function EventUploadPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -16,6 +18,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
   const [event, setEvent] = useState<any>(null);
   const [credits, setCredits] = useState<any>(null);
+  const { usage: storageUsage, refresh: refreshStorage } = useStorageUsage();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isUpdatingDownload, setIsUpdatingDownload] = useState(false);
@@ -63,10 +66,18 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
   const currentVideoRemaining = credits?.videos?.remaining !== undefined ? credits.videos.remaining : 0;
   const projectedVideoRemaining = credits?.videos?.projectedRemaining !== undefined ? credits.videos.projectedRemaining : Math.max(0, currentVideoRemaining - pendingVideosCount);
 
-  // Credit limit flags
-  const isPhotoLimitReached = !isSuperAdmin && projectedPhotoRemaining <= 0 && credits?.photos?.remaining !== undefined;
-  const isVideoLimitReached = !isSuperAdmin && projectedVideoRemaining <= 0 && credits?.videos?.remaining !== undefined;
-  const isAllCreditsExhausted = !isSuperAdmin && isPhotoLimitReached && isVideoLimitReached;
+  // Storage limit check (pure GB storage based)
+  const hasPaidActivePlan = Boolean(
+    isSuperAdmin ||
+    (storageUsage?.hasActivePlan &&
+     storageUsage?.activePlan?.status === 'ACTIVE' &&
+     storageUsage?.activePlan?.planId &&
+     storageUsage?.activePlan?.planId !== 'free-starter')
+  );
+  const isStorageFull = !isSuperAdmin && (!hasPaidActivePlan || storageUsage?.warningState === 'FULL' || (storageUsage?.availableStorageBytes !== undefined && storageUsage.availableStorageBytes <= 0));
+  const isPhotoLimitReached = isStorageFull;
+  const isVideoLimitReached = isStorageFull;
+  const isAllCreditsExhausted = isStorageFull;
 
   // Top Tier Plan Detection (Premium / Enterprise / 31999 / 4,00,000 photos limit)
   const isTopTierPlan = isSuperAdmin || Boolean(
@@ -124,7 +135,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
       if (res.data && res.data.event) {
         setEvent(res.data.event);
         try {
-           const mediaRes = await apiClient.get(`/media/event/${res.data.event._id}`);
+           const mediaRes = await apiClient.get(`/media/event/${res.data.event._id}?_t=${Date.now()}`);
            if (mediaRes.data && mediaRes.data.media) setMediaItems(mediaRes.data.media);
         } catch (me) {
            console.error("Failed to fetch media", me);
@@ -163,6 +174,17 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
     
     const fileArray = Array.from(files);
     const totalBytes = fileArray.reduce((acc, f) => acc + (f.size || 0), 0);
+
+    // Enforce storage subscription capacity check
+    if (!isSuperAdmin && storageUsage && storageUsage.availableStorageBytes !== undefined) {
+      if (totalBytes > storageUsage.availableStorageBytes) {
+        const reqMb = (totalBytes / (1024 * 1024)).toFixed(1);
+        const availGb = (storageUsage.availableStorageBytes / (1024 * 1024 * 1024)).toFixed(2);
+        toast.error(`⚠️ Insufficient storage! Upload requires ${reqMb} MB, but only ${availGb} GB is available. Please upgrade your storage plan.`, { duration: 6000 });
+        e.target.value = '';
+        return;
+      }
+    }
     const startTime = Date.now();
     let bytesUploadedTotal = 0;
     let successful = 0;
@@ -411,6 +433,8 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
       fetchEventDetails();
       fetchCredits();
       window.dispatchEvent(new Event('studio_plan_updated'));
+      refreshStorage();
+      window.dispatchEvent(new Event('storage_updated'));
     } catch (err: any) {
        console.error('Upload error:', err);
        toast.error(err?.response?.data?.error || err.message || 'Upload failed. Please check console.');
@@ -676,8 +700,8 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
               const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
               const createdMidnight = new Date(createdDate.getFullYear(), createdDate.getMonth(), createdDate.getDate()).getTime();
               const diffDays = Math.max(0, Math.floor((todayMidnight - createdMidnight) / (1000 * 60 * 60 * 24)));
-              const days = typeof event.daysLeft === 'number' ? event.daysLeft : Math.max(0, 30 - diffDays);
-              const label = days === 0 ? 'Expires today' : `${days} ${days === 1 ? 'day' : 'days'} left`;
+              const days = typeof event.daysLeft === 'number' ? event.daysLeft : 180;
+              const label = days >= 9000 ? 'Active Lifetime' : days === 0 ? 'Plan Expired' : `${days} ${days === 1 ? 'day' : 'days'} left`;
               const isUrgent = days <= 1;
               const isWarning = days <= 5;
               return (
@@ -695,10 +719,18 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
             })()}
           </div>
 
-          <div className="hidden sm:flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0">
+            <Link
+              href={`/dashboard/events/${eventId}/upload`}
+              className="inline-flex items-center gap-2 px-3.5 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-gradient-to-r from-[#c5a880] via-[#b89665] to-[#9e7b4f] text-white text-xs font-black uppercase tracking-wider shadow-md shadow-[#c5a880]/25 hover:brightness-105 active:scale-95 transition-all duration-200 cursor-pointer shrink-0"
+            >
+              <Upload className="w-4 h-4 text-white" />
+              <span>Upload Media</span>
+            </Link>
+
             <button
               onClick={() => { fetchEventDetails(); fetchCredits(); }}
-              className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-[#c5a880] hover:border-[#c5a880]/40 transition-all shadow-xs cursor-pointer"
+              className="p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-[#c5a880] hover:border-[#c5a880]/40 transition-all shadow-xs cursor-pointer"
               title="Refresh Storage Credits & Media"
             >
               <RefreshCw className="w-4 h-4" />
@@ -706,876 +738,239 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
 
-        {/* Sleek, Ultra-Modern Storage Credits Box */}
-        <div className="w-full max-w-4xl mx-auto p-[1px] rounded-3xl bg-gradient-to-r from-[#c5a880]/30 via-white/10 to-[#c5a880]/40 shadow-[0_15px_40px_rgba(0,0,0,0.4)] hover:shadow-[0_20px_50px_rgba(197,168,128,0.18)] transition-all duration-500 group relative">
-          
-          <div className="w-full bg-[#0b0b0e]/95 backdrop-blur-2xl text-white rounded-[23px] p-3.5 xs:p-4 sm:p-5 relative overflow-hidden">
-            {/* Ambient Animated Aura Lighting */}
-            <div className="absolute -top-24 -right-24 w-60 h-60 bg-gradient-to-br from-[#c5a880]/20 via-[#f3d9a2]/10 to-transparent rounded-full blur-[65px] pointer-events-none animate-aura-breathe" />
-            <div className="absolute -bottom-24 -left-24 w-60 h-60 bg-gradient-to-tr from-[#9c7c56]/20 via-[#c5a880]/10 to-transparent rounded-full blur-[65px] pointer-events-none animate-aura-breathe [animation-delay:2.5s]" />
-            
-            {/* Subtle Grid / Starfield Overlay */}
-            <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none opacity-60" />
-            
-            {/* Glowing Accent Top Beam */}
-            <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#c5a880] to-transparent animate-beam-scan pointer-events-none" />
+        {/* ============================================================== */}
+        {/* LUXURY WHITE & GOLD CLOUD STORAGE OVERVIEW BLOCK               */}
+        {/* ============================================================== */}
+        {(() => {
+          const usedBytes = storageUsage?.usedStorageBytes ?? 0;
+          const totalGb = hasPaidActivePlan ? (storageUsage?.totalStorageGb ?? 0) : 0;
+          const totalBytes = hasPaidActivePlan ? (storageUsage?.totalStorageBytes ?? (totalGb * ONE_GB_BYTES)) : 0;
+          const availableBytes = hasPaidActivePlan ? Math.max(0, totalBytes - usedBytes) : 0;
+          const rawPct = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : 0;
+          const usagePct = rawPct > 0 && rawPct < 0.1 ? Math.max(0.01, Number(rawPct.toFixed(2))) : Number(rawPct.toFixed(1));
+          const clampedPct = hasPaidActivePlan ? Math.min(100, Math.max(usedBytes > 0 ? 1.5 : 0, usagePct)) : 0;
+          const planName = hasPaidActivePlan ? (storageUsage?.activePlan?.name || `${totalGb} GB Storage`) : 'No Active Plan';
+          const warningState = hasPaidActivePlan ? (storageUsage?.warningState ?? 'NORMAL') : 'NONE';
 
-            {/* Header Row */}
-            <div className="flex items-center justify-between gap-2.5 pb-3 border-b border-white/[0.08] relative z-10">
-              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-[#2a241d] to-[#141312] text-[#e6d0a7] border border-[#c5a880]/40 flex items-center justify-center shadow-[0_0_15px_rgba(197,168,128,0.25)] shrink-0 relative group/icon">
-                  <div className="absolute inset-0 rounded-xl bg-[#c5a880]/20 blur-sm opacity-0 group-hover/icon:opacity-100 transition-opacity duration-300" />
-                  <Sparkles className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-[#f3d9a2] animate-pulse-soft relative z-10" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider sm:tracking-[0.16em] bg-gradient-to-r from-amber-100 via-[#f5deb3] to-[#c5a880] bg-clip-text text-transparent drop-shadow-sm whitespace-nowrap overflow-hidden text-ellipsis">
-                      {credits?.planName || 'Standard'} Plan Storage
-                    </h3>
+          let progressFill = 'bg-gradient-to-r from-[#c5a880] via-[#b89665] to-[#9e7b4f] shadow-[0_0_12px_rgba(197,168,128,0.35)]';
+          if (warningState === 'FULL' || (hasPaidActivePlan && usagePct >= 100)) {
+            progressFill = 'bg-gradient-to-r from-red-500 to-rose-600 shadow-[0_0_12px_rgba(239,68,68,0.4)]';
+          } else if (warningState === 'CRITICAL' || (hasPaidActivePlan && usagePct >= 95)) {
+            progressFill = 'bg-gradient-to-r from-rose-500 to-amber-600 shadow-[0_0_12px_rgba(244,63,94,0.4)]';
+          } else if (warningState === 'WARNING' || (hasPaidActivePlan && usagePct >= 80)) {
+            progressFill = 'bg-gradient-to-r from-amber-500 to-yellow-600 shadow-[0_0_12px_rgba(245,158,11,0.4)]';
+          }
+
+          return (
+            <div className="w-full max-w-4xl mx-auto rounded-3xl bg-white border border-[#e8dfd3] shadow-[0_10px_35px_rgba(197,168,128,0.1)] p-4 sm:p-6 mb-6 sm:mb-8 transition-all relative overflow-hidden group">
+              {/* Subtle Warm Luxury Ambient Glow */}
+              <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-bl from-[#c5a880]/15 via-[#faf6f0]/40 to-transparent rounded-full blur-[70px] pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-60 h-60 bg-gradient-to-tr from-[#e8dfd3]/30 via-transparent to-transparent rounded-full blur-[60px] pointer-events-none" />
+              <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-gradient-to-r from-transparent via-[#c5a880] to-transparent pointer-events-none" />
+
+              {/* Header Row */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 pb-4 border-b border-[#e8dfd3] relative z-10">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-[#c5a880]/20 to-[#9e7b4f]/15 border border-[#c5a880]/40 text-[#9e7b4f] flex items-center justify-center shadow-xs shrink-0">
+                    <Cloud className="w-5 h-5 sm:w-6 sm:h-6 text-[#9e7b4f]" />
                   </div>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="relative flex h-2 w-2 shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
-                    </span>
-                    <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium tracking-wide whitespace-nowrap overflow-hidden text-ellipsis">
-                      Live Balance • Deducts on event save
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm sm:text-base font-black uppercase tracking-wider text-slate-900 font-serif-luxury truncate">
+                        {planName}
+                      </h3>
+                      {hasPaidActivePlan ? (
+                        <span className="inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] font-black px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Active Storage Plan
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] font-black px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200/90 shadow-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          No Active Plan
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 font-medium mt-0.5 flex items-center gap-1.5">
+                      <span>Cloud Photo Storage</span>
+                      <span>•</span>
+                      <span>High-Speed Studio Cloud</span>
                     </p>
                   </div>
                 </div>
-              </div>
 
-              {/* White Luxe Upgrade Button OR Top Tier Badge */}
-              {isTopTierPlan ? (
-                <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl bg-gradient-to-r from-amber-400/20 via-yellow-400/15 to-amber-500/20 border border-amber-400/40 text-amber-300 text-[10px] sm:text-[11px] font-black uppercase tracking-wider shrink-0 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
-                  <Crown className="w-3.5 h-3.5 text-amber-400 fill-amber-400 drop-shadow-xs" />
-                  <span className="font-extrabold tracking-wider">Top Tier Plan</span>
-                </div>
-              ) : (
+                {/* White & Gold Upgrade / Select Plan Button */}
                 <Link
                   href="/dashboard/plans-billing"
-                  className="relative overflow-hidden group/btn inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-950 text-[10px] xs:text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all duration-300 shadow-[0_4px_16px_rgba(255,255,255,0.25)] hover:shadow-[0_6px_25px_rgba(255,255,255,0.45)] hover:-translate-y-0.5 active:translate-y-0 border border-white shrink-0 cursor-pointer"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-gradient-to-r from-[#c5a880] via-[#b89665] to-[#9e7b4f] text-white text-xs font-black uppercase tracking-wider shadow-md shadow-[#c5a880]/25 hover:brightness-105 hover:shadow-lg active:scale-95 transition-all duration-200 shrink-0 cursor-pointer"
                 >
-                  <div className="absolute inset-0 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-black/10 to-transparent pointer-events-none" />
-                  <Crown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500 fill-amber-500 drop-shadow-xs" />
-                  <span className="font-extrabold tracking-wide">Upgrade</span>
-                  <ArrowRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.5] text-slate-950 group-hover/btn:translate-x-0.5 transition-transform" />
+                  <Crown className="w-3.5 h-3.5 text-white" />
+                  <span>{hasPaidActivePlan ? 'Upgrade Storage' : 'Select Storage Plan'}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
-              )}
+              </div>
+
+              {/* Dedicated GB Storage Metric Content in Pure White & Gold Theme */}
+              <div className="pt-4 relative z-10 space-y-3.5">
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+                      Storage Used
+                    </span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl sm:text-4xl font-extrabold text-slate-950 font-sans tracking-tight leading-none">
+                        {formatBytes(usedBytes)}
+                      </span>
+                      <span className="text-sm sm:text-base font-bold text-slate-500">
+                        {hasPaidActivePlan ? (
+                          <>of {totalGb >= 10 ? Math.round(totalGb) : totalGb.toFixed(1)} GB used</>
+                        ) : (
+                          <span className="text-amber-700">of 0 GB (No plan active)</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-left sm:text-right">
+                    <span className="text-xs font-bold text-slate-500 block">
+                      {hasPaidActivePlan ? (
+                        <>
+                          <span className="font-extrabold text-[#9e7b4f]">
+                            {rawPct > 0 && rawPct < 0.1 ? `${rawPct.toFixed(2)}%` : `${usagePct.toFixed(1)}%`} Full
+                          </span>
+                        </>
+                      ) : (
+                        '0% Allocated'
+                      )}
+                    </span>
+                    <span className={`text-sm font-extrabold ${hasPaidActivePlan ? 'text-slate-900' : 'text-slate-400'}`}>
+                      {hasPaidActivePlan ? (
+                        <>{formatBytes(availableBytes)} Available</>
+                      ) : (
+                        '0 GB Available'
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Smooth Animated Gold Progress Bar */}
+                <div className="relative w-full bg-[#f4ece1] rounded-full h-3 overflow-hidden p-[1px]">
+                  <div
+                    className={`h-full rounded-full transition-all duration-700 ease-out ${progressFill}`}
+                    style={{ width: `${clampedPct}%` }}
+                  />
+                </div>
+
+                {/* Bottom Details Row */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs text-slate-500 gap-2 pt-1">
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <ImageIcon className="w-3.5 h-3.5 text-[#9e7b4f]" />
+                      <strong className="text-slate-800">{storageUsage?.totalPhotos ?? mediaItems.length}</strong> photos stored in account
+                    </span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1 font-medium text-slate-600">
+                      <span>Occupied:</span>
+                      <strong className="text-slate-900">{formatBytes(usedBytes)}</strong>
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 font-mono">
+                    {storageUsage?.activePlan?.expiresAt ? (
+                      <>Valid until: {new Date(storageUsage.activePlan.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</>
+                    ) : (
+                      <>Studio Cloud Encrypted</>
+                    )}
+                  </div>
+                </div>
+
+                {/* Warning Banner if storage is tight or no plan */}
+                {!hasPaidActivePlan ? (
+                  <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-amber-500/10 via-[#c5a880]/15 to-amber-500/5 border border-amber-300/80 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2 text-slate-800">
+                      <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                      <span>No active storage plan. Please select a plan to activate photo uploads.</span>
+                    </div>
+                    <Link
+                      href="/dashboard/plans-billing"
+                      className="shrink-0 font-black text-[#9e7b4f] hover:underline"
+                    >
+                      Select Plan →
+                    </Link>
+                  </div>
+                ) : warningState === 'FULL' || usagePct >= 100 ? (
+                  <div className="mt-3 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>Storage is 100% full. New photo uploads are blocked until upgraded.</span>
+                    </div>
+                    <Link href="/dashboard/plans-billing" className="shrink-0 font-bold underline">
+                      Upgrade Now
+                    </Link>
+                  </div>
+                ) : null}
+              </div>
             </div>
+          );
+        })()}
 
-            {/* 2 Credit Metric Cards: Photos & Videos */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 relative z-10">
-              
-              {/* Photo Credits Card */}
-              <div className={`relative rounded-2xl p-3 xs:p-3.5 sm:p-4 bg-gradient-to-b from-white/[0.06] via-white/[0.02] to-transparent border transition-all duration-300 group/card shadow-md hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col justify-between space-y-2.5 sm:space-y-3 ${pendingPhotosCount > 0 ? 'border-amber-500/50 ring-1 ring-amber-500/30' : 'border-white/10 hover:border-[#c5a880]/50'}`}>
-                {/* Glowing top line highlight */}
-                <div className={`absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent ${pendingPhotosCount > 0 ? 'via-amber-400 opacity-100' : 'via-[#c5a880]/40 group-hover/card:via-[#c5a880] opacity-70 group-hover/card:opacity-100'} transition-all duration-500`} />
-                
-                {/* Card Top Row */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#c5a880]/20 to-[#c5a880]/5 border border-[#c5a880]/30 flex items-center justify-center text-[#e6d0a7] shadow-[0_0_10px_rgba(197,168,128,0.15)] shrink-0">
-                      <ImageIcon className="w-3 h-3" />
-                    </div>
-                    <span className="text-xs font-bold text-slate-300 group-hover/card:text-white transition-colors tracking-wider uppercase">
-                      Photos
-                    </span>
-                  </div>
-
-                  {pendingPhotosCount > 0 ? (
-                    <span className="inline-flex items-center gap-1 text-[9px] xs:text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border text-amber-300 bg-amber-500/20 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)] animate-pulse shrink-0">
-                      ⏳ {pendingPhotosCount} Pending Save
-                    </span>
-                  ) : (
-                    <span className={`inline-flex items-center gap-1.5 text-[9px] xs:text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border transition-all duration-300 shrink-0 ${isPhotoLimitReached ? 'text-red-400 bg-red-500/15 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'text-[#f5deb3] bg-[#c5a880]/15 border-[#c5a880]/30 shadow-[0_0_10px_rgba(197,168,128,0.12)] group-hover/card:border-[#c5a880]/60'}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
-                      {credits?.photos ? `${Number(currentPhotoRemaining).toLocaleString('en-IN')} Left` : 'Active'}
-                    </span>
-                  )}
-                </div>
-
-                {/* Primary Numbers */}
-                <div className="space-y-1">
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <span className="text-2xl sm:text-3xl font-black text-white tracking-tight font-mono group-hover/card:text-[#fef3c7] transition-colors leading-none" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {Number(currentPhotoRemaining).toLocaleString('en-IN')}
-                    </span>
-                    <span className="text-xs sm:text-sm text-slate-400 font-bold font-mono tracking-wide">
-                      / {credits?.photos?.totalLimit ? Number(credits.photos.totalLimit).toLocaleString('en-IN') : '---'}
-                    </span>
-                  </div>
-
-                  {pendingPhotosCount > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono font-bold text-amber-300/90 pt-0.5">
-                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                        ⚡ -{pendingPhotosCount} on Save
-                      </span>
-                      <span className="text-slate-300 flex items-center gap-1">
-                        → <strong className="text-white font-black bg-white/10 px-1 py-0.5 rounded">{Number(projectedPhotoRemaining).toLocaleString('en-IN')}</strong> Remaining
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* High-Tech Animated Progress Bar */}
-                <div className="space-y-1.5">
-                  <div className="relative w-full bg-black/60 rounded-full h-2 p-[1px] overflow-hidden border border-white/10 shadow-inner">
-                    <div 
-                      className="bg-gradient-to-r from-[#9c7c56] via-[#c5a880] to-[#fde68a] h-full rounded-full transition-all duration-700 ease-out relative overflow-hidden animate-progress-stripe shadow-[0_0_10px_rgba(197,168,128,0.5)]"
-                      style={{ 
-                        width: (credits?.photos?.used || 0) > 0 
-                          ? `${Math.min(100, Math.max(2, credits?.photos?.percentUsed || 0))}%` 
-                          : '0%' 
-                      }}
-                    >
-                      {/* Sweeping Shimmer Highlight */}
-                      <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-credit-shimmer" />
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-between items-center text-[9px] xs:text-[10px] font-mono tracking-wide text-slate-400">
-                    <span className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#c5a880]" />
-                      {(credits?.photos?.used || 0) > 0 ? `${Number(credits.photos.used).toLocaleString('en-IN')} Used (${(credits.photos.percentUsed || 0) < 0.01 ? '0.01%' : `${credits.photos.percentUsed}%`})` : '0 Used'}
-                    </span>
-                    {pendingPhotosCount > 0 ? (
-                      <span className="text-amber-400 font-bold flex items-center gap-1 animate-pulse">
-                        +{pendingPhotosCount} queued
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 group-hover/card:text-slate-300 transition-colors">
-                        {100 - Math.min(100, Math.round(credits?.photos?.percentUsed || 0))}% Available
-                      </span>
-                    )}
-                  </div>
-                </div>
+        {/* Media Gallery Access Banner */}
+        <div className="max-w-4xl mx-auto rounded-2xl bg-white border border-[#e8dfd3] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_4px_20px_rgba(197,168,128,0.06)]">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#c5a880]/20 to-[#9e7b4f]/15 border border-[#c5a880]/30 text-[#9e7b4f] flex items-center justify-center shrink-0">
+              <Upload className="w-6 h-6 text-[#9e7b4f]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm sm:text-base font-black text-slate-900">
+                  Event Media & Photos ({mediaItems.length} Files)
+                </h4>
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#f4ece1] text-[#9e7b4f]">
+                  Dedicated Studio
+                </span>
               </div>
-
-              {/* Video Credits Card */}
-              <div className={`relative rounded-2xl p-3 xs:p-3.5 sm:p-4 bg-gradient-to-b from-white/[0.06] via-white/[0.02] to-transparent border transition-all duration-300 group/card shadow-md hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col justify-between space-y-2.5 sm:space-y-3 ${pendingVideosCount > 0 ? 'border-amber-500/50 ring-1 ring-amber-500/30' : 'border-white/10 hover:border-[#c5a880]/50'}`}>
-                {/* Glowing top line highlight */}
-                <div className={`absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent ${pendingVideosCount > 0 ? 'via-amber-400 opacity-100' : 'via-[#c5a880]/40 group-hover/card:via-[#c5a880] opacity-70 group-hover/card:opacity-100'} transition-all duration-500`} />
-                
-                {/* Card Top Row */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#c5a880]/20 to-[#c5a880]/5 border border-[#c5a880]/30 flex items-center justify-center text-[#e6d0a7] shadow-[0_0_10px_rgba(197,168,128,0.15)] shrink-0">
-                      <Video className="w-3 h-3" />
-                    </div>
-                    <span className="text-xs font-bold text-slate-300 group-hover/card:text-white transition-colors tracking-wider uppercase">
-                      Videos
-                    </span>
-                  </div>
-
-                  {pendingVideosCount > 0 ? (
-                    <span className="inline-flex items-center gap-1 text-[9px] xs:text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border text-amber-300 bg-amber-500/20 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)] animate-pulse shrink-0">
-                      ⏳ {pendingVideosCount} Pending Save
-                    </span>
-                  ) : (
-                    <span className={`inline-flex items-center gap-1.5 text-[9px] xs:text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border transition-all duration-300 shrink-0 ${isVideoLimitReached ? 'text-red-400 bg-red-500/15 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'text-[#f5deb3] bg-[#c5a880]/15 border-[#c5a880]/30 shadow-[0_0_10px_rgba(197,168,128,0.12)] group-hover/card:border-[#c5a880]/60'}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
-                      {credits?.videos ? `${Number(currentVideoRemaining)} Left` : 'Active'}
-                    </span>
-                  )}
-                </div>
-
-                {/* Primary Numbers */}
-                <div className="space-y-1">
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <span className="text-2xl sm:text-3xl font-black text-white tracking-tight font-mono group-hover/card:text-[#fef3c7] transition-colors leading-none" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {Number(currentVideoRemaining)}
-                    </span>
-                    <span className="text-xs sm:text-sm text-slate-400 font-bold font-mono tracking-wide">
-                      / {credits?.videos?.totalLimit ? Number(credits.videos.totalLimit) : '---'}
-                    </span>
-                  </div>
-
-                  {pendingVideosCount > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono font-bold text-amber-300/90 pt-0.5">
-                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                        ⚡ -{pendingVideosCount} on Save
-                      </span>
-                      <span className="text-slate-300 flex items-center gap-1">
-                        → <strong className="text-white font-black bg-white/10 px-1 py-0.5 rounded">{Number(projectedVideoRemaining)}</strong> Remaining
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* High-Tech Animated Progress Bar */}
-                <div className="space-y-1.5">
-                  <div className="relative w-full bg-black/60 rounded-full h-2 p-[1px] overflow-hidden border border-white/10 shadow-inner">
-                    <div 
-                      className="bg-gradient-to-r from-[#9c7c56] via-[#c5a880] to-[#fde68a] h-full rounded-full transition-all duration-700 ease-out relative overflow-hidden animate-progress-stripe shadow-[0_0_10px_rgba(197,168,128,0.5)]"
-                      style={{ 
-                        width: (credits?.videos?.used || 0) > 0 
-                          ? `${Math.min(100, Math.max(2, credits?.videos?.percentUsed || 0))}%` 
-                          : '0%' 
-                      }}
-                    >
-                      {/* Sweeping Shimmer Highlight */}
-                      <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-credit-shimmer" />
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-between items-center text-[9px] xs:text-[10px] font-mono tracking-wide text-slate-400">
-                    <span className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#c5a880]" />
-                      {(credits?.videos?.used || 0) > 0 ? `${credits.videos.used} Used (${(credits.videos.percentUsed || 0) < 0.01 ? '0.01%' : `${credits.videos.percentUsed}%`})` : '0 Used'}
-                    </span>
-                    {pendingVideosCount > 0 ? (
-                      <span className="text-amber-400 font-bold flex items-center gap-1 animate-pulse">
-                        +{pendingVideosCount} queued
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 group-hover/card:text-slate-300 transition-colors">
-                        {100 - Math.min(100, Math.round(credits?.videos?.percentUsed || 0))}% Available
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Upload entire folders, photos, or videos with high-speed direct upload and cloud sync.
+              </p>
             </div>
           </div>
+          <Link
+            href={`/dashboard/events/${eventId}/upload`}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#c5a880] via-[#b89665] to-[#9e7b4f] text-white text-xs font-black uppercase tracking-wider shadow-md shadow-[#c5a880]/20 hover:brightness-105 active:scale-95 transition-all cursor-pointer shrink-0"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span>Open Upload Studio →</span>
+          </Link>
         </div>
 
-        {/* 2-Column Content Layout (Upload Media & Media Files on Left, Edit Event Details on Right - level with each other!) */}
-        <div className="flex flex-col lg:flex-row gap-8 items-start">
-          
-          {/* Left Column: Upload Media & Media Files */}
-          <div className="flex-1 flex flex-col min-w-0 w-full">
-            <div className="bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-2xl p-4 sm:p-6 md:p-8 shadow-sm mb-6 sm:mb-8">
-            <div className="flex flex-col items-center justify-center mb-4 sm:mb-6 text-center">
-              <Upload className="h-8 w-8 sm:h-10 sm:w-10 text-[#c5a880] mb-2 sm:mb-3" />
-              <h2 className="text-lg sm:text-xl font-bold text-slate-900 mb-1">Upload Media</h2>
-              <p className="text-xs sm:text-sm text-slate-500">Select a category below or drag and drop files.</p>
-            </div>
-
-            {/* Credit Exhausted Warning Banner */}
-            {isAllCreditsExhausted && (
-              <div className="mb-5 sm:mb-6 p-3.5 sm:p-4 rounded-xl bg-red-50 border border-red-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                    <ShieldCheck className="w-5 h-5 text-red-500" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-red-700">All Storage Credits Exhausted</p>
-                    <p className="text-xs text-red-500 mt-0.5">Your photo and video upload limits have been reached.</p>
-                  </div>
-                </div>
-                {!isTopTierPlan && (
-                  <Link href="/dashboard/plans-billing" className="w-full sm:w-auto text-center px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-bold uppercase tracking-wider transition-colors shrink-0">
-                    Upgrade
-                  </Link>
-                )}
+        {/* Centered Form: Edit Event Details */}
+        <div className="w-full max-w-4xl mx-auto">
+          <div className="bg-white text-slate-900 border border-[#e8dfd3] rounded-3xl p-6 sm:p-8 md:p-10 shadow-[0_10px_35px_rgba(197,168,128,0.08)]">
+            <div className="flex items-center gap-3 mb-8 border-b border-[#e8dfd3] pb-5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#c5a880]/20 to-[#9e7b4f]/15 border border-[#c5a880]/30 flex items-center justify-center text-[#9e7b4f] shrink-0">
+                <Settings className="h-5 w-5 text-[#9e7b4f]" />
               </div>
-            )}
-            {!isAllCreditsExhausted && (isPhotoLimitReached || isVideoLimitReached) && (
-              <div className="mb-5 sm:mb-6 p-3.5 sm:p-4 rounded-xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                    <Flame className="w-5 h-5 text-amber-500" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-amber-700">
-                      {isPhotoLimitReached ? 'Photo' : 'Video'} Credits Exhausted
-                    </p>
-                    <p className="text-xs text-amber-600 mt-0.5">
-                      Your {isPhotoLimitReached ? 'photo' : 'video'} upload limit has been reached. You can still upload {isPhotoLimitReached ? 'videos' : 'photos'}.
-                    </p>
-                  </div>
-                </div>
-                {!isTopTierPlan && (
-                  <Link href="/dashboard/plans-billing" className="w-full sm:w-auto text-center px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold uppercase tracking-wider transition-colors shrink-0">
-                    Upgrade
-                  </Link>
-                )}
-              </div>
-            )}
-
-            {/* Pending Save Alert Banner */}
-            {(pendingPhotosCount > 0 || pendingVideosCount > 0) && (
-              <div className="mb-5 sm:mb-6 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-transparent border border-amber-400/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 shadow-sm backdrop-blur-xs">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center shrink-0 text-amber-600 shadow-inner">
-                    <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse text-amber-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 flex-wrap">
-                      <span>
-                        {pendingPhotosCount > 0 && `${pendingPhotosCount} Photo${pendingPhotosCount > 1 ? 's' : ''}`}
-                        {pendingPhotosCount > 0 && pendingVideosCount > 0 && ' & '}
-                        {pendingVideosCount > 0 && `${pendingVideosCount} Video${pendingVideosCount > 1 ? 's' : ''}`} Uploaded
-                      </span>
-                      <span className="text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 font-mono font-bold shrink-0">
-                        Pending Save
-                      </span>
-                    </p>
-                    <p className="text-[10px] sm:text-[11px] text-slate-600 font-medium mt-0.5 leading-snug">
-                      Your credit balance will deduct <strong className="text-slate-900 font-bold">{pendingPhotosCount > 0 ? `-${pendingPhotosCount} photo credit${pendingPhotosCount > 1 ? 's' : ''}` : ''}</strong> once you click <strong>Save Event Details</strong>.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const btn = document.getElementById('save-event-button');
-                    btn?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    btn?.focus();
-                  }}
-                  className="w-full sm:w-auto text-center px-4 py-2.5 rounded-xl bg-[#c5a880] hover:bg-[#b69970] text-[#09090b] text-[11px] font-black uppercase tracking-wider transition-all shadow-md hover:shadow-lg shrink-0 cursor-pointer"
-                >
-                  Save Event Details →
-                </button>
-              </div>
-            )}
-
-            {/* ⚡ High-Speed Real-time Upload Telemetry Banner */}
-            {uploadingMedia && (
-              <div className={`mb-6 p-4 sm:p-5 rounded-2xl bg-white border border-[#e8ded1] text-slate-900 shadow-md animate-in fade-in zoom-in-95 duration-300 relative overflow-hidden ring-1 ring-slate-100 ${
-                uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
-                  ? 'border-emerald-300 shadow-[0_4px_20px_rgba(16,185,129,0.12)]'
-                  : 'shadow-[0_4px_20px_rgba(197,168,128,0.12)]'
-              }`}>
-                {/* Gold Top Accent Line */}
-                <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-gradient-to-r from-transparent via-[#c5a880] to-transparent" />
-
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
-                  <div className="flex items-center gap-3">
-                    {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total ? (
-                      <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-xs">
-                        <Check className="w-5 h-5 stroke-[3]" />
-                      </div>
-                    ) : (
-                      <div className="w-10 h-10 rounded-xl bg-[#faf6f0] border border-[#ebdccb] flex items-center justify-center text-[#c5a880] shadow-xs">
-                        <Zap className="w-5 h-5 text-[#c5a880] animate-pulse fill-[#c5a880]" />
-                      </div>
-                    )}
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider">
-                          {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
-                            ? '⚡ Upload Complete'
-                            : '⚡ Turbo Cloud Upload (32 Threads)'}
-                        </span>
-                        <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-mono font-bold border border-emerald-200">
-                          GIGABIT
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-500 font-medium">
-                        {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
-                          ? `All ${uploadProgress.total} photos successfully saved in your gallery`
-                          : `Uploading ${uploadProgress.current} of ${uploadProgress.total} photos to your gallery...`}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <div className="px-2.5 py-1 rounded-lg bg-[#faf7f2] border border-[#ece3d5] text-right">
-                      <span className="text-[9px] uppercase font-bold text-slate-400 block leading-tight">Speed</span>
-                      <span className="text-xs font-mono font-black text-[#b69970]">{uploadStats.speedMBps} MB/s</span>
-                    </div>
-                    <div className="px-2.5 py-1 rounded-lg bg-[#faf7f2] border border-[#ece3d5] text-right">
-                      <span className="text-[9px] uppercase font-bold text-slate-400 block leading-tight">Rate</span>
-                      <span className="text-xs font-mono font-black text-emerald-600">{uploadStats.photosPerSec} /s</span>
-                    </div>
-                    <div className="px-3 py-1.5 rounded-xl bg-[#c5a880]/15 text-[#8c6f47] border border-[#c5a880]/30 font-mono font-black text-sm">
-                      {uploadProgress.total > 0 ? Math.round((uploadProgress.current / uploadProgress.total) * 100) : 0}%
-                    </div>
-                  </div>
-                </div>
-
-                {/* Loading Patti (Progress strip) */}
-                <div className="w-full h-2.5 bg-[#f3efe8] rounded-full overflow-hidden mb-2 border border-[#e5ddd0] relative p-[1px]">
-                  <div 
-                    className={`h-full transition-all duration-200 rounded-full relative overflow-hidden ${
-                      uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total
-                        ? 'bg-gradient-to-r from-emerald-400 to-emerald-500'
-                        : 'bg-gradient-to-r from-[#b69970] via-[#c5a880] to-[#b69970]'
-                    }`}
-                    style={{ width: `${Math.min(100, Math.max(3, uploadProgress.total > 0 ? (uploadProgress.current / uploadProgress.total) * 100 : 0))}%` }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-turbo-shimmer" />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-2">
-                  <span className="flex items-center gap-1.5 font-bold text-slate-700">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                    <span>{uploadProgress.current} / {uploadProgress.total} Files Streamed</span>
-                  </span>
-                  <span>
-                    {uploadStats.etaSec > 0 ? `ETA: ~${uploadStats.etaSec}s remaining` : `Elapsed: ${uploadStats.elapsedSec}s`}
-                  </span>
-                </div>
-
-                {/* Smart Compression Telemetry Pill */}
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[10px] font-mono text-slate-500">
-                  <div className="flex items-center gap-1.5 text-slate-700">
-                    <Zap className="w-3 h-3 text-[#c5a880] fill-[#c5a880]" />
-                    <span>Smart Compression: Photos &gt; 2MB &rarr; &lt; 2MB | Videos &gt; 18MB &rarr; 15-20MB</span>
-                  </div>
-                  {uploadStats.compressedCount > 0 && (
-                    <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                      ✨ {uploadStats.compressedCount} Photos Compressed ({uploadStats.bytesSavedMB} MB Saved)
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* 3 Upload Action Buttons (Responsive Grid) */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-4 relative">
-              <input type="file" {...{ webkitdirectory: "true", directory: "true" }} multiple ref={folderInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'FOLDER')} />
-              <input type="file" accept="image/*" multiple ref={photoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'PHOTO')} />
-              <input type="file" accept="video/*" multiple ref={videoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'VIDEO')} />
-
-              <div 
-                onClick={() => {
-                  if (isAllCreditsExhausted) {
-                    toast.error('⚠️ All storage credits exhausted! Please upgrade your plan.', { duration: 4000 });
-                    return;
-                  }
-                  folderInputRef.current?.click();
-                }}
-                className={`border rounded-xl p-3 sm:p-6 flex flex-col items-center justify-center text-center transition-all group ${
-                  isAllCreditsExhausted 
-                    ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-50' 
-                    : 'bg-white border-slate-200 cursor-pointer hover:border-[#c5a880] hover:shadow-md active:scale-95'
-                }`}
-              >
-                <FolderUp className={`h-6 w-6 sm:h-8 sm:w-8 mb-1.5 sm:mb-3 transition-colors shrink-0 ${isAllCreditsExhausted ? 'text-slate-300' : 'text-slate-400 group-hover:text-[#c5a880]'}`} />
-                <span className={`font-bold text-xs sm:text-sm leading-tight ${isAllCreditsExhausted ? 'text-slate-400' : 'text-slate-700'}`}>Entire Folder</span>
-                {isAllCreditsExhausted && <span className="text-[9px] sm:text-[10px] font-bold text-red-400 mt-1 uppercase">Exhausted</span>}
-              </div>
-
-              <div 
-                onClick={() => {
-                  if (isPhotoLimitReached) {
-                    toast.error('📸 Photo credits exhausted! Please upgrade your plan to upload more photos.', { duration: 4000 });
-                    return;
-                  }
-                  photoInputRef.current?.click();
-                }}
-                className={`border rounded-xl p-3 sm:p-6 flex flex-col items-center justify-center text-center transition-all group ${
-                  isPhotoLimitReached 
-                    ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-50' 
-                    : 'bg-white border-slate-200 cursor-pointer hover:border-[#c5a880] hover:shadow-md active:scale-95'
-                }`}
-              >
-                <ImageIcon className={`h-6 w-6 sm:h-8 sm:w-8 mb-1.5 sm:mb-3 transition-colors shrink-0 ${isPhotoLimitReached ? 'text-slate-300' : 'text-slate-400 group-hover:text-[#c5a880]'}`} />
-                <span className={`font-bold text-xs sm:text-sm leading-tight ${isPhotoLimitReached ? 'text-slate-400' : 'text-slate-700'}`}>Photos</span>
-                {isPhotoLimitReached && <span className="text-[9px] sm:text-[10px] font-bold text-red-400 mt-1 uppercase">Exhausted</span>}
-              </div>
-
-              <div 
-                onClick={() => {
-                  if (isVideoLimitReached) {
-                    toast.error('🎬 Video credits exhausted! Please upgrade your plan to upload more videos.', { duration: 4000 });
-                    return;
-                  }
-                  videoInputRef.current?.click();
-                }}
-                className={`border rounded-xl p-3 sm:p-6 flex flex-col items-center justify-center text-center transition-all group ${
-                  isVideoLimitReached 
-                    ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-50' 
-                    : 'bg-white border-slate-200 cursor-pointer hover:border-[#c5a880] hover:shadow-md active:scale-95'
-                }`}
-              >
-                <Video className={`h-6 w-6 sm:h-8 sm:w-8 mb-1.5 sm:mb-3 transition-colors shrink-0 ${isVideoLimitReached ? 'text-slate-300' : 'text-slate-400 group-hover:text-[#c5a880]'}`} />
-                <span className={`font-bold text-xs sm:text-sm leading-tight ${isVideoLimitReached ? 'text-slate-400' : 'text-slate-700'}`}>Videos</span>
-                {isVideoLimitReached && <span className="text-[9px] sm:text-[10px] font-bold text-red-400 mt-1 uppercase">Exhausted</span>}
+              <div>
+                <h3 className="text-xl font-black text-slate-900">Edit Event Details</h3>
+                <p className="text-xs text-slate-500 font-medium">Update event metadata, client info, features, and cover image.</p>
               </div>
             </div>
-          </div>
-
-          <div className="mt-8">
-             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                <div className="flex flex-wrap items-center gap-2.5 sm:gap-4">
-                  <h3 className="text-base sm:text-lg font-bold text-slate-900">Media Files ({mediaItems.filter(item => mediaFilter === 'ALL' || item.type === mediaFilter).length})</h3>
-                  {mediaItems.length > 0 && (
-                    <button 
-                      onClick={() => {
-                        setIsSelectionMode(!isSelectionMode);
-                        setSelectedMediaIds([]);
-                      }}
-                      className={`text-[10px] font-bold px-3 py-1.5 rounded-full transition-colors uppercase tracking-wider min-h-[36px] flex items-center cursor-pointer ${isSelectionMode ? 'bg-[#c5a880] text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
-                    >
-                      {isSelectionMode ? 'Cancel Selection' : 'Select'}
-                    </button>
-                  )}
-                  {isSelectionMode && selectedMediaIds.length > 0 && (
-                    <button 
-                      onClick={() => handleDeleteMedia(selectedMediaIds)}
-                      disabled={isDeleting}
-                      className="text-[10px] font-bold px-3 py-1.5 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors flex items-center gap-1 uppercase tracking-wider min-h-[36px] cursor-pointer"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      {isDeleting ? 'Deleting...' : `Delete (${selectedMediaIds.length})`}
-                    </button>
-                  )}
-                </div>
-                <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
-                   <div className="relative">
-                     <button 
-                       onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
-                       className="flex items-center justify-between gap-2 text-xs bg-white border border-slate-200 rounded-lg px-3 py-1.5 outline-none text-slate-700 font-bold hover:border-[#c5a880] cursor-pointer shadow-sm min-w-[120px] transition-all duration-300"
-                     >
-                       <div className="flex items-center gap-2">
-                         {mediaFilter === 'ALL' && <LayoutGrid className="w-3.5 h-3.5 text-[#c5a880]" />}
-                         {mediaFilter === 'PHOTO' && <ImageIcon className="w-3.5 h-3.5 text-[#c5a880]" />}
-                         {mediaFilter === 'VIDEO' && <Video className="w-3.5 h-3.5 text-[#c5a880]" />}
-                         <span>
-                           {mediaFilter === 'ALL' && 'All Media'}
-                           {mediaFilter === 'PHOTO' && 'Photos Only'}
-                           {mediaFilter === 'VIDEO' && 'Videos Only'}
-                         </span>
-                       </div>
-                       <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-300 ${filterDropdownOpen ? 'rotate-180' : ''}`} />
-                     </button>
-
-                     {filterDropdownOpen && (
-                       <>
-                         <div className="fixed inset-0 z-10" onClick={() => setFilterDropdownOpen(false)} />
-                         <div className="absolute top-full left-0 mt-1 w-full bg-white border border-slate-100 rounded-lg shadow-lg z-20 py-1 overflow-hidden transform opacity-100 scale-100 transition-all origin-top">
-                           <button 
-                             onClick={() => { setMediaFilter('ALL'); setFilterDropdownOpen(false); }}
-                             className={`w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2 transition-colors ${mediaFilter === 'ALL' ? 'bg-[#fcfaf7] text-[#c5a880]' : 'text-slate-600 hover:bg-slate-50'}`}
-                           >
-                             <LayoutGrid className="w-3.5 h-3.5" /> All Media
-                           </button>
-                           <button 
-                             onClick={() => { setMediaFilter('PHOTO'); setFilterDropdownOpen(false); }}
-                             className={`w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2 transition-colors ${mediaFilter === 'PHOTO' ? 'bg-[#fcfaf7] text-[#c5a880]' : 'text-slate-600 hover:bg-slate-50'}`}
-                           >
-                             <ImageIcon className="w-3.5 h-3.5" /> Photos Only
-                           </button>
-                           <button 
-                             onClick={() => { setMediaFilter('VIDEO'); setFilterDropdownOpen(false); }}
-                             className={`w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2 transition-colors ${mediaFilter === 'VIDEO' ? 'bg-[#fcfaf7] text-[#c5a880]' : 'text-slate-600 hover:bg-slate-50'}`}
-                           >
-                             <Video className="w-3.5 h-3.5" /> Videos Only
-                           </button>
-                         </div>
-                       </>
-                     )}
-                   </div>
-                   <button 
-                     onClick={fetchEventDetails}
-                     className="text-xs font-bold text-slate-500 hover:text-[#c5a880] transition-colors"
-                   >
-                     Refresh
-                   </button>
-                </div>
-             </div>
-            
-            {uploadingMedia && (
-                <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
-                   <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-[0_25px_70px_rgba(0,0,0,0.18)] border border-[#ede5d8] ring-1 ring-black/5 relative overflow-hidden flex flex-col items-center text-center">
-                      {/* Top gold accent line */}
-                      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#c5a880] to-transparent" />
-                      {/* Soft ambient background glow */}
-                      <div className="absolute -top-24 -left-24 w-56 h-56 bg-[#c5a880]/10 rounded-full blur-3xl pointer-events-none" />
-                      <div className="absolute -bottom-24 -right-24 w-56 h-56 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
-
-                      {uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total ? (
-                        <div className="w-full flex flex-col items-center text-center animate-in zoom-in-95 duration-400">
-                          {/* Circular Success Badge */}
-                          <div className="relative w-28 h-28 flex items-center justify-center mb-4">
-                            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
-                              <circle cx="60" cy="60" r="50" className="stroke-emerald-100" strokeWidth="8" fill="transparent" />
-                              <circle cx="60" cy="60" r="50" stroke="#10b981" strokeWidth="8" strokeDasharray={314.16} strokeDashoffset={0} strokeLinecap="round" fill="transparent" />
-                            </svg>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                              <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center shadow-xs">
-                                <Check className="h-7 w-7 stroke-[3] text-emerald-600" />
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-mono font-bold uppercase tracking-widest mb-2">
-                            <Sparkles className="w-3 h-3 text-emerald-600" /> Upload Complete
-                          </div>
-
-                          <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mb-1">
-                            All Files Uploaded!
-                          </h3>
-                          <p className="text-xs font-medium text-slate-500 mb-5 max-w-sm">
-                            All <span className="text-slate-900 font-bold font-mono">{uploadProgress.total.toLocaleString()}</span> files were successfully uploaded and synced with your event gallery.
-                          </p>
-
-                          {/* Completed Green Loading Patti */}
-                          <div className="w-full bg-emerald-100 rounded-full h-3 mb-4 overflow-hidden border border-emerald-200 shadow-inner">
-                            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 h-full w-full rounded-full transition-all duration-500 shadow-sm" />
-                          </div>
-
-                          <div className="w-full grid grid-cols-3 gap-2 text-xs font-mono mb-2">
-                            <div className="p-2.5 rounded-xl bg-[#faf7f2] border border-[#ece3d5] text-slate-700">
-                              <span className="text-[10px] text-slate-400 block uppercase">Total Files</span>
-                              <span className="font-black text-slate-900">{uploadProgress.total}</span>
-                            </div>
-                            <div className="p-2.5 rounded-xl bg-[#faf7f2] border border-[#ece3d5] text-slate-700">
-                              <span className="text-[10px] text-slate-400 block uppercase">Speed</span>
-                              <span className="font-black text-[#c5a880]">{uploadStats.speedMBps} MB/s</span>
-                            </div>
-                            <div className="p-2.5 rounded-xl bg-[#faf7f2] border border-[#ece3d5] text-slate-700">
-                              <span className="text-[10px] text-slate-400 block uppercase">Total Time</span>
-                              <span className="font-black text-slate-900">{uploadStats.elapsedSec}s</span>
-                            </div>
-                          </div>
-
-                          {uploadStats.compressedCount > 0 && (
-                            <div className="w-full p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] font-mono text-emerald-800 flex items-center justify-between">
-                              <span>✨ Auto-Compressed (&lt; 2MB):</span>
-                              <span className="font-black">{uploadStats.compressedCount} Photos ({uploadStats.bytesSavedMB} MB Saved)</span>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="w-full flex flex-col items-center text-center">
-                          {/* Top Badge */}
-                          <div className="flex items-center justify-between w-full mb-4">
-                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#faf7f2] border border-[#ece3d5] text-[#8c6f47] text-[10px] font-mono font-bold uppercase tracking-wider">
-                              <Zap className="w-3 h-3 text-[#c5a880] fill-[#c5a880] animate-pulse" />
-                              32 Parallel Streams
-                            </div>
-                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono text-[9px] font-bold">
-                              TURBO CLOUD
-                            </span>
-                          </div>
-
-                          {/* 🔄 CIRCULAR PROGRESS LOADER */}
-                          <div className="relative w-32 h-32 flex items-center justify-center mb-3">
-                            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
-                              {/* Background Circle */}
-                              <circle
-                                cx="60"
-                                cy="60"
-                                r="50"
-                                className="stroke-[#f3ede4]"
-                                strokeWidth="8"
-                                fill="transparent"
-                              />
-                              {/* Progress Animated Circle */}
-                              <circle
-                                cx="60"
-                                cy="60"
-                                r="50"
-                                stroke="#c5a880"
-                                strokeWidth="8"
-                                strokeDasharray={314.16}
-                                strokeDashoffset={314.16 - ((Math.min(100, Math.round((uploadProgress.current / uploadProgress.total) * 100)) || 0) / 100) * 314.16}
-                                strokeLinecap="round"
-                                fill="transparent"
-                                className="transition-all duration-300 ease-out"
-                              />
-                            </svg>
-                            {/* Inner Circle Content */}
-                            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                              <span className="text-3xl font-black text-slate-900 tracking-tight leading-none font-mono">
-                                {Math.round((uploadProgress.current / uploadProgress.total) * 100) || 0}%
-                              </span>
-                              <span className="text-[10px] font-bold text-[#b69970] uppercase tracking-widest mt-1">
-                                Uploading
-                              </span>
-                            </div>
-                          </div>
-
-                          <h3 className="text-lg font-black text-slate-900 tracking-tight mb-0.5">
-                            Uploading Photos &amp; Media
-                          </h3>
-                          <p className="text-[11px] font-medium text-slate-500 mb-4">
-                            High-speed secure upload to your event gallery
-                          </p>
-
-                          {/* ── LOADING PATTI (Progress Strip) ── */}
-                          <div className="w-full relative mb-2">
-                            <div className="w-full bg-[#f3ede4] rounded-full h-3.5 overflow-hidden shadow-inner border border-[#e5ded2] p-[2px]">
-                              <div
-                                className="h-full bg-gradient-to-r from-[#b69970] via-[#c5a880] to-[#b69970] rounded-full transition-all duration-200 relative overflow-hidden shadow-sm"
-                                style={{ width: `${Math.max(3, (uploadProgress.current / uploadProgress.total) * 100)}%` }}
-                              >
-                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent animate-turbo-shimmer" />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Files Count & ETA Strip Footer */}
-                          <div className="w-full flex items-center justify-between text-xs font-mono text-slate-600 mb-4 px-1">
-                            <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-[#c5a880] animate-pulse" />
-                              {uploadProgress.current.toLocaleString()} <span className="text-slate-400 font-normal">/</span> {uploadProgress.total.toLocaleString()} Files
-                            </span>
-                            <span className="text-[11px] text-slate-500">
-                              {uploadStats.etaSec > 0 ? `ETA: ~${uploadStats.etaSec}s left` : `${uploadStats.elapsedSec}s elapsed`}
-                            </span>
-                          </div>
-
-                          {/* 4 Telemetry Stats in White Theme */}
-                          <div className="w-full grid grid-cols-4 gap-2 mb-3 font-mono">
-                            <div className="p-2 rounded-xl bg-[#faf7f2] border border-[#ece3d5] text-center shadow-xs">
-                              <div className="flex items-center justify-center gap-1 text-[9px] uppercase font-bold text-slate-400 mb-0.5">
-                                <Zap className="w-2.5 h-2.5 text-[#c5a880]" /> Speed
-                              </div>
-                              <span className="text-xs font-black text-[#b69970] block">{uploadStats.speedMBps}</span>
-                              <span className="text-[8px] text-slate-400 font-sans">MB/s</span>
-                            </div>
-
-                            <div className="p-2 rounded-xl bg-[#faf7f2] border border-[#ece3d5] text-center shadow-xs">
-                              <div className="flex items-center justify-center gap-1 text-[9px] uppercase font-bold text-slate-400 mb-0.5">
-                                <Activity className="w-2.5 h-2.5 text-emerald-600" /> Rate
-                              </div>
-                              <span className="text-xs font-black text-emerald-600 block">{uploadStats.photosPerSec}</span>
-                              <span className="text-[8px] text-slate-400 font-sans">Files/s</span>
-                            </div>
-
-                            <div className="p-2 rounded-xl bg-[#faf7f2] border border-[#ece3d5] text-center shadow-xs">
-                              <div className="flex items-center justify-center gap-1 text-[9px] uppercase font-bold text-slate-400 mb-0.5">
-                                <Clock className="w-2.5 h-2.5 text-sky-600" /> Time
-                              </div>
-                              <span className="text-xs font-black text-sky-600 block">{uploadStats.elapsedSec}s</span>
-                              <span className="text-[8px] text-slate-400 font-sans">Elapsed</span>
-                            </div>
-
-                            <div className="p-2 rounded-xl bg-[#faf7f2] border border-[#ece3d5] text-center shadow-xs">
-                              <div className="flex items-center justify-center gap-1 text-[9px] uppercase font-bold text-slate-400 mb-0.5">
-                                <Sparkles className="w-2.5 h-2.5 text-purple-600" /> ETA
-                              </div>
-                              <span className="text-xs font-black text-purple-600 block">{uploadStats.etaSec > 0 ? `${uploadStats.etaSec}s` : '...'}</span>
-                              <span className="text-[8px] text-slate-400 font-sans">Remaining</span>
-                            </div>
-                          </div>
-
-                          {/* Smart Compression Pill */}
-                          <div className="w-full p-2.5 rounded-xl bg-[#faf7f2] border border-[#ece3d5] text-[10px] font-mono text-slate-600 flex flex-wrap items-center justify-between gap-1 shadow-xs">
-                            <div className="flex items-center gap-1.5 text-slate-700 font-medium">
-                              <Zap className="w-3 h-3 text-[#c5a880] fill-[#c5a880]" />
-                              <span>Smart Compression: &gt;2MB &rarr; &lt;2MB | Videos &gt;18MB</span>
-                            </div>
-                            {uploadStats.compressedCount > 0 && (
-                              <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                                ✨ {uploadStats.compressedCount} Compressed ({uploadStats.bytesSavedMB} MB Saved)
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                   </div>
-                </div>
-            )}
-
-             {mediaItems.length === 0 ? (
-               <div className="bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-2xl p-12 flex items-center justify-center text-slate-500 text-sm">
-                 No media files uploaded yet. Select files to start.
-               </div>
-            ) : (
-               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-4 pb-12">
-                 {mediaItems.filter(item => mediaFilter === 'ALL' || item.type === mediaFilter).map((item, idx) => (
-                   <div 
-                     key={idx} 
-                     className={`relative aspect-square rounded-xl overflow-hidden bg-slate-900 border transition-all group cursor-pointer ${selectedMediaIds.includes(item._id) ? 'border-[#c5a880] ring-4 ring-[#c5a880]/30' : 'border-slate-200 hover:border-[#c5a880]/50'}`}
-                     onClick={() => {
-                       if (isSelectionMode) {
-                         toggleSelection(item._id);
-                       } else {
-                         setPreviewMedia(item);
-                       }
-                     }}
-                   >
-                      {item.type === 'VIDEO' ? (
-                         <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 overflow-hidden">
-                            {item.thumbnailUrl || (item.r2Url && item.r2Url.includes('imagekit.io')) ? (
-                              <img 
-                                src={item.thumbnailUrl || `${item.r2Url}/ik-thumbnail.jpg`} 
-                                className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300" 
-                                alt="Video thumbnail"
-                              />
-                            ) : (
-                              <video 
-                                src={item.compressedUrl || item.r2Url} 
-                                className="w-full h-full object-cover opacity-60 pointer-events-none" 
-                                preload="metadata" 
-                                muted 
-                              />
-                            )}
-                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/30 group-hover:bg-black/50 transition-colors">
-                               <div className="w-11 h-11 rounded-full bg-white/25 backdrop-blur-md border border-white/40 flex items-center justify-center text-white mb-1 shadow-md group-hover:scale-110 transition-transform">
-                                  <Play className="h-5 w-5 fill-white ml-0.5" />
-                               </div>
-                               <span className="text-[10px] text-white font-bold uppercase tracking-wider bg-black/50 px-2.5 py-0.5 rounded-full border border-white/20">Video</span>
-                            </div>
-                         </div>
-                      ) : (
-                         <img src={item.compressedUrl || item.r2Url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                      )}
-
-                      {/* Completed Green Badge */}
-                      {item.processedStatus === 'COMPLETED' && (
-                         <div className="absolute top-3 right-3 bg-emerald-500 text-white rounded-full p-1.5 shadow-md z-10" title="Ready & Processed">
-                            <Check className="h-3.5 w-3.5 stroke-[3]" />
-                         </div>
-                      )}
-
-                      {/* Selection Checkbox */}
-                      {isSelectionMode && (
-                        <div className="absolute top-3 left-3 z-10 bg-white/90 rounded border border-slate-300 p-0.5 shadow-sm">
-                          <input 
-                            type="checkbox" 
-                            checked={selectedMediaIds.includes(item._id)}
-                            onChange={() => toggleSelection(item._id)}
-                            className="w-4 h-4 cursor-pointer accent-[#c5a880]"
-                          />
-                        </div>
-                      )}
-
-                      {/* Hover Overlay */}
-                      <div className={`absolute inset-0 bg-black/40 transition-opacity flex flex-col items-center justify-center gap-3 ${isSelectionMode ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
-                         <span className="text-[10px] font-bold text-white px-3 py-1.5 bg-black/60 rounded-full uppercase tracking-wider">{item.processedStatus}</span>
-                         <div className="flex items-center gap-2">
-                           <button 
-                             onClick={(e) => { e.stopPropagation(); setPreviewMedia(item); }}
-                             className="bg-white/20 backdrop-blur-md text-white p-2.5 rounded-full hover:bg-white/30 transition-transform hover:scale-110 shadow-lg border border-white/30"
-                             title="Preview"
-                           >
-                             <ZoomIn className="h-4 w-4" />
-                           </button>
-                           <button 
-                              onClick={(e) => { e.stopPropagation(); handleDeleteMedia([item._id]); }}
-                              className="bg-red-500 text-white p-2.5 rounded-full hover:bg-red-600 transition-transform hover:scale-110 shadow-lg"
-                              title="Delete Media"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                       </div>
-                    </div>
-                  ))}
-                </div>
-             )}
-           </div>
-         </div>
-
-          {/* Right Column: Edit Event Details Form (aligned at top with Upload Media!) */}
-          <div className="w-full lg:w-[420px] shrink-0">
-            <div className="bg-[#f8f7f4] text-slate-900 border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm sticky top-8">
-                <div className="flex items-center gap-2 mb-6 border-b border-slate-200 pb-4">
-                  <Settings className="h-5 w-5 text-[#c5a880]" />
-                  <h3 className="text-lg font-bold text-slate-900">Edit Event Details</h3>
-                </div>
             
             <style dangerouslySetInnerHTML={{__html: `
               .edit-input {
                 width: 100%;
-                background: #ffffff;
-                border: 1px solid #cbd5e1;
+                background: #faf8f5;
+                border: 1px solid #e8dfd3;
                 color: #0f172a;
-                padding: 10px 12px;
-                border-radius: 8px;
-                font-size: 13px;
+                padding: 12px 14px;
+                border-radius: 12px;
+                font-size: 13.5px;
                 outline: none;
-                transition: border-color 0.2s;
+                transition: all 0.2s;
+              }
+              .edit-input:focus {
+                background: #ffffff;
+                border-color: #c5a880;
+                box-shadow: 0 0 0 3px rgba(197, 168, 128, 0.15);
               }
               .edit-input:focus {
                 border-color: #c5a880;
@@ -1676,6 +1071,8 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                     setCredits(res.data.credits);
                   }
                   window.dispatchEvent(new Event('studio_plan_updated'));
+      refreshStorage();
+      window.dispatchEvent(new Event('storage_updated'));
                   await fetchEventDetails();
                   await fetchCredits();
 
@@ -2316,7 +1713,6 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
 
-      </div>
       </div>
 
       {/* Preview Lightbox Modal */}

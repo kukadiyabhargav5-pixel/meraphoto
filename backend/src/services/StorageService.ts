@@ -42,6 +42,11 @@ export const getFileUrl = (key: string): string => {
     return key;
   }
 
+  // If key is a local frontend static asset (e.g. /wedding.jpg, /logo.png), return as is
+  if (key.startsWith('/') && !key.startsWith('/api/') && !key.startsWith('/studios/') && !key.startsWith('/branding/') && !key.startsWith('/events/') && !key.startsWith('/mara-photo/')) {
+    return key;
+  }
+
   // If key is already a full URL, sanitize any broken/localhost prefixes
   if (key.startsWith('http://') || key.startsWith('https://')) {
     if (key.includes('.r2.dev/')) {

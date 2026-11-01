@@ -13,6 +13,13 @@ const shootLogSchema = new mongoose.Schema({
   location: { type: String },
   notes: { type: String },
   reminder: { type: String, enum: ['none', '24h', '72h'], default: 'none' },
+  status: {
+    type: String,
+    enum: ['Upcoming', 'Today', 'Completed', 'Due'],
+    default: 'Upcoming'
+  },
+  todayEmailSent: { type: Boolean, default: false },
+  completedAt: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
 

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import confetti from 'canvas-confetti';
-import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy, ZoomIn, Play, ShieldCheck, RefreshCw, ScanFace, ChevronRight, ChevronLeft, ChevronDown, LayoutGrid, Sliders, X, Download, Loader, Sparkles, CalendarDays, Lock, Key, AlertCircle, Search, HelpCircle, Send, CheckCircle, Globe } from 'lucide-react';
+import { Heart, ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, Copy, ZoomIn, Play, ShieldCheck, RefreshCw, ScanFace, ChevronRight, ChevronLeft, ChevronDown, LayoutGrid, Sliders, X, Download, Loader, Sparkles, CalendarDays, Lock, Key, AlertCircle, Search, HelpCircle, Send, CheckCircle, Globe } from 'lucide-react';
 import { apiClient, resolveMediaUrl as globalResolveMediaUrl } from '@/lib/api';
 import toast from 'react-hot-toast';
 import JSZip from 'jszip';
@@ -76,7 +76,7 @@ export default function ClientGallery() {
 
   // Gallery view configurations
   const [viewType, setViewType] = useState<'grid' | 'masonry' | 'timeline'>('masonry');
-  const [mediaTypeFilter, setMediaTypeFilter] = useState<'ALL' | 'PHOTO' | 'VIDEO'>('ALL');
+  const [mediaTypeFilter, setMediaTypeFilter] = useState<'ALL' | 'PHOTO' | 'VIDEO' | 'FAVORITES'>('ALL');
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   
   // Selfie Search Modal
@@ -181,7 +181,7 @@ export default function ClientGallery() {
     const diff = touchStartXRef.current - touchEndXRef.current;
     if (Math.abs(diff) > 40) {
       const baseGalleryMedia = searchActive ? matchedMedia : media;
-      const currentFiltered = baseGalleryMedia.filter(m => mediaTypeFilter === 'ALL' || m.type === mediaTypeFilter);
+      const currentFiltered = baseGalleryMedia.filter(m => mediaTypeFilter === 'ALL' || (mediaTypeFilter === 'FAVORITES' ? isFavorite(m._id || m.r2Key) : m.type === mediaTypeFilter));
       if (selectedItem) {
         const currentIndex = currentFiltered.findIndex(m => m._id === selectedItem._id);
         if (diff > 0) {
@@ -205,6 +205,78 @@ export default function ClientGallery() {
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
   const [isMultiSelect, setIsMultiSelect] = useState(false);
 
+  // Favorite photos state (persisted per event in localStorage)
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const storageKey = `mara_favs_${slug || 'default'}`;
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setFavoriteIds(parsed);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load favorites', e);
+    }
+
+    const handleFavUpdate = () => {
+      try {
+        const storageKey = `mara_favs_${slug || 'default'}`;
+        const raw = localStorage.getItem(storageKey);
+        if (raw) {
+          const ids = JSON.parse(raw);
+          if (Array.isArray(ids)) setFavoriteIds(ids);
+        } else {
+          setFavoriteIds([]);
+        }
+      } catch (e) {}
+    };
+
+    window.addEventListener('favorites_updated', handleFavUpdate);
+    window.addEventListener('storage', handleFavUpdate);
+    return () => {
+      window.removeEventListener('favorites_updated', handleFavUpdate);
+      window.removeEventListener('storage', handleFavUpdate);
+    };
+  }, [slug]);
+
+  const toggleFavorite = useCallback(async (id: string | any) => {
+    if (!id) return;
+    const cleanId = String(id);
+    const exists = favoriteIds.includes(cleanId);
+    const updated = exists ? favoriteIds.filter((favId) => favId !== cleanId) : [...favoriteIds, cleanId];
+    setFavoriteIds(updated);
+    try {
+      if (typeof window !== 'undefined') {
+        const storageKey = `mara_favs_${slug || 'default'}`;
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        window.dispatchEvent(new Event('favorites_updated'));
+      }
+    } catch (e) {
+      console.warn('Failed to save favorites', e);
+    }
+    if (!exists) {
+      toast.success('Added to favorites ❤️', { id: `fav-${cleanId}`, duration: 2000 });
+    } else {
+      toast('Removed from favorites', { id: `fav-${cleanId}`, duration: 2000, icon: '🤍' });
+    }
+
+    // Persist to backend database so studio owner sees it immediately in favorites page!
+    try {
+      await apiClient.put(`/media/${cleanId}/favorite`, { isFavorite: !exists });
+    } catch (err) {
+      console.error('Failed to sync favorite with server:', err);
+    }
+  }, [favoriteIds, slug]);
+
+  const isFavorite = useCallback((id: any) => {
+    if (!id) return false;
+    return favoriteIds.includes(String(id));
+  }, [favoriteIds]);
+
   // ZIP Download progress state
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -215,8 +287,18 @@ export default function ClientGallery() {
 
   const fetchGalleryMedia = async (eventId: string) => {
     try {
-      const res = await apiClient.get(`/media/event/${eventId}`);
-      setMedia(res.data.media);
+      const res = await apiClient.get(`/media/event/${eventId}`, { params: { _t: Date.now() } });
+      const mediaList = res.data.media || [];
+      setMedia(mediaList);
+
+      // Synchronize favoriteIds directly from server media (removes un-favorited photos)
+      const serverFavs = mediaList
+        .filter((m: any) => m && (m.isFavorite === true || (m.favoriteCount || 0) > 0))
+        .map((m: any) => String(m._id));
+      setFavoriteIds(serverFavs);
+      try {
+        localStorage.setItem(`mara_favs_${slug}`, JSON.stringify(serverFavs));
+      } catch (e) {}
     } catch (err) {
       console.error(err);
     }
@@ -859,7 +941,7 @@ export default function ClientGallery() {
   }
 
   const baseGalleryMedia = searchActive ? matchedMedia : media;
-  const galleryMedia = baseGalleryMedia.filter(m => mediaTypeFilter === 'ALL' || m.type === mediaTypeFilter);
+  const galleryMedia = baseGalleryMedia.filter(m => mediaTypeFilter === 'ALL' || (mediaTypeFilter === 'FAVORITES' ? isFavorite(m._id || m.r2Key) : m.type === mediaTypeFilter));
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col relative selection:bg-orange-500 selection:text-white">
@@ -1067,10 +1149,12 @@ export default function ClientGallery() {
                 {mediaTypeFilter === 'ALL' && <LayoutGrid className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#c5a880]" />}
                 {mediaTypeFilter === 'PHOTO' && <ImageIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#c5a880]" />}
                 {mediaTypeFilter === 'VIDEO' && <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#c5a880]" />}
+                {mediaTypeFilter === 'FAVORITES' && <Heart className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-500 fill-rose-500" />}
                 <span>
                   {mediaTypeFilter === 'ALL' && 'All Media'}
                   {mediaTypeFilter === 'PHOTO' && 'Photos'}
                   {mediaTypeFilter === 'VIDEO' && 'Videos'}
+                  {mediaTypeFilter === 'FAVORITES' && `Favorites (${favoriteIds.length})`}
                 </span>
               </div>
               <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-300 ${filterDropdownOpen ? 'rotate-180' : ''}`} />
@@ -1097,6 +1181,17 @@ export default function ClientGallery() {
                     className={`w-full text-left px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition-colors ${mediaTypeFilter === 'VIDEO' ? 'bg-[#fcfaf7] text-[#c5a880]' : 'text-slate-600 hover:bg-slate-50'}`}
                   >
                     <Video className="w-4 h-4" /> Videos
+                  </button>
+                  <button 
+                    onClick={() => { setMediaTypeFilter('FAVORITES'); setFilterDropdownOpen(false); }}
+                    className={`w-full text-left px-4 py-2.5 text-xs font-bold flex items-center justify-between transition-colors ${mediaTypeFilter === 'FAVORITES' ? 'bg-rose-50 text-rose-600' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Heart className="w-4 h-4 text-rose-500 fill-rose-500" /> Favorites
+                    </span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-600">
+                      {favoriteIds.length}
+                    </span>
                   </button>
                 </div>
               </>
@@ -1203,6 +1298,13 @@ export default function ClientGallery() {
                         }
                       }}
                     />
+                    {/* Face Scan Similarity Match Badge on Mobile */}
+                    {searchActive && (m as any).similarityPercent && (
+                      <div className="absolute bottom-2 left-2 z-20 px-2 py-0.5 rounded-full bg-black/80 backdrop-blur-md border border-[#c5a880]/60 text-[#c5a880] text-[10px] font-black flex items-center gap-1 shadow-md">
+                        <Sparkles className="w-2.5 h-2.5 text-[#c5a880]" />
+                        <span>{(m as any).similarityPercent}% Match</span>
+                      </div>
+                    )}
                     {m.type === 'VIDEO' && (
                       <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
                         <div className="w-9 h-9 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center">
@@ -1210,6 +1312,27 @@ export default function ClientGallery() {
                         </div>
                       </div>
                     )}
+                    {/* Favorite Heart Button on Mobile */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFavorite(m._id);
+                      }}
+                      className={`absolute top-2 right-2 z-20 p-2 rounded-full backdrop-blur-md transition-all shadow-md cursor-pointer ${
+                        isFavorite(m._id)
+                          ? 'bg-white/95 text-rose-500 scale-105 shadow-rose-500/20'
+                          : 'bg-black/40 text-white/90 hover:bg-black/60'
+                      }`}
+                      title={isFavorite(m._id) ? 'Remove from Favorites' : 'Add to Favorites'}
+                    >
+                      <Heart
+                        className={`h-4 w-4 transition-transform active:scale-125 ${
+                          isFavorite(m._id) ? 'fill-rose-500 text-rose-500' : ''
+                        }`}
+                      />
+                    </button>
+
                     {isMultiSelect && (
                       <div className="absolute top-2 left-2 z-10">
                         <div className={`w-5 h-5 rounded-md border flex items-center justify-center ${isSelected ? 'bg-[#c5a880] border-[#c5a880] text-white shadow-sm' : 'border-white/80 bg-black/30'}`}>
@@ -1281,6 +1404,30 @@ export default function ClientGallery() {
                       const isSelected = selectedMediaIds.includes(m._id);
                       return (
                         <>
+                          {/* Face Scan Similarity Match Badge on Desktop */}
+                          {searchActive && (m as any).similarityPercent && (
+                            <div className="absolute bottom-2.5 left-2.5 z-40 px-2.5 py-1 rounded-full bg-black/85 backdrop-blur-md border border-[#c5a880]/70 text-[#c5a880] text-xs font-black flex items-center gap-1.5 shadow-lg pointer-events-none">
+                              <Sparkles className="w-3 h-3 text-[#c5a880]" />
+                              <span>{(m as any).similarityPercent}% Match</span>
+                            </div>
+                          )}
+                          {/* Favorite Heart Button on Hover / Active */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFavorite(m._id);
+                            }}
+                            className={`absolute top-2.5 right-2.5 z-40 p-2.5 rounded-full backdrop-blur-md transition-all duration-300 shadow-md cursor-pointer ${
+                              isFavorite(m._id)
+                                ? 'bg-white/95 text-rose-500 opacity-100 scale-100 hover:scale-110 shadow-rose-500/20'
+                                : 'bg-black/40 text-white/90 opacity-0 group-hover:opacity-100 hover:bg-black/70 hover:text-rose-400 hover:scale-110'
+                            }`}
+                            title={isFavorite(m._id) ? "Remove from Favorites" : "Add to Favorites"}
+                          >
+                            <Heart className={`h-4 w-4 transition-transform duration-200 active:scale-125 ${isFavorite(m._id) ? 'fill-rose-500 text-rose-500' : ''}`} />
+                          </button>
+
                           {/* Video overlay */}
                           {m.type === 'VIDEO' && (
                             <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/35 transition-colors pointer-events-none z-10">
@@ -1356,6 +1503,23 @@ export default function ClientGallery() {
                       const isSelected = selectedMediaIds.includes(m._id);
                       return (
                         <>
+                          {/* Favorite Heart Button on Hover / Active */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFavorite(m._id);
+                            }}
+                            className={`absolute top-2.5 right-2.5 z-40 p-2.5 rounded-full backdrop-blur-md transition-all duration-300 shadow-md cursor-pointer ${
+                              isFavorite(m._id)
+                                ? 'bg-white/95 text-rose-500 opacity-100 scale-100 hover:scale-110 shadow-rose-500/20'
+                                : 'bg-black/40 text-white/90 opacity-0 group-hover:opacity-100 hover:bg-black/70 hover:text-rose-400 hover:scale-110'
+                            }`}
+                            title={isFavorite(m._id) ? "Remove from Favorites" : "Add to Favorites"}
+                          >
+                            <Heart className={`h-4 w-4 transition-transform duration-200 active:scale-125 ${isFavorite(m._id) ? 'fill-rose-500 text-rose-500' : ''}`} />
+                          </button>
+
                           {/* Video overlay */}
                           {m.type === 'VIDEO' && (
                             <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/35 transition-colors pointer-events-none z-10">
@@ -1390,11 +1554,13 @@ export default function ClientGallery() {
           <div className="py-24 text-center glass-panel bg-white border-slate-200 rounded-3xl flex flex-col items-center justify-center p-8 max-w-xl mx-auto text-slate-500 shadow-sm">
             <ImageIcon className="h-10 w-10 text-slate-350 mb-3" />
             <h3 className="text-sm font-bold text-slate-600">
-              {searchActive ? 'No matching photos found' : 'No media files yet'}
+              {searchActive ? 'No matching photos found' : mediaTypeFilter === 'FAVORITES' ? 'No favorite photos yet' : 'No media files yet'}
             </h3>
             <p className="text-xs mt-1 font-semibold">
               {searchActive 
                 ? 'Try uploading a clearer, well-lit photo of your face. Make sure you are looking directly at the camera.'
+                : mediaTypeFilter === 'FAVORITES'
+                ? 'Click the heart icon ❤️ on any photo to save it to your personal favorites list.'
                 : 'Check back later once uploads are completed.'}
             </p>
             {searchActive && (
@@ -1946,7 +2112,24 @@ export default function ClientGallery() {
             <span className="text-xs text-white/60 font-mono font-medium tracking-wider pointer-events-auto">
               {galleryMedia.findIndex(m => m._id === selectedItem._id) + 1} / {galleryMedia.length}
             </span>
-            <div className="flex items-center gap-2 sm:gap-4 pointer-events-auto">
+            <div className="flex items-center gap-2 sm:gap-3 pointer-events-auto">
+              {/* Favorite Button in Fullscreen Lightbox */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (selectedItem?._id) toggleFavorite(selectedItem._id);
+                }}
+                className={`px-3 sm:px-4 py-2 rounded-xl flex items-center gap-2 font-bold text-xs sm:text-sm transition-all border min-h-[40px] cursor-pointer shadow-md ${
+                  isFavorite(selectedItem._id)
+                    ? 'bg-rose-500/25 text-rose-400 border-rose-500/40 hover:bg-rose-500/35'
+                    : 'bg-white/10 text-white hover:bg-white/20 border-white/10 hover:text-rose-300'
+                }`}
+                title={isFavorite(selectedItem._id) ? "Remove from Favorites" : "Add to Favorites"}
+              >
+                <Heart className={`h-4 w-4 transition-transform duration-200 active:scale-125 ${isFavorite(selectedItem._id) ? 'fill-rose-500 text-rose-500' : ''}`} />
+                <span>{isFavorite(selectedItem._id) ? 'Favorited' : 'Favorite'}</span>
+              </button>
               {event?.allowDownload !== false && (
                 <a href={resolveMediaUrl(selectedItem)} target="_blank" download className="bg-white/10 hover:bg-white/20 px-3 sm:px-4 py-2 text-white rounded-xl flex items-center gap-2 font-bold text-xs sm:text-sm transition-colors border border-white/10 min-h-[40px]">
                   <Download className="h-4 w-4" />

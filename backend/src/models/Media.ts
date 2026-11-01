@@ -18,6 +18,8 @@ export interface IMedia extends Document {
   faceIndexStatus?: 'PENDING' | 'INDEXED' | 'NO_FACE' | 'FAILED';
   faceCount?: number;
   creditDeducted: boolean;
+  isFavorite?: boolean;
+  favoriteCount?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,7 +49,9 @@ const MediaSchema = new Schema<IMedia>({
     default: 'PENDING'
   },
   faceCount: { type: Number, default: 0 },
-  creditDeducted: { type: Boolean, default: false, index: true }
+  creditDeducted: { type: Boolean, default: false, index: true },
+  isFavorite: { type: Boolean, default: false, index: true },
+  favoriteCount: { type: Number, default: 0 }
 }, {
   timestamps: true
 });

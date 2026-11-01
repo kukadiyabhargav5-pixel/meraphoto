@@ -14,6 +14,7 @@ import { DashboardProvider, useDashboard } from './DashboardContext';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import { useAuth } from '../../lib/AuthContext';
 import { apiClient, resolveMediaUrl } from '../../lib/api';
+import { useStorageUsage } from '@/lib/storage';
 import toast from 'react-hot-toast';
 
 const NAV_SECTIONS = [
@@ -42,6 +43,7 @@ const NAV_SECTIONS = [
   {
     category: 'More',
     links: [
+      { path: '/branding', label: 'Studio Branding', icon: Sparkles },
       { path: '/payment-qr', label: 'Payment QR', icon: QrCode },
       { path: '/calendar', label: 'Calendar', icon: Calendar },
       { path: '/profile', label: 'Profile & Studio Settings', icon: User },
@@ -144,49 +146,53 @@ function SidebarContent({
   const isAdminDashboard = pathname.startsWith('/admin-dashboard') || (isSuperAdmin && !pathname.startsWith('/dashboard/'));
   const basePrefix = isAdminDashboard ? '/admin-dashboard' : '/dashboard';
 
+  const { usage: storageUsage, loading: storageLoading } = useStorageUsage();
   const studioPlanKey = (studio?.subscriptionPlan || authStudio?.subscriptionPlan || '').toUpperCase();
-  const currentPlan = studioPlanKey || (isSuperAdmin ? 'PREMIUM' : 'BASIC');
-  const isBasicPlan = currentPlan === 'BASIC';
-  const isStartupPlan = currentPlan === 'STARTUP' || currentPlan === 'STARTER';
+  const hasStoragePlan = Boolean(
+    storageUsage?.hasActivePlan &&
+    storageUsage?.activePlan?.status === 'ACTIVE' &&
+    storageUsage?.activePlan?.planId &&
+    storageUsage?.activePlan?.planId !== 'free-starter'
+  );
+  const hasStudioPlan = ['STARTUP', 'STARTER', 'STANDARD', 'ESSENTIAL', 'PREMIUM'].includes(studioPlanKey);
+  const hasPaidPlan = Boolean(isSuperAdmin || hasStoragePlan || hasStudioPlan);
+  const isStartupPlan = studioPlanKey === 'STARTUP' || studioPlanKey === 'STARTER';
 
-  // When Basic Plan is active: ONLY Overview and Plans & Billing are accessible!
-  const allowedBasicRoutes = [
-    '/dashboard',
-    '/dashboard/plans-billing',
-    '/admin-dashboard',
-    '/admin-dashboard/plans-billing'
-  ];
-
-  // When Startup Plan is active: ONLY Create Event, Events Management, Plans & Billing, Quotation, and Profile are enabled!
   const allowedStartupRoutes = [
     '/dashboard/plans-billing',
     '/dashboard/create-event',
     '/dashboard/events',
     '/dashboard/quotation',
     '/dashboard/profile',
+    '/dashboard/branding',
     '/admin-dashboard/plans-billing',
     '/admin-dashboard/create-event',
     '/admin-dashboard/events',
     '/admin-dashboard/quotation',
-    '/admin-dashboard/profile'
+    '/admin-dashboard/profile',
+    '/admin-dashboard/branding'
   ];
 
   const isRouteAllowed = (href: string) => {
-    if (isBasicPlan) {
-      return allowedBasicRoutes.includes(href);
+    if (isSuperAdmin) return true;
+    if (!hasPaidPlan) {
+      return href === `${basePrefix}/plans-billing` || href === '/dashboard/plans-billing' || href === '/admin-dashboard/plans-billing';
     }
     if (isStartupPlan) {
       return allowedStartupRoutes.some(r => href === r || href.startsWith(`${r}/`));
     }
-    // Standard, Essential, and Premium: ALL buttons enabled!
     return true;
   };
 
   const handleLinkClick = (e: React.MouseEvent, href: string) => {
+    if (storageLoading) {
+      if (onLinkClick) onLinkClick();
+      return;
+    }
     if (!isRouteAllowed(href)) {
       e.preventDefault();
       router.push(`${basePrefix}/plans-billing`);
-      toast.error(isBasicPlan ? 'Please upgrade your plan from Basic to access this feature.' : 'Please upgrade to Standard or higher to unlock this feature.', {
+      toast.error(!hasPaidPlan ? 'તમારા સ્ટુડિયો ફીચર્સ વાપરવા માટે કૃપા કરીને પહેલા પ્લાન પસંદ કરો. (Please choose a plan to unlock all features)' : 'Please upgrade your plan to unlock this feature.', {
         duration: 3500,
         icon: '🔒'
       });
@@ -203,7 +209,7 @@ function SidebarContent({
       ? (pathname === basePrefix || pathname === `${basePrefix}/`) 
       : (pathname === href || pathname.startsWith(`${href}/`));
     
-    const isDisabled = !isRouteAllowed(href);
+    const isDisabled = !storageLoading && !isRouteAllowed(href);
     
     if (isDisabled) {
       return `flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs transition-all duration-300 relative group overflow-hidden opacity-40 cursor-not-allowed text-slate-500 bg-transparent select-none`;
@@ -388,7 +394,7 @@ function SidebarContent({
           <div className="overflow-hidden">
             <p className="text-xs font-bold text-slate-200 truncate">{user?.name || 'User'}</p>
             <p className="text-[9px] text-[#c5a880] font-black tracking-widest uppercase mt-0.5">
-              {isSuperAdmin ? '👑 Super Admin' : (user?.role === 'STUDIO_OWNER' ? 'Studio Owner' : user?.role || 'Admin')}
+              {isSuperAdmin ? '👑 Super Admin' : !hasPaidPlan ? 'No Active Plan' : (user?.role === 'STUDIO_OWNER' ? 'Studio Owner' : user?.role || 'Admin')}
             </p>
           </div>
           <button
@@ -444,17 +450,17 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
   const isAdminDashboard = pathname.startsWith('/admin-dashboard') || (isSuperAdmin && !pathname.startsWith('/dashboard/'));
   const basePrefix = isAdminDashboard ? '/admin-dashboard' : '/dashboard';
 
+  const { usage: storageUsage, loading: storageLoading } = useStorageUsage();
   const studioPlanKey = (studio?.subscriptionPlan || authStudio?.subscriptionPlan || '').toUpperCase();
-  const currentPlan = studioPlanKey || (isSuperAdmin ? 'PREMIUM' : 'BASIC');
-  const isBasicPlan = currentPlan === 'BASIC';
-  const isStartupPlan = currentPlan === 'STARTUP' || currentPlan === 'STARTER';
-
-  const allowedBasicRoutes = [
-    '/dashboard',
-    '/dashboard/plans-billing',
-    '/admin-dashboard',
-    '/admin-dashboard/plans-billing'
-  ];
+  const hasStoragePlan = Boolean(
+    storageUsage?.hasActivePlan &&
+    storageUsage?.activePlan?.status === 'ACTIVE' &&
+    storageUsage?.activePlan?.planId &&
+    storageUsage?.activePlan?.planId !== 'free-starter'
+  );
+  const hasStudioPlan = ['STARTUP', 'STARTER', 'STANDARD', 'ESSENTIAL', 'PREMIUM'].includes(studioPlanKey);
+  const hasPaidPlan = Boolean(isSuperAdmin || hasStoragePlan || hasStudioPlan);
+  const isStartupPlan = studioPlanKey === 'STARTUP' || studioPlanKey === 'STARTER';
 
   const allowedStartupRoutes = [
     '/dashboard/plans-billing',
@@ -462,16 +468,19 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
     '/dashboard/events',
     '/dashboard/quotation',
     '/dashboard/profile',
+    '/dashboard/branding',
     '/admin-dashboard/plans-billing',
     '/admin-dashboard/create-event',
     '/admin-dashboard/events',
     '/admin-dashboard/quotation',
-    '/admin-dashboard/profile'
+    '/admin-dashboard/profile',
+    '/admin-dashboard/branding'
   ];
 
   const isRouteAllowed = (href: string) => {
-    if (isBasicPlan) {
-      return allowedBasicRoutes.includes(href);
+    if (isSuperAdmin) return true;
+    if (!hasPaidPlan) {
+      return href === `${basePrefix}/plans-billing` || href === '/dashboard/plans-billing' || href === '/admin-dashboard/plans-billing';
     }
     if (isStartupPlan) {
       return allowedStartupRoutes.some(r => href === r || href.startsWith(`${r}/`));
@@ -521,20 +530,35 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Auto-redirect to /plans-billing if user navigates to any disabled route on Basic or Startup plan
+  // Auto-redirect to /plans-billing if user navigates to any disabled route without an active plan
   useEffect(() => {
+    // Wait until storage usage and user auth finish loading!
+    if (storageLoading || !user) return;
+
+    if (!hasPaidPlan && !isSuperAdmin) {
+      const allowedBillingRoutes = [`${basePrefix}/plans-billing`, '/dashboard/plans-billing', '/admin-dashboard/plans-billing'];
+      if (!allowedBillingRoutes.includes(pathname)) {
+        router.replace(`${basePrefix}/plans-billing`);
+        toast.error('તમારા સ્ટુડિયો ફીચર્સ વાપરવા માટે કૃપા કરીને પહેલા પ્લાન પસંદ કરો. (Please choose a plan to unlock all features)', {
+          id: 'no-plan-redirect',
+          duration: 4000,
+          icon: '🔒',
+        });
+      }
+      return;
+    }
     if (isStartupPlan && (pathname === basePrefix || pathname === `${basePrefix}/`)) {
       router.replace(`${basePrefix}/events`);
       return;
     }
     if (!isRouteAllowed(pathname)) {
       router.replace(`${basePrefix}/plans-billing`);
-      toast.error(isBasicPlan ? 'Please upgrade your plan from Basic to access this feature.' : 'Please upgrade to Standard or higher to unlock this feature.', {
+      toast.error('Please upgrade your plan to unlock this feature.', {
         duration: 3500,
         icon: '🔒'
       });
     }
-  }, [isBasicPlan, isStartupPlan, pathname, router, basePrefix]);
+  }, [hasPaidPlan, storageLoading, user, isStartupPlan, isSuperAdmin, pathname, router, basePrefix]);
 
   const handleLogout = async () => {
     await logout();

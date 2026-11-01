@@ -1,7 +1,10 @@
 'use client';
 import React, { useEffect, useState, useCallback } from 'react';
 import { useDashboard } from './DashboardContext';
-import { Calendar, Image as ImageIcon, Users, Heart, UsersRound, RefreshCw, ExternalLink, Settings, Camera, TrendingUp, ArrowUpRight, Sparkles, Clock, Lock, CreditCard, Zap, User } from 'lucide-react';
+import { Calendar, Image as ImageIcon, Users, Heart, UsersRound, RefreshCw, ExternalLink, Settings, Camera, TrendingUp, ArrowUpRight, Sparkles, Clock, Lock, CreditCard, Zap, User, HardDrive, Cloud, Crown, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useStorageUsage } from '@/lib/storage';
+import StorageCreditBlock from '@/components/storage/StorageCreditBlock';
+import StorageRecentActivity from '@/components/storage/StorageRecentActivity';
 import { apiClient } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
@@ -46,7 +49,7 @@ export default function DashboardOverview() {
       try {
         const cached = localStorage.getItem('mara_overview_stats');
         if (cached) return JSON.parse(cached);
-      } catch {}
+      } catch { }
     }
     return { events: 0, media: 0, visitors: 0, teamMembers: 0, customers: 0 };
   });
@@ -58,6 +61,7 @@ export default function DashboardOverview() {
   });
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const { usage: storageUsage, loading: loadingStorage, refresh: refreshStorage } = useStorageUsage();
 
   // Aggressive prefetch for instant 0.5s navigation
   useEffect(() => {
@@ -89,6 +93,7 @@ export default function DashboardOverview() {
         localStorage.setItem('mara_overview_stats', JSON.stringify(newStats));
       }
       setLastUpdated(new Date());
+      refreshStorage();
     } catch (err) {
       console.error('Failed to fetch stats:', err);
     } finally {
@@ -126,6 +131,41 @@ export default function DashboardOverview() {
   const isBasicPlan = currentPlan === 'BASIC';
   const isStartupPlan = currentPlan === 'STARTUP' || currentPlan === 'STARTER';
 
+  const shoots = context?.shoots || [];
+  const todayDateStr = React.useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const shootStats = React.useMemo(() => {
+    let upcoming = 0;
+    let todayCount = 0;
+    let complete = 0;
+    let due = 0;
+
+    (shoots || []).forEach((s: any) => {
+      if (s.status === 'Completed') {
+        complete++;
+        return;
+      }
+      if (s.status === 'Due') {
+        due++;
+        return;
+      }
+      const d = new Date(s.date);
+      const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (dStr === todayDateStr || s.status === 'Today') {
+        todayCount++;
+      } else if (dStr > todayDateStr || s.status === 'Upcoming') {
+        upcoming++;
+      } else {
+        due++;
+      }
+    });
+
+    return { upcoming, today: todayCount, complete, due, total: (shoots || []).length };
+  }, [shoots, todayDateStr]);
+
   const allowedStartupLinks = [
     '/dashboard/plans-billing',
     '/dashboard/create-event',
@@ -136,6 +176,10 @@ export default function DashboardOverview() {
 
   const handleBlockClick = (targetLink?: string) => {
     if (isSuperAdmin) {
+      if (targetLink) router.push(targetLink);
+      return;
+    }
+    if (loadingStorage) {
       if (targetLink) router.push(targetLink);
       return;
     }
@@ -373,6 +417,118 @@ export default function DashboardOverview() {
         </motion.div>
       )}
 
+      {/* ═══ Studio Shoot Schedule: 4 Calendar Status Boxes ═══ */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-3 px-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Calendar className="w-4 h-4 text-[#c5a880]" />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-700">Studio Shoot Schedule</span>
+            {shootStats.today > 0 && (
+              <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-800 border border-amber-500/30 animate-pulse flex items-center gap-1">
+                ★ {shootStats.today} Shoot Scheduled Today!
+              </span>
+            )}
+          </div>
+          <Link
+            href="/dashboard/calendar"
+            className="text-xs font-black text-[#8c6d3f] hover:text-[#5a4321] flex items-center gap-1 group transition-colors"
+          >
+            <span>Open Full Calendar</span>
+            <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
+          {/* 1. UPCOMING */}
+          <Link
+            href="/dashboard/calendar?filter=upcoming"
+            className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-5 relative overflow-hidden cursor-pointer hover:border-blue-400 hover:shadow-lg hover:shadow-blue-500/10 hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-300 group shadow-xs"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center transition-transform group-hover:scale-110 shadow-xs">
+                <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                Upcoming
+              </span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              <AnimatedCount value={shootStats.upcoming} />
+            </div>
+            <p className="text-[11px] font-medium text-slate-500 mt-0.5">
+              Scheduled future shoots
+            </p>
+          </Link>
+
+          {/* 2. TODAY */}
+          <Link
+            href="/dashboard/calendar?filter=today"
+            className={`rounded-2xl p-3.5 sm:p-5 relative overflow-hidden cursor-pointer hover:shadow-lg hover:shadow-amber-500/10 hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-300 group shadow-xs border ${
+              shootStats.today > 0
+                ? 'bg-amber-50/80 border-amber-400 ring-2 ring-amber-400/20'
+                : 'bg-white border-slate-200/80 hover:border-amber-400'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center transition-transform group-hover:scale-110 shadow-xs">
+                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full flex items-center gap-1">
+                Today {shootStats.today > 0 && <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-ping inline-block" />}
+              </span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <AnimatedCount value={shootStats.today} />
+            </div>
+            <p className="text-[11px] font-medium text-slate-500 mt-0.5">
+              Action required today
+            </p>
+          </Link>
+
+          {/* 3. COMPLETE */}
+          <Link
+            href="/dashboard/calendar?filter=complete"
+            className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-5 relative overflow-hidden cursor-pointer hover:border-emerald-400 hover:shadow-lg hover:shadow-emerald-500/10 hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-300 group shadow-xs"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center transition-transform group-hover:scale-110 shadow-xs">
+                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                Complete
+              </span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              <AnimatedCount value={shootStats.complete} />
+            </div>
+            <p className="text-[11px] font-medium text-slate-500 mt-0.5">
+              Completed shoots
+            </p>
+          </Link>
+
+          {/* 4. DUE DATE */}
+          <Link
+            href="/dashboard/calendar?filter=due"
+            className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-5 relative overflow-hidden cursor-pointer hover:border-rose-400 hover:shadow-lg hover:shadow-rose-500/10 hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-300 group shadow-xs"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center transition-transform group-hover:scale-110 shadow-xs">
+                <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">
+                Due Date
+              </span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              <AnimatedCount value={shootStats.due} />
+            </div>
+            <p className="text-[11px] font-medium text-slate-500 mt-0.5">
+              Overdue / rescheduled
+            </p>
+          </Link>
+        </div>
+      </div>
+
       {/* ═══ Stat Cards ═══ */}
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-4 px-1">
@@ -424,7 +580,7 @@ export default function DashboardOverview() {
                         style={{ background: card.bg }}>
                         <card.icon className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: card.color }} />
                       </div>
-                      
+
                       {/* Arrow or Lock Badge */}
                       <div>
                         {(isBasicPlan || (isStartupPlan && !allowedStartupLinks.some(r => card.link === r || card.link.startsWith(`${r}/`)))) ? (
@@ -455,6 +611,112 @@ export default function DashboardOverview() {
         </AnimatePresence>
       </div>
 
+      {/* ═══ Cloud Photo Storage Overview & Metric Cards ═══ */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="mb-8"
+      >
+        <div className="flex items-center justify-between mb-4 px-1">
+          <div className="flex items-center gap-2">
+            <Cloud className="w-4 h-4 text-blue-600" />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+              Cloud Storage System
+            </span>
+          </div>
+          <Link
+            href="/dashboard/plans-billing"
+            className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer transition-colors"
+          >
+            Manage Storage Plans <ArrowUpRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        {/* Storage Credit Block Widget */}
+        <div className="mb-4">
+          <StorageCreditBlock usage={storageUsage} loading={loadingStorage} />
+        </div>
+
+        {/* 6 Dedicated Storage Metric Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3.5 mb-6">
+          {/* 1. Total Storage */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-4 shadow-xs hover:border-slate-300 transition-all">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2">
+              <HardDrive className="w-4 h-4" />
+            </div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Storage</div>
+            <div className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 tracking-tight">
+              {storageUsage?.totalStorageGb ?? 2} GB
+            </div>
+          </div>
+
+          {/* 2. Used Storage */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-4 shadow-xs hover:border-slate-300 transition-all">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2">
+              <Cloud className="w-4 h-4" />
+            </div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Used Storage</div>
+            <div className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 tracking-tight">
+              {storageUsage?.usedStorageGb ?? 0} GB
+            </div>
+          </div>
+
+          {/* 3. Available Storage */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-4 shadow-xs hover:border-slate-300 transition-all">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Available Storage</div>
+            <div className="text-xl sm:text-2xl font-black text-emerald-600 mt-0.5 tracking-tight">
+              {storageUsage?.availableStorageGb ?? 2} GB
+            </div>
+          </div>
+
+          {/* 4. Active Subscription */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-4 shadow-xs hover:border-slate-300 transition-all">
+            <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-2">
+              <Crown className="w-4 h-4" />
+            </div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Active Plan</div>
+            <div className="text-xs sm:text-sm font-black text-slate-900 mt-0.5 truncate" title={storageUsage?.activePlan?.name}>
+              {storageUsage?.activePlan?.name || 'Free Starter'}
+            </div>
+          </div>
+
+          {/* 5. Subscription Expiry */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-4 shadow-xs hover:border-slate-300 transition-all">
+            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-2">
+              <Clock className="w-4 h-4" />
+            </div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Subscription Expiry</div>
+            <div className="text-xs sm:text-sm font-black text-slate-900 mt-0.5 truncate">
+              {storageUsage?.activePlan?.isLifetime || !storageUsage?.activePlan?.expiresAt
+                ? 'Lifetime Free'
+                : new Date(storageUsage.activePlan.expiresAt).toLocaleDateString('en-IN', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: '2-digit',
+                })}
+            </div>
+          </div>
+
+          {/* 6. Total Uploaded Photos */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-4 shadow-xs hover:border-slate-300 transition-all">
+            <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-2">
+              <ImageIcon className="w-4 h-4" />
+            </div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Uploaded Photos</div>
+            <div className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 tracking-tight">
+              <AnimatedCount value={storageUsage?.totalPhotos ?? stats.media} />
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Storage Activity */}
+        <StorageRecentActivity limit={4} />
+      </motion.div>
+
       {/* ═══ Quick Actions ═══ */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
@@ -468,8 +730,8 @@ export default function DashboardOverview() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-3.5">
           {quickLinks.map((ql, i) => {
-            const isQLLocked = (isBasicPlan && !ql.highlight) || 
-                               (isStartupPlan && !allowedStartupLinks.some(r => ql.href === r || ql.href.startsWith(`${r}/`)));
+            const isQLLocked = (isBasicPlan && !ql.highlight) ||
+              (isStartupPlan && !allowedStartupLinks.some(r => ql.href === r || ql.href.startsWith(`${r}/`)));
             return (
               <motion.div
                 key={ql.href}
@@ -478,20 +740,18 @@ export default function DashboardOverview() {
                 transition={{ delay: 0.35 + i * 0.06 }}
                 onClick={() => handleBlockClick(ql.href)}
                 className={`rounded-2xl p-3.5 sm:p-4 flex items-center gap-3 sm:gap-3.5 cursor-pointer
-                  transition-all duration-300 group active:scale-[0.98] ${
-                    ql.highlight
-                      ? 'bg-gradient-to-br from-[#fcf9f5] via-white to-[#faf5ec] border border-[#c5a880]/60 ring-1 ring-[#c5a880]/20 shadow-[0_4px_16px_rgba(197,168,128,0.12)] hover:border-[#c5a880] hover:ring-[#c5a880]/40 hover:shadow-[0_8px_24px_rgba(197,168,128,0.22)] hover:-translate-y-0.5'
-                      : isQLLocked
-                        ? 'bg-slate-50/70 border border-slate-200/60 opacity-60 hover:opacity-85 hover:bg-slate-50'
-                        : 'bg-white border border-slate-200/80 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-0.5 shadow-xs'
+                  transition-all duration-300 group active:scale-[0.98] ${ql.highlight
+                    ? 'bg-gradient-to-br from-[#fcf9f5] via-white to-[#faf5ec] border border-[#c5a880]/60 ring-1 ring-[#c5a880]/20 shadow-[0_4px_16px_rgba(197,168,128,0.12)] hover:border-[#c5a880] hover:ring-[#c5a880]/40 hover:shadow-[0_8px_24px_rgba(197,168,128,0.22)] hover:-translate-y-0.5'
+                    : isQLLocked
+                      ? 'bg-slate-50/70 border border-slate-200/60 opacity-60 hover:opacity-85 hover:bg-slate-50'
+                      : 'bg-white border border-slate-200/80 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-0.5 shadow-xs'
                   }`}
               >
                 <div
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105 shadow-xs ${
-                    ql.highlight
-                      ? 'bg-[#c5a880]/15 text-[#9e7b4f] border border-[#c5a880]/30'
-                      : 'border border-slate-100'
-                  }`}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105 shadow-xs ${ql.highlight
+                    ? 'bg-[#c5a880]/15 text-[#9e7b4f] border border-[#c5a880]/30'
+                    : 'border border-slate-100'
+                    }`}
                   style={!ql.highlight ? { background: `${ql.accent}12` } : {}}
                 >
                   <ql.icon
@@ -527,11 +787,10 @@ export default function DashboardOverview() {
                   </div>
                 ) : (
                   <ArrowUpRight
-                    className={`w-4 h-4 ml-auto shrink-0 transition-all ${
-                      ql.highlight
-                        ? 'text-[#c5a880] opacity-100 group-hover:text-[#9e7b4f] group-hover:translate-x-0.5 group-hover:-translate-y-0.5'
-                        : 'text-slate-300 opacity-0 group-hover:opacity-100 group-hover:text-slate-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5'
-                    }`}
+                    className={`w-4 h-4 ml-auto shrink-0 transition-all ${ql.highlight
+                      ? 'text-[#c5a880] opacity-100 group-hover:text-[#9e7b4f] group-hover:translate-x-0.5 group-hover:-translate-y-0.5'
+                      : 'text-slate-300 opacity-0 group-hover:opacity-100 group-hover:text-slate-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5'
+                      }`}
                   />
                 )}
               </motion.div>

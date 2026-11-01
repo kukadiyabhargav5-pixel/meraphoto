@@ -104,6 +104,7 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 import { initializeQdrant } from './services/qdrantService';
 import { startEventRetentionScheduler } from './services/eventRetentionService';
 import { seedDefaultPlans } from './controllers/pricingController';
+import { seedStoragePlans } from './services/storageSubscriptionService';
 
 // ── AI Service Keep-Alive Pinger ──────────────────────────────────
 // Prevents Render free-tier from sleeping the AI service after 5 min inactivity.
@@ -166,6 +167,7 @@ mongoose
       // Non-blocking background initializations
       initializeQdrant().catch((err) => console.warn('[Qdrant] Background init notice:', err?.message));
       seedDefaultPlans().catch((err) => console.warn('[PricingPlans] Init notice:', err?.message));
+      seedStoragePlans().catch((err) => console.warn('[StoragePlans] Init notice:', err?.message));
       startEventRetentionScheduler();
       startAiKeepAlive();
     });
