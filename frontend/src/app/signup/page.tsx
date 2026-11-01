@@ -127,12 +127,6 @@ export default function SignupPage() {
           toast.success('Existing studio account found! Logging in...');
           try {
             await googleLogin(googleCredential, googleAccessToken);
-            router.replace('/dashboard');
-            setTimeout(() => {
-              if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/dashboard')) {
-                window.location.href = '/dashboard';
-              }
-            }, 350);
           } catch (loginErr) {
             console.warn('Auto Google login failed:', loginErr);
             setRedirecting(false);
@@ -320,23 +314,11 @@ export default function SignupPage() {
         if (googleLogin) {
           await googleLogin(googleCredential || undefined, googleAccessToken || undefined, registrationPayload);
         }
-        toast.success('Studio account verified! Redirecting...');
-        router.replace('/dashboard');
-        setTimeout(() => {
-          if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/dashboard')) {
-            window.location.href = '/dashboard';
-          }
-        }, 400);
+        toast.success('Studio account verified! Loading dashboard...');
       } else {
         setRedirecting(true);
         await register(registrationPayload);
         toast.success('Registration successful! Opening your studio dashboard...');
-        router.replace('/dashboard');
-        setTimeout(() => {
-          if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/dashboard')) {
-            window.location.href = '/dashboard';
-          }
-        }, 400);
       }
     } catch (err: any) {
       setRedirecting(false);

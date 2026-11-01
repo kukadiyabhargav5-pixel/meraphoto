@@ -168,7 +168,7 @@ export default function GlobalLoader() {
     return false;
   });
 
-  const [displayProgress, setDisplayProgress] = useState(15);
+  const [displayProgress, setDisplayProgress] = useState(1);
   const [isFlashing, setIsFlashing] = useState(false);
   const keepAliveStartedRef = useRef(false);
 
@@ -192,24 +192,24 @@ export default function GlobalLoader() {
     }
   }, []);
 
-  // Autonomous, smooth progress animation: 15% -> 100% in 400ms (NEVER STUCK AT 1%)
+  // Autonomous, smooth progress animation: 1% -> 100% in 450ms (NEVER STUCK AT 1%)
   useEffect(() => {
     if (!isHome || isDismissed) return;
 
-    // Hard safety timeout: unconditionally dismiss after 650ms
+    // Hard safety timeout: unconditionally dismiss after 750ms
     const hardSafetyTimer = setTimeout(() => {
       setIsDismissed(true);
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('app_initial_ready', 'true');
       }
-    }, 650);
+    }, 750);
 
     const startTime = Date.now();
-    const duration = 380; // 380ms total animation
+    const duration = 450; // 450ms total animation
 
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTime;
-      const calculated = Math.min(100, Math.round(15 + (elapsed / duration) * 85));
+      const calculated = Math.min(100, Math.round(1 + (elapsed / duration) * 99));
       const current = Math.max(calculated, Math.min(100, progress || 0));
       setDisplayProgress(current);
 
@@ -221,7 +221,7 @@ export default function GlobalLoader() {
           if (typeof window !== 'undefined') {
             sessionStorage.setItem('app_initial_ready', 'true');
           }
-        }, 100);
+        }, 120);
       }
     }, 20);
 

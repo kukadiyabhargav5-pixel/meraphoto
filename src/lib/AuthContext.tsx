@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { apiClient } from './api';
 import { LoadingManager } from './LoadingManager';
 import LogoutLoader from '../components/LogoutLoader';
@@ -32,22 +33,24 @@ interface AuthContextType {
   isAuthenticated: boolean;
   loading: boolean;
   isLoggingOut: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  isLoggingIn?: boolean;
+  login: (email: string, pass: string) => Promise<any>;
   googleLogin: (credential?: string, accessToken?: string, extraData?: any) => Promise<any>;
-  register: (data: any) => Promise<void>;
+  register: (formData: any) => Promise<any>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const router = useRouter();
+
   const [user, setUser] = useState<AuthUser | null>(() => {
     if (typeof window === 'undefined') return null;
     try {
       const u = localStorage.getItem('user');
-      const t = localStorage.getItem('accessToken');
-      return t && u ? JSON.parse(u) : null;
+      return u ? JSON.parse(u) : null;
     } catch { return null; }
   });
   const [studio, setStudio] = useState<AuthStudio | null>(() => {
@@ -65,7 +68,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       return !(t && u);
     } catch { return true; }
   });
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const [authTransition, setAuthTransition] = useState<{
+    active: boolean;
+    mode: 'login' | 'logout';
+    targetUrl: string;
+  } | null>(null);
+
+  const isLoggingOut = Boolean(authTransition && authTransition.mode === 'logout');
+  const isLoggingIn = Boolean(authTransition && authTransition.mode === 'login');
 
   const isAuthenticated = !!user;
 
@@ -127,6 +138,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     refreshUser();
   }, [refreshUser]);
 
+  const handleTransitionComplete = useCallback(() => {
+    if (!authTransition) return;
+    const { mode, targetUrl } = authTransition;
+    const destination = targetUrl || (mode === 'logout' ? '/login' : '/dashboard');
+
+    if (mode === 'logout') {
+      setUser(null);
+      setStudio(null);
+    }
+
+    try {
+      router.replace(destination);
+    } catch {
+      if (typeof window !== 'undefined') {
+        window.location.href = destination;
+      }
+    }
+
+    // Safety fallback: if router hasn't changed URL after 450ms, enforce hard navigation
+    setTimeout(() => {
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith(destination)) {
+        window.location.href = destination;
+      }
+      setAuthTransition(null);
+    }, 450);
+  }, [authTransition, router]);
+
   const login = async (email: string, password: string) => {
     const res = await apiClient.post('/auth/login', { email, password });
     const data = res.data;
@@ -145,6 +183,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(data.user);
     setStudio(data.studio || null);
     setLoading(false);
+
+    const targetUrl = data.user?.role === 'SUPER_ADMIN' ? '/admin-choice' : '/dashboard';
+
+    // Activate the 1% -> 100% Page Loader
+    setAuthTransition({
+      active: true,
+      mode: 'login',
+      targetUrl,
+    });
+
+    return data;
   };
 
   const googleLogin = async (credential?: string, accessToken?: string, extraData?: any) => {
@@ -165,6 +214,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(data.user);
     setStudio(data.studio || null);
     setLoading(false);
+
+    const targetUrl = data.user?.role === 'SUPER_ADMIN' ? '/admin-choice' : '/dashboard';
+
+    // Activate the 1% -> 100% Page Loader
+    setAuthTransition({
+      active: true,
+      mode: 'login',
+      targetUrl,
+    });
+
     return data;
   };
 
@@ -186,13 +245,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(data.user);
     setStudio(data.studio || null);
     setLoading(false);
+
+    const targetUrl = data.user?.role === 'SUPER_ADMIN' ? '/admin-choice' : '/dashboard';
+
+    // Activate the 1% -> 100% Page Loader
+    setAuthTransition({
+      active: true,
+      mode: 'login',
+      targetUrl,
+    });
+
     return data;
   };
 
-  const logout = async () => {
-    setIsLoggingOut(true);
-
-    // Immediately clear authentication credentials
+  const logout = useCallback(async () => {
+    // 1. Immediately clear authentication credentials
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
@@ -203,28 +270,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       sessionStorage.setItem('app_initial_ready', 'true');
     }
 
-    // Run backend logout notification with race timeout so it never hangs
-    const logoutNetworkCall = Promise.race([
-      apiClient.post('/auth/logout').catch(() => {}),
-      new Promise((r) => setTimeout(r, 1200))
-    ]);
+    // 2. Fire backend logout in background
+    apiClient.post('/auth/logout').catch(() => {});
 
-    // Display the logout page loader for exactly 1.35s
-    const displayTimer = new Promise((resolve) => setTimeout(resolve, 1350));
-
-    await Promise.all([logoutNetworkCall, displayTimer]);
-
-    setUser(null);
-    setStudio(null);
-
-    // Navigate smoothly to /login without triggering any global loaders
-    window.location.replace('/login');
-  };
+    // 3. Activate the 1% -> 100% Page Loader
+    setAuthTransition({
+      active: true,
+      mode: 'logout',
+      targetUrl: '/login',
+    });
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, studio, isAuthenticated, loading, isLoggingOut, login, googleLogin, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, studio, isAuthenticated, loading, isLoggingOut, isLoggingIn, login, googleLogin, register, logout, refreshUser }}>
       {children}
-      {isLoggingOut && <LogoutLoader />}
+      {authTransition && authTransition.active && (
+        <LogoutLoader
+          mode={authTransition.mode}
+          targetUrl={authTransition.targetUrl}
+          onComplete={handleTransitionComplete}
+        />
+      )}
     </AuthContext.Provider>
   );
 };

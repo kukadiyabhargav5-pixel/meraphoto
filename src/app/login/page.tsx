@@ -57,24 +57,6 @@ export default function LoginPage() {
       }
 
       toast.success('Login successful! Entering dashboard...');
-
-      const userStr = localStorage.getItem('user');
-      let targetPath = '/dashboard';
-      if (userStr) {
-        try {
-          const userObj = JSON.parse(userStr);
-          if (userObj.role === 'SUPER_ADMIN') {
-            targetPath = '/admin-choice';
-          }
-        } catch (e) {}
-      }
-
-      router.replace(targetPath);
-      setTimeout(() => {
-        if (typeof window !== 'undefined' && !window.location.pathname.startsWith(targetPath)) {
-          window.location.href = targetPath;
-        }
-      }, 350);
     } catch (err: any) {
       const errMsg =
         err?.response?.data?.error ||
@@ -282,7 +264,6 @@ export default function LoginPage() {
                   if (googleLogin) {
                     await googleLogin(credential, accessToken);
                     toast.success('Google login successful!');
-                    router.push('/dashboard');
                   }
                 } catch (err: any) {
                   toast.error(err?.response?.data?.error || 'Google login failed.');
