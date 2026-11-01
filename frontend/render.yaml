@@ -2,12 +2,13 @@ services:
   - type: web
     name: meraphotoes
     runtime: node
-    plan: free
+    # Note: Use 'starter' ($7/mo) for always-on 24/7 zero-cold-start production, or 'free' for evaluation
+    plan: starter
     region: oregon
     repo: https://github.com/kukadiyabhargav5-pixel/meraphotoes.git
     branch: main
-    buildCommand: cd backend && npm install && npm run build
-    startCommand: cd backend && npm start
+    buildCommand: npm install && npm run build
+    startCommand: npm start
     autoDeploy: true
     healthCheckPath: /health
     envVars:
@@ -54,7 +55,7 @@ services:
       - key: OPENROUTER_API_KEY
         sync: false
       - key: AI_SERVICE_URL
-        value: http://maraphotoes-ai:10000
+        sync: false
       - key: FRONTEND_URL
         value: https://meraphoto.vercel.app
       - key: R2_ACCESS_KEY_ID

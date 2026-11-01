@@ -444,14 +444,14 @@ export default function PublicStudioPage() {
       </div>
 
       {/* ── PORTFOLIO & EVENTS SHOWCASE ── */}
-      <section id="portfolio" className="pt-24 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      <section id="portfolio" className="scroll-mt-28 pt-24 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
           <div>
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#f8f1e5] border border-[#c5a880]/40 text-xs font-black text-[#99732e] uppercase tracking-wider mb-3 shadow-sm">
               <Sparkles className="w-4 h-4 text-[#99732e]" />
               <span>Curated Masterpieces</span>
             </div>
-            <h2 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight">
+            <h2 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight leading-snug sm:leading-normal pt-2 pb-1 overflow-visible">
               Featured Events & Portfolio
             </h2>
             <p className="text-slate-600 text-sm sm:text-base mt-2 max-w-xl leading-relaxed">

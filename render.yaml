@@ -7,11 +7,14 @@ services:
     region: oregon
     repo: https://github.com/kukadiyabhargav5-pixel/meraphotoes.git
     branch: main
+    rootDir: backend
     buildCommand: npm install && npm run build
     startCommand: npm start
     autoDeploy: true
     healthCheckPath: /health
     envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
       - key: NODE_ENV
         value: production
       - key: PORT

@@ -27,3 +27,5 @@ mongo_log.txt
 scratch/
 *.tsbuildinfo
 .next/
+
+.vercel

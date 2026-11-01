@@ -7,11 +7,14 @@ services:
     region: oregon
     repo: https://github.com/kukadiyabhargav5-pixel/meraphotoes.git
     branch: main
+    rootDir: backend
     buildCommand: npm install && npm run build
     startCommand: npm start
     autoDeploy: true
     healthCheckPath: /health
     envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
       - key: NODE_ENV
         value: production
       - key: PORT
@@ -63,19 +66,16 @@ services:
       - key: R2_SECRET_ACCESS_KEY
         sync: false
       - key: R2_BUCKET_NAME
-        sync: false
+        value: maraphoto
       - key: R2_ENDPOINT
         sync: false
       - key: R2_REGION
         value: auto
+      - key: R2_PUBLIC_URL
+        sync: false
       - key: API_URL
-        value: https://meraphotoes.onrender.com
-      - key: RAZORPAY_WEBHOOK_SECRET
         sync: false
-      - key: QDRANT_URL
-        sync: false
-      - key: QDRANT_API_KEY
-        sync: false
+
   - type: web
     name: maraphotoes-ai
     runtime: python

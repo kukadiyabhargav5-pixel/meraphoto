@@ -1,21 +1,24 @@
 FROM node:20-alpine
 
+# Install FFmpeg and OpenCV system dependencies
+RUN apk update && apk add --no-cache ffmpeg gcc g++ make python3
+
 WORKDIR /app
 
 # Copy dependency files
 COPY package.json package-lock.json* ./
 
-# Install dependencies
+# Install dependencies including native builds for sharp
 RUN npm install
 
 # Copy application source
 COPY . .
 
-# Build the Next.js app for production
+# Compile TypeScript
 RUN npm run build
 
 # Expose port
-EXPOSE 3000
+EXPOSE 5000
 
-# Start Next.js production server
+# Start Express server
 CMD ["npm", "start"]
