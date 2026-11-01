@@ -37,7 +37,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { apiClient, resolveMediaUrl } from '@/lib/api';
+import { apiClient, resolveMediaUrl, getDirectUploadApiUrl } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/lib/AuthContext';
 import { useStorageUsage, formatBytes, ONE_GB_BYTES } from '@/lib/storage';
@@ -371,6 +371,7 @@ export default function EventUploadDedicatedPage({
     let bytesUploadedTotal = 0;
     let successful = 0;
     let failed = 0;
+    let lastUploadError = '';
     let currentFileIndex = 0;
     let activeStreamsCount = 0;
 
@@ -549,8 +550,8 @@ export default function EventUploadDedicatedPage({
 
           let uploadedSuccessfully = false;
 
-          // Direct parallel PUT to presigned cloud storage URL
-          if (presignedItem?.uploadUrl) {
+          // Direct parallel PUT to presigned cloud storage URL (photos only; videos stream direct to backend)
+          if (!isVideo && presignedItem?.uploadUrl) {
             try {
               const putRes = await fetch(presignedItem.uploadUrl, {
                 method: 'PUT',
@@ -598,7 +599,8 @@ export default function EventUploadDedicatedPage({
               if (file.webkitRelativePath) {
                 formData.append('folderPath', file.webkitRelativePath);
               }
-              const res = await apiClient.post(`/media/event/${event._id}/upload`, formData, {
+              const directUploadBase = getDirectUploadApiUrl();
+              const res = await apiClient.post(`${directUploadBase}/media/event/${event._id}/upload`, formData, {
                 timeout: 600000, // 10 minutes timeout for ultra-fast, uninterrupted large video & photo uploads
               });
               if (res.data?.media) {

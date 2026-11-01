@@ -92,48 +92,262 @@ const benefits = [
   },
 ];
 
-const plans = [
-  {
-    name: 'Startup',
-    price: '₹3,999',
-    period: '/year',
-    desc: 'Store 50,000 photos & store 10 videos',
-    highlight: false,
-    features: ['Store 50,000 photos', 'Store 10 videos', 'Create & Manage Events', 'Quotation Generator', 'Profile & Galleries'],
-    cta: 'Choose Startup',
-    href: '/signup',
-  },
-  {
-    name: 'Standard',
-    price: '₹7,999',
-    period: '/year',
-    desc: 'Store 1,00,000 photos & store 20 videos',
-    highlight: true,
-    features: ['Store 1,00,000 photos', 'Store 20 videos', 'ALL Dashboard Tools Enabled', 'Bill & Invoice Generator', 'Lead Capture & Branding', 'Watermarks & Protection'],
-    cta: 'Choose Standard',
-    href: '/signup',
-  },
-  {
-    name: 'Essential',
-    price: '₹12,999',
-    period: '/year',
-    desc: 'Store 1,50,000 photos & store 50 videos',
-    highlight: false,
-    features: ['Store 1,50,000 photos', 'Store 50 videos', 'ALL Dashboard Tools Enabled', 'High-Speed Optimization', 'Priority 24/7 Support', 'Includes all Standard features'],
-    cta: 'Choose Essential',
-    href: '/signup',
-  },
-  {
-    name: 'Premium',
-    price: '₹19,999',
-    period: '/year',
-    desc: 'Store 3,00,000 photos & store 100 videos',
-    highlight: false,
-    features: ['Store 3,00,000 photos', 'Store 100 videos', 'ALL Dashboard Tools Enabled', 'AI Face Recognition Scanner', 'Dedicated VIP Account Manager', 'Includes all Essential features'],
-    cta: 'Choose Premium',
-    href: '/signup',
-  },
-];
+type StoragePlanItem = {
+  name: string;
+  price: string;
+  period: string;
+  storageGb: string;
+  validity: string;
+  desc: string;
+  highlight: boolean;
+  badge: string;
+  features: string[];
+  cta: string;
+  href: string;
+};
+
+const storagePlansByDuration: Record<'MONTHLY' | '6_MONTHS' | 'YEARLY', StoragePlanItem[]> = {
+  MONTHLY: [
+    {
+      name: 'Free Starter',
+      price: '₹0',
+      period: '/ forever',
+      storageGb: '15 GB',
+      validity: 'Lifetime Access',
+      desc: '15 GB High-Speed Cloud Storage included free',
+      highlight: false,
+      badge: 'Free Forever',
+      features: [
+        '15 GB Free Cloud Storage',
+        'Upload Photos & Full HD Videos',
+        'Create & Share Unlimited Events',
+        'Instant QR Code Gallery Access',
+        'Quotation & Invoice Generator',
+      ],
+      cta: 'Start Free Account',
+      href: '/signup',
+    },
+    {
+      name: '10 GB Storage',
+      price: '₹149',
+      period: '/ month',
+      storageGb: '10 GB',
+      validity: '1 Full Month',
+      desc: 'Store ~2,500 High-Res Photos',
+      highlight: false,
+      badge: 'Starter Solo',
+      features: [
+        '10 GB High-Speed Cloud Storage',
+        'Store ~2,500 High-Res Photos',
+        'Full Resolution Direct Downloads',
+        'AI Face Recognition Indexing',
+        'Client QR Code Sharing',
+      ],
+      cta: 'Choose 10 GB',
+      href: '/signup',
+    },
+    {
+      name: '50 GB Storage',
+      price: '₹299',
+      period: '/ month',
+      storageGb: '50 GB',
+      validity: '1 Full Month',
+      desc: 'Store ~12,500 High-Res Photos',
+      highlight: false,
+      badge: 'Popular Solo',
+      features: [
+        '50 GB High-Speed Cloud Storage',
+        'Store ~12,500 High-Res Photos',
+        'Full Video Storage & Playback',
+        'AI Face Search & Live Scanner',
+        'Custom Studio Watermarking',
+      ],
+      cta: 'Choose 50 GB',
+      href: '/signup',
+    },
+    {
+      name: '100 GB Storage',
+      price: '₹499',
+      period: '/ month',
+      storageGb: '100 GB',
+      validity: '1 Full Month',
+      desc: 'Store ~25,000 High-Res Photos',
+      highlight: true,
+      badge: 'Most Popular',
+      features: [
+        '100 GB High-Speed Cloud Storage',
+        'Store ~25,000 High-Res Photos',
+        'Full 4K Video Storage Support',
+        'AI Face Search & Smart Albums',
+        'Automated Zip Download Archiver',
+        'VIP Priority 24/7 Support',
+      ],
+      cta: 'Choose 100 GB',
+      href: '/signup',
+    },
+  ],
+  '6_MONTHS': [
+    {
+      name: 'Free Starter',
+      price: '₹0',
+      period: '/ forever',
+      storageGb: '15 GB',
+      validity: 'Lifetime Access',
+      desc: '15 GB High-Speed Cloud Storage included free',
+      highlight: false,
+      badge: 'Free Forever',
+      features: [
+        '15 GB Free Cloud Storage',
+        'Upload Photos & Full HD Videos',
+        'Create & Share Unlimited Events',
+        'Instant QR Code Gallery Access',
+        'Quotation & Invoice Generator',
+      ],
+      cta: 'Start Free Account',
+      href: '/signup',
+    },
+    {
+      name: '50 GB Storage',
+      price: '₹1,499',
+      period: '/ 6 months',
+      storageGb: '50 GB',
+      validity: '6 Full Months',
+      desc: 'Store ~12,500 High-Res Photos',
+      highlight: false,
+      badge: 'Extended Solo',
+      features: [
+        '50 GB Dedicated Cloud Storage',
+        '6 Months Extended Validity',
+        'Store ~12,500 High-Res Photos',
+        'AI Face Search & Live Scanner',
+        'Custom Watermark Protection',
+      ],
+      cta: 'Choose 50 GB',
+      href: '/signup',
+    },
+    {
+      name: '75 GB Storage',
+      price: '₹6,999',
+      period: '/ 6 months',
+      storageGb: '75 GB',
+      validity: '6 Full Months',
+      desc: 'Store ~18,750 High-Res Photos',
+      highlight: true,
+      badge: 'HOT • Most Popular',
+      features: [
+        '75 GB Dedicated Cloud Storage',
+        '6 Months Extended Validity',
+        'Store ~18,750 High-Res Photos',
+        'High-Speed Multi-Stream Uploads',
+        'AI Face Recognition Included',
+        'Complete Client Gallery Management',
+      ],
+      cta: 'Choose 75 GB',
+      href: '/signup',
+    },
+    {
+      name: '150 GB Storage',
+      price: '₹11,999',
+      period: '/ 6 months',
+      storageGb: '150 GB',
+      validity: '6 Full Months',
+      desc: 'Store ~37,500 High-Res Photos',
+      highlight: false,
+      badge: 'Pro Agency',
+      features: [
+        '150 GB Dedicated Cloud Storage',
+        '6 Months Extended Validity',
+        'Store ~37,500 High-Res Photos',
+        '4K Video Storage & Streaming',
+        'VIP AI Face Recognition Tier',
+        'Dedicated Priority Support',
+      ],
+      cta: 'Choose 150 GB',
+      href: '/signup',
+    },
+  ],
+  YEARLY: [
+    {
+      name: 'Free Starter',
+      price: '₹0',
+      period: '/ forever',
+      storageGb: '15 GB',
+      validity: 'Lifetime Access',
+      desc: '15 GB High-Speed Cloud Storage included free',
+      highlight: false,
+      badge: 'Free Forever',
+      features: [
+        '15 GB Free Cloud Storage',
+        'Upload Photos & Full HD Videos',
+        'Create & Share Unlimited Events',
+        'Instant QR Code Gallery Access',
+        'Quotation & Invoice Generator',
+      ],
+      cta: 'Start Free Account',
+      href: '/signup',
+    },
+    {
+      name: '100 GB Storage',
+      price: '₹5,999',
+      period: '/ year',
+      storageGb: '100 GB',
+      validity: '1 Full Year (12 Mo)',
+      desc: 'Store ~25,000 High-Res Photos',
+      highlight: false,
+      badge: 'Annual Value',
+      features: [
+        '100 GB Dedicated Cloud Storage',
+        '1 Full Year Subscription Validity',
+        'Store ~25,000 High-Res Photos',
+        'Unlimited Client Event Galleries',
+        'AI Face Search & Smart Albums',
+        'Dedicated Account Assistance',
+      ],
+      cta: 'Choose 100 GB',
+      href: '/signup',
+    },
+    {
+      name: '200 GB Storage',
+      price: '₹11,999',
+      period: '/ year',
+      storageGb: '200 GB',
+      validity: '1 Full Year (12 Mo)',
+      desc: 'Store ~50,000 High-Res Photos',
+      highlight: true,
+      badge: 'Most Popular • Best Value',
+      features: [
+        '200 GB High-Capacity Storage',
+        '1 Full Year Subscription Validity',
+        'Store ~50,000 High-Res Photos',
+        '4K Video Storage & Streaming',
+        'AI Face Recognition VIP Tier',
+        'VIP Priority 24/7 SLA Support',
+      ],
+      cta: 'Choose 200 GB',
+      href: '/signup',
+    },
+    {
+      name: '500 GB Storage',
+      price: '₹23,999',
+      period: '/ year',
+      storageGb: '500 GB',
+      validity: '1 Full Year (12 Mo)',
+      desc: 'Store ~1,25,000 High-Res Photos',
+      highlight: false,
+      badge: 'Enterprise VIP',
+      features: [
+        '500 GB Maximum Enterprise Cloud Storage',
+        '1 Full Year Subscription Validity',
+        'Store ~1,25,000 High-Res Photos',
+        'High-Throughput Enterprise CDN',
+        'VIP Dedicated Account Manager',
+        'Custom Domain & Whitelabeling Ready',
+      ],
+      cta: 'Choose 500 GB',
+      href: '/signup',
+    },
+  ],
+};
 
 const faqs = [
   {
@@ -212,7 +426,7 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 
 export default function HomePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [billingCycle, setBillingCycle] = useState<'yearly' | 'monthly'>('yearly');
+  const [selectedDuration, setSelectedDuration] = useState<'MONTHLY' | '6_MONTHS' | 'YEARLY'>('YEARLY');
 
   const handleHomeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1168,90 +1382,110 @@ export default function HomePage() {
       {/* ── PRICING ── */}
       <section id="pricing" className="pricing-section">
         <div className="section-container" style={{ textAlign: 'center' }}>
-          <span className="section-badge">Membership &amp; Storage</span>
+          <span className="section-badge">Plans &amp; Cloud Storage</span>
           <h2 className="section-title">Simple, Transparent Pricing</h2>
-          <p className="section-desc">Start delivering free with 15 GB storage. Upgrade as your studio grows.</p>
+          <p className="section-desc">Choose your preferred validity: Monthly, 6 Months (Extended), or 1 Year (Annual).</p>
 
-          {/* Billing Cycle Toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginTop: '28px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: billingCycle === 'monthly' ? '#09090b' : '#9ca3af' }}>
-              Monthly
-            </span>
-            <button
-              type="button"
-              onClick={() => setBillingCycle(billingCycle === 'yearly' ? 'monthly' : 'yearly')}
-              style={{
-                position: 'relative',
-                width: '54px',
-                height: '28px',
-                borderRadius: '9999px',
-                background: '#c5a880',
-                border: 'none',
-                cursor: 'pointer',
-                transition: 'background-color 0.2s',
-                padding: '2px',
-                display: 'inline-flex',
-                alignItems: 'center'
-              }}
-              role="switch"
-              aria-checked={billingCycle === 'yearly'}
-            >
-              <span
+          {/* 3 Duration Pills from Plans & Billing Page */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '32px', marginBottom: '24px' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', padding: '6px', borderRadius: '20px', background: '#ffffff', border: '1px solid #e8dfd3', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+              <button
+                type="button"
+                onClick={() => setSelectedDuration('MONTHLY')}
                 style={{
-                  display: 'inline-block',
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '50%',
-                  background: '#ffffff',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                  transform: billingCycle === 'yearly' ? 'translateX(26px)' : 'translateX(0px)',
-                  transition: 'transform 0.2s ease-in-out'
+                  padding: '8px 18px',
+                  borderRadius: '14px',
+                  fontSize: '12px',
+                  fontWeight: 900,
+                  cursor: 'pointer',
+                  border: 'none',
+                  transition: 'all 0.2s',
+                  background: selectedDuration === 'MONTHLY' ? '#09090b' : 'transparent',
+                  color: selectedDuration === 'MONTHLY' ? '#ffffff' : '#4b5563',
                 }}
-              />
-            </button>
-            <span style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', display: 'inline-flex', alignItems: 'center', gap: '6px', color: billingCycle === 'yearly' ? '#09090b' : '#9ca3af' }}>
-              Yearly
-              <span style={{ background: 'rgba(197,168,128,0.25)', color: '#99732e', fontSize: '9px', fontWeight: 900, padding: '2px 8px', borderRadius: '9999px', textTransform: 'uppercase' }}>
-                Save 35%
-              </span>
-            </span>
+              >
+                Monthly (1 Month)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDuration('6_MONTHS')}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: '14px',
+                  fontSize: '12px',
+                  fontWeight: 900,
+                  cursor: 'pointer',
+                  border: 'none',
+                  position: 'relative',
+                  transition: 'all 0.2s',
+                  background: selectedDuration === '6_MONTHS' ? 'linear-gradient(135deg, #c5a880, #b89665)' : 'transparent',
+                  color: selectedDuration === '6_MONTHS' ? '#ffffff' : '#4b5563',
+                }}
+              >
+                6 Months (Extended)
+                <span style={{ position: 'absolute', top: '-10px', right: '4px', padding: '1px 6px', borderRadius: '9999px', background: '#f59e0b', fontSize: '8px', fontWeight: 900, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  HOT
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDuration('YEARLY')}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: '14px',
+                  fontSize: '12px',
+                  fontWeight: 900,
+                  cursor: 'pointer',
+                  border: 'none',
+                  transition: 'all 0.2s',
+                  background: selectedDuration === 'YEARLY' ? '#09090b' : 'transparent',
+                  color: selectedDuration === 'YEARLY' ? '#ffffff' : '#4b5563',
+                }}
+              >
+                1 Year (Annual)
+              </button>
+            </div>
           </div>
 
           <div className="pricing-grid">
-            {plans.map(plan => {
-              const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
-              const period = billingCycle === 'yearly' ? plan.yearlyPeriod : plan.monthlyPeriod;
-              return (
-                <div key={plan.name} className={`pricing-card ${plan.highlight ? 'pricing-card-highlight' : ''}`}>
-                  {plan.highlight ? (
-                    <div className="pricing-popular">{plan.badge}</div>
-                  ) : (
-                    <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', padding: '3px 12px', background: '#f5f2eb', border: '1px solid rgba(227,216,200,0.5)', color: '#99732e', fontSize: '8px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', borderRadius: '9999px', whiteSpace: 'nowrap' }}>
-                      {plan.badge}
-                    </div>
-                  )}
-                  <div style={{ marginBottom: '20px', marginTop: '4px' }}>
-                    <h3 className="pricing-name" style={{ color: plan.highlight ? '#c5a880' : '#09090b' }}>{plan.name}</h3>
-                    <p style={{ fontSize: '12px', fontWeight: 500, color: plan.highlight ? '#9ca3af' : '#6b7280', marginBottom: '14px', minHeight: '36px' }}>{plan.desc}</p>
-                    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '4px', borderBottom: '1px solid rgba(227,216,200,0.15)', paddingBottom: '14px' }}>
-                      <span className="pricing-price" style={{ color: plan.highlight ? '#fff' : '#09090b' }}>{price}</span>
-                      <span className="pricing-period" style={{ color: plan.highlight ? '#c5a880' : '#6b7280', marginBottom: '4px' }}>{period}</span>
-                    </div>
+            {storagePlansByDuration[selectedDuration].map(plan => (
+              <div key={plan.name} className={`pricing-card ${plan.highlight ? 'pricing-card-highlight' : ''}`}>
+                {plan.highlight ? (
+                  <div className="pricing-popular">{plan.badge}</div>
+                ) : (
+                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', padding: '3px 12px', background: '#f5f2eb', border: '1px solid rgba(227,216,200,0.5)', color: '#99732e', fontSize: '8px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', borderRadius: '9999px', whiteSpace: 'nowrap' }}>
+                    {plan.badge}
                   </div>
-                  <ul className="pricing-features" style={{ flex: 1 }}>
-                    {plan.features.map(f => (
-                      <li key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '10px', textAlign: 'left' }}>
-                        <Check className="w-3.5 h-3.5" style={{ color: '#c5a880', flexShrink: 0, marginTop: '2px' }} />
-                        <span style={{ color: plan.highlight ? '#d1d5db' : '#6b7280', fontSize: '12px', fontWeight: 500 }}>{f}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <Link href={plan.href} className={`pricing-cta ${plan.highlight ? 'pricing-cta-highlight' : 'pricing-cta-default'}`} style={{ marginTop: '16px' }}>
-                    {plan.cta}
-                  </Link>
+                )}
+                <div style={{ marginBottom: '20px', marginTop: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '2px 8px', borderRadius: '9999px', background: plan.highlight ? 'rgba(197,168,128,0.2)' : '#f5f2eb', color: plan.highlight ? '#c5a880' : '#8c6d3f' }}>
+                      {plan.storageGb} Storage
+                    </span>
+                  </div>
+                  <h3 className="pricing-name" style={{ color: plan.highlight ? '#c5a880' : '#09090b', marginTop: '6px' }}>{plan.name}</h3>
+                  <p style={{ fontSize: '12px', fontWeight: 500, color: plan.highlight ? '#9ca3af' : '#6b7280', marginBottom: '14px', minHeight: '36px' }}>{plan.desc}</p>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '4px', borderBottom: '1px solid rgba(227,216,200,0.15)', paddingBottom: '14px' }}>
+                    <span className="pricing-price" style={{ color: plan.highlight ? '#fff' : '#09090b' }}>{plan.price}</span>
+                    <span className="pricing-period" style={{ color: plan.highlight ? '#c5a880' : '#6b7280', marginBottom: '4px' }}>{plan.period}</span>
+                  </div>
+                  <div style={{ marginTop: '8px', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: plan.highlight ? '#d1d5db' : '#9ca3af' }}>
+                    Validity: {plan.validity}
+                  </div>
                 </div>
-              );
-            })}
+                <ul className="pricing-features" style={{ flex: 1 }}>
+                  {plan.features.map(f => (
+                    <li key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '10px', textAlign: 'left' }}>
+                      <Check className="w-3.5 h-3.5" style={{ color: '#c5a880', flexShrink: 0, marginTop: '2px' }} />
+                      <span style={{ color: plan.highlight ? '#d1d5db' : '#6b7280', fontSize: '12px', fontWeight: 500 }}>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link href={plan.href} className={`pricing-cta ${plan.highlight ? 'pricing-cta-highlight' : 'pricing-cta-default'}`} style={{ marginTop: '16px' }}>
+                  {plan.cta}
+                </Link>
+              </div>
+            ))}
           </div>
 
           <div style={{ marginTop: '36px', textAlign: 'center' }}>
@@ -1285,7 +1519,7 @@ export default function HomePage() {
                 <div className="contact-info-card">
                   <div className="contact-icon-wrap"><Phone className="w-5 h-5" /></div>
                   <div>
-                    <p style={{ fontSize: '14px', fontWeight: 700, color: '#09090b' }}>+91 87994 95038</p>
+                    <p style={{ fontSize: '14px', fontWeight: 700, color: '#09090b' }}>+91 87994 95028</p>
                     <p style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600, marginTop: '2px' }}>Available 9 AM – 6 PM IST</p>
                   </div>
                 </div>

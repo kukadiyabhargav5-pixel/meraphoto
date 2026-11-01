@@ -12,6 +12,23 @@ export const getApiBaseUrl = (): string => {
 
 export const API_BASE_URL = getApiBaseUrl();
 
+/**
+ * Direct Backend API URL for large media uploads (Videos, ZIPs, Large Photo batches).
+ * Bypasses Vercel's strict 4.5 MB serverless/rewrite body size limit by connecting directly
+ * to Render backend (which supports up to 1 GB uploads).
+ */
+export const getDirectUploadApiUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.')) {
+      return 'http://localhost:5000/api';
+    }
+    // Production Render backend
+    return 'https://meraphotoes.onrender.com/api';
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'https://meraphotoes.onrender.com/api';
+};
+
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
