@@ -141,7 +141,6 @@ export default function DashboardOverview() {
   );
   const hasPaidPlan = Boolean(isSuperAdmin || hasPaidStorage || hasPaidStudio);
   const isBasicPlan = !hasPaidPlan;
-  const isStartupPlan = hasPaidPlan && (studioPlanKey === 'STARTUP' || studioPlanKey === 'STARTER');
 
   const shoots = context?.shoots || [];
   const todayDateStr = React.useMemo(() => {
@@ -178,14 +177,6 @@ export default function DashboardOverview() {
     return { upcoming, today: todayCount, complete, due, total: (shoots || []).length };
   }, [shoots, todayDateStr]);
 
-  const allowedStartupLinks = [
-    '/dashboard/plans-billing',
-    '/dashboard/create-event',
-    '/dashboard/events',
-    '/dashboard/quotation',
-    '/dashboard/profile'
-  ];
-
   const handleBlockClick = (targetLink?: string) => {
     if (isSuperAdmin) {
       if (targetLink) router.push(targetLink);
@@ -197,18 +188,7 @@ export default function DashboardOverview() {
         return;
       }
       toast.error('તમારા ડેશબોર્ડના તમામ ફીચર્સ અનલોક કરવા માટે કૃપા કરીને પહેલા પ્લાન પસંદ કરો. (Please choose a plan to unlock all features)', {
-        duration: 3500,
-        icon: '🔒'
-      });
-      router.push('/dashboard/plans-billing');
-      return;
-    }
-    if (isStartupPlan) {
-      if (targetLink && allowedStartupLinks.some(r => targetLink === r || targetLink.startsWith(`${r}/`))) {
-        router.push(targetLink);
-        return;
-      }
-      toast.error('Please upgrade to Standard or higher to unlock this feature.', {
+        id: 'no-plan-click',
         duration: 3500,
         icon: '🔒'
       });
@@ -392,39 +372,6 @@ export default function DashboardOverview() {
         </motion.div>
       )}
 
-      {/* ═══ Startup Plan Upgrade Banner ═══ */}
-      {isStartupPlan && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          onClick={() => handleBlockClick()}
-          className="mb-8 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-transparent border border-blue-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/10 transition-all group"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-600 shrink-0">
-              <Zap className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-sm font-black text-slate-900 flex items-center gap-2">
-                Active Plan: STARTUP (₹3,999/yr)
-                <span className="text-[10px] uppercase font-black tracking-wider bg-blue-500/20 text-blue-800 px-2.5 py-0.5 rounded-full">
-                  50k Photos & 10 Videos
-                </span>
-              </div>
-              <p className="text-xs text-slate-600 mt-0.5">
-                Create Event, Manage Events, Quotations, and Profile are unlocked. Upgrade to Standard (₹7,999) to unlock ALL dashboard features!
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={(e) => { e.stopPropagation(); handleBlockClick(); }}
-            className="shrink-0 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-black shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 group-hover:translate-x-0.5 cursor-pointer"
-          >
-            Upgrade to Standard <ArrowUpRight className="w-4 h-4" />
-          </button>
-        </motion.div>
-      )}
-
       {/* ═══ Studio Shoot Schedule: 4 Calendar Status Boxes ═══ */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-3 px-1">
@@ -592,7 +539,7 @@ export default function DashboardOverview() {
 
                       {/* Arrow or Lock Badge */}
                       <div>
-                        {(isBasicPlan || (isStartupPlan && !allowedStartupLinks.some(r => card.link === r || card.link.startsWith(`${r}/`)))) ? (
+                        {(isBasicPlan) ? (
                           <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600">
                             <Lock className="w-3.5 h-3.5" />
                           </div>
@@ -739,8 +686,7 @@ export default function DashboardOverview() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-3.5">
           {quickLinks.map((ql, i) => {
-            const isQLLocked = (isBasicPlan && !ql.highlight) ||
-              (isStartupPlan && !allowedStartupLinks.some(r => ql.href === r || ql.href.startsWith(`${r}/`)));
+            const isQLLocked = isBasicPlan && !ql.highlight;
             return (
               <motion.div
                 key={ql.href}

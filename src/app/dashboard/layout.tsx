@@ -162,22 +162,6 @@ function SidebarContent({
     studioPlanKey !== 'BASIC'
   );
   const hasPaidPlan = Boolean(isSuperAdmin || hasStoragePlan || hasStudioPlan);
-  const isStartupPlan = studioPlanKey === 'STARTUP' || studioPlanKey === 'STARTER';
-
-  const allowedStartupRoutes = [
-    '/dashboard/plans-billing',
-    '/dashboard/create-event',
-    '/dashboard/events',
-    '/dashboard/quotation',
-    '/dashboard/profile',
-    '/dashboard/branding',
-    '/admin-dashboard/plans-billing',
-    '/admin-dashboard/create-event',
-    '/admin-dashboard/events',
-    '/admin-dashboard/quotation',
-    '/admin-dashboard/profile',
-    '/admin-dashboard/branding'
-  ];
 
   const isRouteAllowed = (href: string) => {
     if (isSuperAdmin) return true;
@@ -185,6 +169,7 @@ function SidebarContent({
       // ONLY Plans & Billing is allowed when user has no active paid plan!
       return href === `${basePrefix}/plans-billing` || href === '/dashboard/plans-billing' || href === '/admin-dashboard/plans-billing';
     }
+    // When ANY plan is purchased, ALL routes are 100% unlocked!
     return true;
   };
 
@@ -470,28 +455,13 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
     studioPlanKey !== 'BASIC'
   );
   const hasPaidPlan = Boolean(isSuperAdmin || hasStoragePlan || hasStudioPlan);
-  const isStartupPlan = studioPlanKey === 'STARTUP' || studioPlanKey === 'STARTER';
-
-  const allowedStartupRoutes = [
-    '/dashboard/plans-billing',
-    '/dashboard/create-event',
-    '/dashboard/events',
-    '/dashboard/quotation',
-    '/dashboard/profile',
-    '/dashboard/branding',
-    '/admin-dashboard/plans-billing',
-    '/admin-dashboard/create-event',
-    '/admin-dashboard/events',
-    '/admin-dashboard/quotation',
-    '/admin-dashboard/profile',
-    '/admin-dashboard/branding'
-  ];
 
   const isRouteAllowed = (href: string) => {
     if (isSuperAdmin) return true;
     if (!hasPaidPlan) {
       return href === `${basePrefix}/plans-billing` || href === '/dashboard/plans-billing' || href === '/admin-dashboard/plans-billing';
     }
+    // When ANY plan is purchased, ALL routes and tools are completely unlocked!
     return true;
   };
 
@@ -554,18 +524,7 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
       }
       return;
     }
-    if (isStartupPlan && (pathname === basePrefix || pathname === `${basePrefix}/`)) {
-      router.replace(`${basePrefix}/events`);
-      return;
-    }
-    if (!isRouteAllowed(pathname)) {
-      router.replace(`${basePrefix}/plans-billing`);
-      toast.error('Please upgrade your plan to unlock this feature.', {
-        duration: 3500,
-        icon: '🔒'
-      });
-    }
-  }, [hasPaidPlan, storageLoading, user, isStartupPlan, isSuperAdmin, pathname, router, basePrefix]);
+  }, [hasPaidPlan, storageLoading, user, isSuperAdmin, pathname, router, basePrefix]);
 
   const handleLogout = async () => {
     await logout();
