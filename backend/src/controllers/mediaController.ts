@@ -9,6 +9,7 @@ import {
   r2Client,
   R2_BUCKET,
   uploadFile,
+  uploadFileStream,
   deleteFile,
   deleteFiles,
   cleanR2Key,

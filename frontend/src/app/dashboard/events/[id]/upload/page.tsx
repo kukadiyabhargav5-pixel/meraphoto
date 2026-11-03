@@ -447,6 +447,51 @@ export default function EventUploadDedicatedPage({
     });
   };
 
+  // Reliable Multipart XHR Uploader with real-time continuous progress (0% -> 100%)
+  const uploadViaMultipartXhr = (
+    url: string,
+    formData: FormData,
+    onProgress: (pct: number) => void
+  ): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      if (typeof window !== 'undefined') {
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        }
+      }
+      xhr.upload.onprogress = (evt) => {
+        if (evt.lengthComputable && evt.total > 0) {
+          const pct = Math.min(100, Math.round((evt.loaded / evt.total) * 100));
+          onProgress(pct);
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch {
+            resolve({ success: true });
+          }
+        } else {
+          try {
+            const errJson = JSON.parse(xhr.responseText);
+            reject(new Error(errJson.error || `HTTP ${xhr.status}`));
+          } catch {
+            reject(new Error(`Server returned HTTP ${xhr.status}`));
+          }
+        }
+      };
+      xhr.onerror = () => reject(new Error('Network connection error during upload'));
+      xhr.ontimeout = () => reject(new Error('Upload timed out'));
+      xhr.timeout = 600000;
+      xhr.send(formData);
+    });
+  };
+
+
   const handleFileUpload = async (files: FileList | File[]) => {
     if (!files || files.length === 0 || !event) return;
 
@@ -688,54 +733,46 @@ export default function EventUploadDedicatedPage({
 
           // Direct parallel PUT to presigned cloud storage URL using accurate continuous byte progress (0% -> 100%)
           if (presignedItem?.uploadUrl) {
-            let attempt = 0;
-            const maxAttempts = 3;
-            while (attempt < maxAttempts && !uploadedSuccessfully) {
-              attempt++;
-              try {
-                const contentType = fileToUpload.type || (isVideo ? 'video/mp4' : 'application/octet-stream');
-                await uploadViaXhr(presignedItem.uploadUrl, fileToUpload, contentType, (pct) => {
-                  setUploadQueue((prev) =>
-                    prev.map((q, qIdx) => (qIdx === idx ? { ...q, progress: Math.max(5, pct) } : q))
-                  );
-                });
-
-                uploadedSuccessfully = true;
-                bytesUploadedTotal += fileToUpload.size;
-                successful++;
-
-                // Mark item as verifying with cloud storage
+            try {
+              const contentType = fileToUpload.type || (isVideo ? 'video/mp4' : 'application/octet-stream');
+              await uploadViaXhr(presignedItem.uploadUrl, fileToUpload, contentType, (pct) => {
                 setUploadQueue((prev) =>
-                  prev.map((q, qIdx) => (qIdx === idx ? { ...q, status: 'verifying', progress: 100 } : q))
+                  prev.map((q, qIdx) => (qIdx === idx ? { ...q, progress: Math.max(5, pct) } : q))
                 );
+              });
 
-                const key = presignedItem.publicId || presignedItem.key;
-                const publicUrl = presignedItem.url || presignedItem.publicUrl;
+              uploadedSuccessfully = true;
+              bytesUploadedTotal += fileToUpload.size;
+              successful++;
 
-                pendingCreateBuffer.push({
-                  publicId: key,
-                  r2Key: key,
-                  key,
-                  url: publicUrl,
-                  r2Url: publicUrl,
-                  originalName: file.name,
-                  mimeType: fileToUpload.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
-                  size: fileToUpload.size,
-                  type: isVideo ? 'VIDEO' : 'PHOTO',
-                  folderPath: file.webkitRelativePath || '',
-                });
+              // Mark item as verifying with cloud storage
+              setUploadQueue((prev) =>
+                prev.map((q, qIdx) => (qIdx === idx ? { ...q, status: 'verifying', progress: 100 } : q))
+              );
 
-                flushToBackend();
-              } catch (putErr) {
-                console.warn(`[Direct Cloud PUT Attempt ${attempt} Failed for ${file.name}]:`, putErr);
-                if (attempt < maxAttempts) {
-                  await new Promise((res) => setTimeout(res, 500 * attempt));
-                }
-              }
+              const key = presignedItem.publicId || presignedItem.key;
+              const publicUrl = presignedItem.url || presignedItem.publicUrl;
+
+              pendingCreateBuffer.push({
+                publicId: key,
+                r2Key: key,
+                key,
+                url: publicUrl,
+                r2Url: publicUrl,
+                originalName: file.name,
+                mimeType: fileToUpload.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+                size: fileToUpload.size,
+                type: isVideo ? 'VIDEO' : 'PHOTO',
+                folderPath: file.webkitRelativePath || '',
+              });
+
+              flushToBackend();
+            } catch (putErr) {
+              console.warn(`[Direct Cloud PUT Failed for ${file.name}, routing via backend upload stream]:`, putErr);
             }
           }
 
-          // Fallback via multipart server route if presigned upload is unavailable
+          // Fallback via high-speed multipart server route if direct presigned upload is blocked/unavailable
           if (!uploadedSuccessfully) {
             try {
               const formData = new FormData();
@@ -744,19 +781,21 @@ export default function EventUploadDedicatedPage({
                 formData.append('folderPath', file.webkitRelativePath);
               }
               const directUploadBase = getDirectUploadApiUrl();
-              const res = await apiClient.post(`${directUploadBase}/media/event/${event._id}/upload`, formData, {
-                headers: {
-                  'Content-Type': 'multipart/form-data',
-                },
-                timeout: 600000, // 10 minutes timeout for ultra-fast, uninterrupted large video & photo uploads
+              const uploadUrl = `${directUploadBase}/media/event/${event._id}/upload`;
+
+              const uploadRes = await uploadViaMultipartXhr(uploadUrl, formData, (pct) => {
+                setUploadQueue((prev) =>
+                  prev.map((q, qIdx) => (qIdx === idx ? { ...q, progress: Math.max(5, pct) } : q))
+                );
               });
-              if (res.data?.media) {
+
+              if (uploadRes?.media) {
                 uploadedSuccessfully = true;
                 bytesUploadedTotal += fileToUpload.size;
                 successful++;
 
                 // Flatten and normalize incoming docs
-                const uploadedDocs = (Array.isArray(res.data.media) ? res.data.media : [res.data.media]).flat();
+                const uploadedDocs = (Array.isArray(uploadRes.media) ? uploadRes.media : [uploadRes.media]).flat();
                 setMediaItems((prev) => {
                   const uniqueMap = new Map();
                   uploadedDocs.forEach((m: any) => {
@@ -783,12 +822,17 @@ export default function EventUploadDedicatedPage({
                   }
                 });
 
+                // Mark item as success in queue
+                setUploadQueue((prev) =>
+                  prev.map((q, qIdx) => (qIdx === idx ? { ...q, status: 'success', progress: 100 } : q))
+                );
+
                 refreshStorage();
                 window.dispatchEvent(new Event('storage_updated'));
               }
             } catch (fallbackErr: any) {
-              const errMsg = fallbackErr.response?.data?.error || fallbackErr.message || 'Upload error';
-              console.error(`Upload failed for ${file.name}:`, errMsg, fallbackErr);
+              const errMsg = fallbackErr.message || 'Upload error';
+              console.error(`Upload failed for ${file.name}:`, errMsg);
               lastUploadError = errMsg;
               failed++;
 

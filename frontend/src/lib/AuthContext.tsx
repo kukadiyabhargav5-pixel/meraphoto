@@ -139,13 +139,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [refreshUser]);
 
   const handleTransitionComplete = useCallback(() => {
-    if (!authTransition) return;
-    const { mode, targetUrl } = authTransition;
-    const destination = targetUrl || (mode === 'logout' ? '/login' : '/dashboard');
+    const current = authTransition;
+    const mode = current?.mode || 'logout';
+    const destination = current?.targetUrl || (mode === 'logout' ? '/login' : '/dashboard');
 
     if (mode === 'logout') {
       setUser(null);
       setStudio(null);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+        localStorage.removeItem('studio');
+        sessionStorage.setItem('app_initial_ready', 'true');
+        window.location.href = destination;
+        return;
+      }
     }
 
     try {
@@ -156,13 +165,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // Safety fallback: if router hasn't changed URL after 450ms, enforce hard navigation
     setTimeout(() => {
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith(destination)) {
-        window.location.href = destination;
-      }
       setAuthTransition(null);
-    }, 450);
+    }, 150);
   }, [authTransition, router]);
 
   const login = async (email: string, password: string) => {
