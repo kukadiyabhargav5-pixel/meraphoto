@@ -1,3 +1,4 @@
+import { safelyDropSubdomainIndex } from '../utils/dbIndexCleaner';
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -34,14 +35,20 @@ export const registerStudioOwner = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Mobile number must be exactly 10 digits and start with 6, 7, 8, or 9.' });
     }
 
-    const passwordRegex = /^[A-Z](?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&#_\-~+=/.,><:;^]).{5,}$/;
-    if (!passwordRegex.test(password)) {
-      return res.status(400).json({ error: 'Password must start with a Capital letter, and contain at least 1 number, 1 special character, and small letters.' });
+    if (typeof password !== 'string' || password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
     }
 
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const normalizedEmail = email.toLowerCase().trim();
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
-      return res.status(400).json({ error: 'Email already registered' });
+      const existingStudio = await Studio.findOne({ ownerId: existingUser._id });
+      if (!existingStudio) {
+        console.warn(`[Registration] Found orphaned user without studio (${normalizedEmail}). Cleaning up for fresh registration.`);
+        await User.findByIdAndDelete(existingUser._id);
+      } else {
+        return res.status(400).json({ error: 'Email already registered. Please sign in instead.' });
+      }
     }
 
     // Hash password
@@ -50,31 +57,65 @@ export const registerStudioOwner = async (req: Request, res: Response) => {
 
     // Create user
     const newUser = await User.create({
-      name,
-      email: email.toLowerCase(),
+      name: name.trim(),
+      email: normalizedEmail,
       phone: cleanPhone,
       passwordHash,
       role: 'STUDIO_OWNER',
     });
 
-    // Create studio
-    const newStudio = await Studio.create({
-      name: studioName,
-      ownerId: newUser._id,
-      subscriptionPlan: 'BASIC',
-      subscriptionStatus: 'FREE',
-      customDomain: websiteLink || undefined,
-      logoUrl: logoUrl || undefined,
-      instagramUrl: instagramUrl || undefined,
-      facebookUrl: facebookUrl || undefined,
-      whatsappUrl: whatsappUrl || whatsappNumber || undefined,
-    });
+    const cleanWebsite = (websiteLink && typeof websiteLink === 'string' && websiteLink.trim().length > 0) ? websiteLink.trim() : undefined;
+    const cleanLogo = (logoUrl && typeof logoUrl === 'string' && logoUrl.trim().length > 0) ? logoUrl.trim() : undefined;
+    const cleanInsta = (instagramUrl && typeof instagramUrl === 'string' && instagramUrl.trim().length > 0) ? instagramUrl.trim() : undefined;
+    const cleanFb = (facebookUrl && typeof facebookUrl === 'string' && facebookUrl.trim().length > 0) ? facebookUrl.trim() : undefined;
+    const rawWa = whatsappUrl || whatsappNumber;
+    const cleanWa = (rawWa && typeof rawWa === 'string' && rawWa.trim().length > 0) ? rawWa.trim() : undefined;
+
+    // Resilient Studio creation (auto-drops obsolete subdomain_1 index if present)
+    let newStudio;
+    try {
+      newStudio = await Studio.create({
+        name: studioName.trim(),
+        ownerId: newUser._id,
+        subscriptionPlan: 'BASIC',
+        subscriptionStatus: 'FREE',
+        customDomain: cleanWebsite,
+        logoUrl: cleanLogo,
+        instagramUrl: cleanInsta,
+        facebookUrl: cleanFb,
+        whatsappUrl: cleanWa,
+      });
+    } catch (studioErr: any) {
+      console.error('[Registration] Studio creation error:', studioErr);
+      if (studioErr.code === 11000 && (studioErr.message?.includes('subdomain') || studioErr.keyPattern?.subdomain)) {
+        await safelyDropSubdomainIndex();
+        try {
+          newStudio = await Studio.create({
+            name: studioName.trim(),
+            ownerId: newUser._id,
+            subscriptionPlan: 'BASIC',
+            subscriptionStatus: 'FREE',
+            customDomain: cleanWebsite,
+            logoUrl: cleanLogo,
+            instagramUrl: cleanInsta,
+            facebookUrl: cleanFb,
+            whatsappUrl: cleanWa,
+          });
+        } catch (retryErr: any) {
+          await User.findByIdAndDelete(newUser._id);
+          throw retryErr;
+        }
+      } else {
+        await User.findByIdAndDelete(newUser._id);
+        throw studioErr;
+      }
+    }
 
     const tokens = generateTokens(newUser._id.toString(), newUser.role);
     newUser.refreshToken = tokens.refreshToken;
     await newUser.save();
 
-    // Send Welcome Email asynchronously (don't block the response)
+    // Send Welcome Email asynchronously
     sendWelcomeEmail(newUser.email, newUser.name, true).catch(err => console.error("Welcome Email Failed:", err));
 
     return res.status(201).json({
@@ -85,13 +126,10 @@ export const registerStudioOwner = async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     console.error('Registration error:', err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message || 'Registration failed. Please try again.' });
   }
 };
 
-/**
- * Normal email/password login
- */
 export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
@@ -356,17 +394,36 @@ export const googleLogin = async (req: Request, res: Response) => {
       const finalLogo = logoUrl && typeof logoUrl === 'string' && logoUrl.trim() ? logoUrl.trim() : undefined;
 
       if (!studio) {
-        studio = await Studio.create({
-          name: finalStudioName,
-          ownerId: user._id,
-          subscriptionPlan: 'BASIC',
-          subscriptionStatus: 'FREE',
-          customDomain: finalDomain,
-          instagramUrl: finalInsta,
-          facebookUrl: finalFb,
-          whatsappUrl: finalWa,
-          logoUrl: finalLogo,
-        });
+        try {
+          studio = await Studio.create({
+            name: finalStudioName,
+            ownerId: user._id,
+            subscriptionPlan: 'BASIC',
+            subscriptionStatus: 'FREE',
+            customDomain: finalDomain,
+            instagramUrl: finalInsta,
+            facebookUrl: finalFb,
+            whatsappUrl: finalWa,
+            logoUrl: finalLogo,
+          });
+        } catch (createStudioErr: any) {
+          if (createStudioErr.code === 11000 && (createStudioErr.message?.includes('subdomain') || createStudioErr.keyPattern?.subdomain)) {
+            await safelyDropSubdomainIndex();
+            studio = await Studio.create({
+              name: finalStudioName,
+              ownerId: user._id,
+              subscriptionPlan: 'BASIC',
+              subscriptionStatus: 'FREE',
+              customDomain: finalDomain,
+              instagramUrl: finalInsta,
+              facebookUrl: finalFb,
+              whatsappUrl: finalWa,
+              logoUrl: finalLogo,
+            });
+          } else {
+            throw createStudioErr;
+          }
+        }
       } else {
         let studioUpdated = false;
         if (studioName && typeof studioName === 'string' && studioName.trim() && studio.name !== studioName.trim()) {

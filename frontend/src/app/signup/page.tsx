@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Eye, EyeOff, Loader, ArrowRight, ArrowLeft, 
-  Mail, Lock, User as UserIcon, Phone, Store, Globe, 
-  Check, Image as ImageIcon, Upload, Trash2, ShieldCheck,
-  AlertCircle, CheckCircle2
+  Mail, Lock, User as UserIcon, Store, Globe, 
+  Check, Upload, Trash2, ShieldCheck,
+  AlertCircle, CheckCircle2, Sparkles
 } from 'lucide-react';
 
 // Branded Social Media Icons
@@ -42,7 +42,7 @@ export default function SignupPage() {
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [direction, setDirection] = useState<'next' | 'prev'>('next');
 
-  // Step 1: Personal Details
+  // STEP 1: Personal Details
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPhone, setRegPhone] = useState('');
@@ -56,7 +56,7 @@ export default function SignupPage() {
   const [googleCredential, setGoogleCredential] = useState('');
   const [googlePicture, setGooglePicture] = useState('');
 
-  // Step 2: Studio & Socials
+  // STEP 2: Studio Profile & Social Channels (NO PASSWORD HERE)
   const [regStudioName, setRegStudioName] = useState('');
   const [regLogo, setRegLogo] = useState('');
   const [regLogoFileName, setRegLogoFileName] = useState('');
@@ -65,23 +65,23 @@ export default function SignupPage() {
   const [regFacebook, setRegFacebook] = useState('');
   const [regWebsite, setRegWebsite] = useState('');
 
-  // Step 3 / Optional Password for Google
+  // STEP 3: Security & Password
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Submission & Navigation
+  // Submission & Loading States
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
 
   const { register, googleLogin, isAuthenticated, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  // 2 STEPS for Google User, 3 STEPS for Standard Email/Password User
+  // Exactly 3 distinct steps
   const totalSteps = 3;
 
-  // Prefetch dashboard routes for instant loading
+  // Prefetch dashboard routes for instantaneous loading
   useEffect(() => {
     router.prefetch('/dashboard');
     router.prefetch('/dashboard/events');
@@ -173,28 +173,30 @@ export default function SignupPage() {
   const isEmailFormatValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail.trim());
   const isEmailValid = isEmailFormatValid && (!emailExists || isGoogleUser);
   const isPhoneValid = /^[6-9]\d{9}$/.test(regPhone);
-
-  // ALL THREE DETAILS MUST BE TRUE TO PROCEED FROM STEP 1
   const isStep1Complete = isNameValid && isEmailValid && isPhoneValid;
 
   // Step 2 Validation (Studio Name is required)
   const isStep2Complete = regStudioName.trim().length >= 2;
 
-  // Password Requirements (Strictly aligned with backend)
+  // Password Requirements (Helpful checklist, forgiving validation)
   const passwordRequirements = [
-    { label: 'Starts with a Capital letter (A-Z)', valid: /^[A-Z]/.test(regPassword) },
-    { label: 'Contains a lowercase letter (a-z)', valid: /[a-z]/.test(regPassword) },
+    { label: 'Minimum 6 characters', valid: regPassword.length >= 6 },
+    { label: 'Contains a letter (a-z or A-Z)', valid: /[a-zA-Z]/.test(regPassword) },
     { label: 'Contains a number (0-9)', valid: /\d/.test(regPassword) },
-    { label: 'Contains a special character (@$!%*?&#...)', valid: /[@$!%*?&#_\-~+=/.,><:;^]/.test(regPassword) },
-    { label: 'Minimum 6 characters', valid: regPassword.length >= 6 }
+    { label: 'Passwords match', valid: regPassword.length > 0 && regPassword === regConfirmPassword },
   ];
-  const allPasswordValid = passwordRequirements.every(r => r.valid);
+  const isPasswordValid = regPassword.length >= 6;
   const passwordsMatch = regConfirmPassword.length > 0 ? regPassword === regConfirmPassword : false;
 
-  // Can submit check based on workflow mode
-  const canSubmit = isGoogleUser 
-    ? (isStep1Complete && isStep2Complete && (regPassword.length === 0 || (allPasswordValid && (regConfirmPassword ? passwordsMatch : true))))
-    : (isStep1Complete && isStep2Complete && allPasswordValid && passwordsMatch);
+  // Step 3 Validation:
+  // For standard user: password min 6 chars and passwords match
+  // For Google user: password is optional; if entered, must be >= 6 chars and match
+  const isStep3Complete = isGoogleUser
+    ? (regPassword.length === 0 || (isPasswordValid && passwordsMatch))
+    : (isPasswordValid && passwordsMatch);
+
+  // Overall canSubmit
+  const canSubmit = isStep1Complete && isStep2Complete && isStep3Complete;
 
   // Step Navigation
   const goToStep = (step: 1 | 2 | 3) => {
@@ -215,9 +217,9 @@ export default function SignupPage() {
         setRegStudioName(`${regName.trim()}'s Studio`);
       }
       goToStep(2);
-    } else if (currentStep === 2 && !isGoogleUser) {
+    } else if (currentStep === 2) {
       if (!isStep2Complete) {
-        toast.error('Please enter your Studio Name (minimum 2 characters).');
+        toast.error('Please enter your Studio / Brand Name (minimum 2 characters).');
         return;
       }
       goToStep(3);
@@ -261,16 +263,15 @@ export default function SignupPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // In Google flow, final step is Step 2; in Standard flow, final step is Step 3
-    if (currentStep !== totalSteps) {
+    if (currentStep !== 3) {
       handleNext();
       return;
     }
 
-    // Strict final validations
+    // Final password validations on Step 3
     if (!isGoogleUser) {
-      if (!allPasswordValid) {
-        toast.error('Password must fulfill all security requirements.');
+      if (!isPasswordValid) {
+        toast.error('Password must be at least 6 characters long.');
         return;
       }
       if (!passwordsMatch) {
@@ -278,8 +279,12 @@ export default function SignupPage() {
         return;
       }
     } else if (regPassword.length > 0) {
-      if (!allPasswordValid) {
-        toast.error('Optional password must fulfill all security requirements.');
+      if (!isPasswordValid) {
+        toast.error('Password must be at least 6 characters long.');
+        return;
+      }
+      if (!passwordsMatch) {
+        toast.error('Passwords do not match.');
         return;
       }
     }
@@ -287,18 +292,23 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
+      const cleanWebsite = regWebsite.trim() ? regWebsite.trim() : undefined;
+      const cleanInsta = regInstagram.trim() ? regInstagram.trim() : undefined;
+      const cleanFb = regFacebook.trim() ? regFacebook.trim() : undefined;
+      const cleanWa = regWhatsApp.trim() ? regWhatsApp.trim() : undefined;
+
       const registrationPayload = {
         name: regName.trim(),
         email: regEmail.trim().toLowerCase(),
         phone: regPhone.trim(),
         studioName: regStudioName.trim() || `${regName.trim()}'s Studio`,
-        websiteLink: regWebsite.trim() || undefined,
-        instagramUrl: regInstagram.trim() || undefined,
-        facebookUrl: regFacebook.trim() || undefined,
-        whatsappUrl: regWhatsApp.trim() || undefined,
-        whatsappNumber: regWhatsApp.trim() || undefined,
+        websiteLink: cleanWebsite,
+        instagramUrl: cleanInsta,
+        facebookUrl: cleanFb,
+        whatsappUrl: cleanWa,
+        whatsappNumber: cleanWa,
         logoUrl: regLogo || undefined,
-        password: regPassword || undefined,
+        password: regPassword.trim() || undefined,
       };
 
       if (isGoogleUser) {
@@ -323,7 +333,8 @@ export default function SignupPage() {
     } catch (err: any) {
       setRedirecting(false);
       setLoading(false);
-      toast.error(err?.response?.data?.error || 'Registration failed. Please try again.');
+      const errorMessage = err?.response?.data?.error || err?.message || 'Registration failed. Please try again.';
+      toast.error(errorMessage);
     }
   };
 
@@ -355,17 +366,12 @@ export default function SignupPage() {
     );
   }
 
-  // Dynamic 2 Steps for Google User, 3 Steps for Standard User
-  const stepsMeta = isGoogleUser 
-    ? [
-        { num: 1, title: 'Personal', subtitle: 'Mobile Verification' },
-        { num: 2, title: 'Studio Setup', subtitle: 'Logo & Social Channels' },
-      ]
-    : [
-        { num: 1, title: 'Personal', subtitle: 'Name, Email & Mobile' },
-        { num: 2, title: 'Studio & Links', subtitle: 'Logo & Social Channels' },
-        { num: 3, title: 'Security', subtitle: 'Password Setup' },
-      ];
+  // Consistent 3-Step Wizard Metadata
+  const stepsMeta = [
+    { num: 1, title: 'Personal', subtitle: 'Name, Email & Mobile' },
+    { num: 2, title: 'Studio Details', subtitle: 'Logo & Social Links' },
+    { num: 3, title: 'Security', subtitle: 'Password Setup' },
+  ];
 
   return (
     <PublicWrapper>
@@ -392,7 +398,7 @@ export default function SignupPage() {
             <p className="text-xs text-slate-500 mt-1 max-w-sm">Join Mara Photo to deliver client galleries with AI Face Recognition</p>
           </div>
 
-          {/* Stepped Wizard Progress Indicator (2 steps if Google, 3 steps if standard) */}
+          {/* Stepped Wizard Progress Indicator (Exactly 3 Steps) */}
           <div className="relative mb-7">
             <div className="flex items-center justify-between relative z-10">
               {stepsMeta.map((s) => {
@@ -428,9 +434,7 @@ export default function SignupPage() {
               <div 
                 className="h-full bg-gradient-to-r from-[#c5a880] to-[#9c7c56] transition-all duration-500 ease-out"
                 style={{ 
-                  width: isGoogleUser 
-                    ? (currentStep === 1 ? '0%' : '100%')
-                    : (currentStep === 1 ? '0%' : currentStep === 2 ? '50%' : '100%')
+                  width: currentStep === 1 ? '0%' : currentStep === 2 ? '50%' : '100%'
                 }}
               />
             </div>
@@ -441,7 +445,7 @@ export default function SignupPage() {
             <AnimatePresence mode="wait" custom={direction}>
               
               {/* ========================================================= */}
-              {/* PAGE 1: PERSONAL DETAILS (Name, Email, Mobile)            */}
+              {/* STEP 1: PERSONAL DETAILS (Name, Email, Mobile)            */}
               {/* ========================================================= */}
               {currentStep === 1 && (
                 <motion.div 
@@ -533,6 +537,7 @@ export default function SignupPage() {
                         type="text" 
                         id="regName"
                         value={regName}
+                        placeholder="Enter your full name"
                         onChange={(e) => setRegName(e.target.value)}
                         className={`w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border rounded-2xl pl-10 pr-10 py-3 text-sm font-semibold text-slate-900 focus:outline-none transition-all shadow-sm ${
                           isNameValid 
@@ -555,7 +560,7 @@ export default function SignupPage() {
                       {emailChecking ? (
                         <span className="text-slate-400 text-[10px] font-medium flex items-center gap-1"><Loader className="w-3 h-3 animate-spin" /> Checking</span>
                       ) : isEmailValid ? (
-                        <span className="text-emerald-600 text-[10px] font-bold flex items-center gap-0.5"><Check className="w-3 h-3" /> Verified</span>
+                        <span className="text-emerald-600 text-[10px] font-bold flex items-center gap-0.5"><Check className="w-3 h-3" /> Available</span>
                       ) : null}
                     </label>
                     <div className="relative group">
@@ -566,6 +571,7 @@ export default function SignupPage() {
                         type="email" 
                         id="regEmail"
                         value={regEmail}
+                        placeholder="e.g. yourname@studio.com"
                         disabled={isGoogleUser}
                         onChange={(e) => setRegEmail(e.target.value)}
                         className={`w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border rounded-2xl pl-10 pr-10 py-3 text-sm font-semibold text-slate-900 focus:outline-none transition-all shadow-sm disabled:opacity-75 disabled:cursor-not-allowed ${
@@ -618,6 +624,7 @@ export default function SignupPage() {
                         type="tel" 
                         id="regPhone"
                         maxLength={10}
+                        placeholder="9876543210"
                         value={regPhone}
                         onChange={handlePhoneChange}
                         className={`w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border rounded-2xl pl-24 pr-10 py-3 text-sm font-semibold tracking-wider text-slate-900 focus:outline-none transition-all shadow-sm ${
@@ -651,8 +658,7 @@ export default function SignupPage() {
               )}
 
               {/* ========================================================= */}
-              {/* PAGE 2: STUDIO PROFILE & SOCIAL CHANNELS                  */}
-              {/* (Final step for Google user, Step 2 of 3 for standard)   */}
+              {/* STEP 2: STUDIO & SOCIAL CHANNELS (Zero Password Fields)   */}
               {/* ========================================================= */}
               {currentStep === 2 && (
                 <motion.div 
@@ -679,6 +685,7 @@ export default function SignupPage() {
                         type="text" 
                         id="regStudioName"
                         value={regStudioName}
+                        placeholder="e.g. Royal Photography Studio"
                         onChange={(e) => setRegStudioName(e.target.value)}
                         className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-[#c5a880] rounded-2xl pl-10 pr-4 py-3 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#c5a880]/20 transition-all shadow-sm"
                       />
@@ -757,7 +764,7 @@ export default function SignupPage() {
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
                           <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-                            <span className="text-[#25D366]"><WhatsAppIcon className="w-3.5 h-3.5" /></span> WhatsApp Number / Link
+                            <span className="text-[#25D366]"><WhatsAppIcon className="w-3.5 h-3.5" /></span> WhatsApp Number
                           </label>
                           {regPhone && regWhatsApp !== regPhone && (
                             <button
@@ -777,6 +784,7 @@ export default function SignupPage() {
                             type="text" 
                             id="regWhatsApp"
                             value={regWhatsApp}
+                            placeholder="e.g. 9876543210"
                             onChange={(e) => setRegWhatsApp(e.target.value)}
                             className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-[#25D366] rounded-2xl pl-10 pr-4 py-2.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#25D366]/20 transition-all shadow-sm"
                           />
@@ -796,6 +804,7 @@ export default function SignupPage() {
                             type="text" 
                             id="regInstagram"
                             value={regInstagram}
+                            placeholder="e.g. @maraphotostudio or instagram.com/..."
                             onChange={(e) => setRegInstagram(e.target.value)}
                             className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-[#E1306C] rounded-2xl pl-10 pr-4 py-2.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#E1306C]/20 transition-all shadow-sm"
                           />
@@ -815,6 +824,7 @@ export default function SignupPage() {
                             type="text" 
                             id="regFacebook"
                             value={regFacebook}
+                            placeholder="e.g. facebook.com/yourstudiopage"
                             onChange={(e) => setRegFacebook(e.target.value)}
                             className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-[#1877F2] rounded-2xl pl-10 pr-4 py-2.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1877F2]/20 transition-all shadow-sm"
                           />
@@ -834,57 +844,21 @@ export default function SignupPage() {
                             type="text" 
                             id="regWebsite"
                             value={regWebsite}
+                            placeholder="e.g. https://www.yourstudio.com"
                             onChange={(e) => setRegWebsite(e.target.value)}
                             className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-[#c5a880] rounded-2xl pl-10 pr-4 py-2.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#c5a880]/20 transition-all shadow-sm"
                           />
                         </div>
                       </div>
-
-                      {/* Optional Password field for Google Users on Step 2 */}
-                      {isGoogleUser && (
-                        <div className="pt-3 border-t border-slate-100 space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-                              <Lock className="w-3.5 h-3.5 text-[#c5a880]" /> Set Account Password <span className="text-slate-400 font-normal lowercase">(optional)</span>
-                            </label>
-                            {regPassword && allPasswordValid && (
-                              <span className="text-emerald-600 text-[10px] font-bold flex items-center gap-0.5"><Check className="w-3 h-3" /> Strong</span>
-                            )}
-                          </div>
-                          <div className="relative group">
-                            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                              <Lock className="w-4 h-4" />
-                            </div>
-                            <input 
-                              type={showPassword ? 'text' : 'password'}
-                              id="regPassword"
-                              value={regPassword}
-                              onChange={(e) => setRegPassword(e.target.value)}
-                              className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-[#c5a880] rounded-2xl pl-10 pr-12 py-2.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#c5a880]/20 transition-all shadow-sm"
-                            />
-                            <button 
-                              type="button" 
-                              onClick={() => setShowPassword(!showPassword)}
-                              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors p-1"
-                              tabIndex={-1}
-                            >
-                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                            </button>
-                          </div>
-                          <p className="text-[10px] text-slate-400 pl-1">
-                            Optional: Allows logging into your studio with email & password in addition to Google.
-                          </p>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </motion.div>
               )}
 
               {/* ========================================================= */}
-              {/* PAGE 3: SECURITY & PASSWORD (Standard Users Only)         */}
+              {/* STEP 3: SECURITY & PASSWORD                               */}
               {/* ========================================================= */}
-              {currentStep === 3 && !isGoogleUser && (
+              {currentStep === 3 && (
                 <motion.div 
                   key="step3" 
                   custom={direction} 
@@ -895,11 +869,36 @@ export default function SignupPage() {
                   transition={{ duration: 0.35, ease: 'easeInOut' }}
                   className="space-y-4"
                 >
+                  {/* Explanatory banner for Google user vs Standard user */}
+                  {isGoogleUser ? (
+                    <div className="p-3.5 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl flex items-start gap-2.5">
+                      <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-bold text-emerald-950">Google Account Linked</p>
+                        <p className="text-[11px] text-emerald-700 font-medium leading-relaxed mt-0.5">
+                          Setting a password is <span className="font-bold underline">optional</span>. You can leave it blank to log in using Google, or set a password to log in with email as well.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-start gap-2.5">
+                      <ShieldCheck className="w-4 h-4 text-[#c5a880] shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">Set Studio Password</p>
+                        <p className="text-[11px] text-slate-500 font-medium leading-relaxed mt-0.5">
+                          Enter a secure password to access your Mara Photo studio dashboard anytime.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Password Field */}
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
-                      <span>Set Password <span className="text-rose-500">*</span></span>
-                      {allPasswordValid && <span className="text-emerald-600 text-[10px] font-bold flex items-center gap-0.5"><Check className="w-3 h-3" /> Strong</span>}
+                      <span>
+                        {isGoogleUser ? 'Set Account Password (Optional)' : 'Set Password'} {!isGoogleUser && <span className="text-rose-500">*</span>}
+                      </span>
+                      {isPasswordValid && <span className="text-emerald-600 text-[10px] font-bold flex items-center gap-0.5"><Check className="w-3 h-3" /> Valid</span>}
                     </label>
                     <div className="relative group">
                       <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#c5a880] transition-colors pointer-events-none">
@@ -909,8 +908,13 @@ export default function SignupPage() {
                         type={showPassword ? 'text' : 'password'}
                         id="regPassword"
                         value={regPassword}
+                        placeholder={isGoogleUser ? "Leave blank or enter a password" : "Enter minimum 6 characters"}
                         onChange={(e) => setRegPassword(e.target.value)}
-                        className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-[#c5a880] rounded-2xl pl-10 pr-12 py-3 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#c5a880]/20 transition-all shadow-sm"
+                        className={`w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border rounded-2xl pl-10 pr-12 py-3 text-sm font-semibold text-slate-900 focus:outline-none transition-all shadow-sm ${
+                          isPasswordValid 
+                            ? 'border-emerald-300 focus:ring-2 focus:ring-emerald-400/20' 
+                            : 'border-slate-200 focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20'
+                        }`}
                       />
                       <button 
                         type="button" 
@@ -924,73 +928,78 @@ export default function SignupPage() {
                   </div>
 
                   {/* Confirm Password Field */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                        Confirm Password <span className="text-rose-500">*</span>
-                      </label>
-                      {regConfirmPassword && (
-                        <span className={`text-[10px] font-bold flex items-center gap-1 ${
-                          passwordsMatch ? 'text-emerald-600' : 'text-rose-500'
-                        }`}>
-                          {passwordsMatch ? <Check className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                          {passwordsMatch ? 'Passwords Match' : 'Passwords Do Not Match'}
-                        </span>
-                      )}
-                    </div>
-                    <div className="relative group">
-                      <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#c5a880] transition-colors pointer-events-none">
-                        <Lock className="w-4 h-4" />
-                      </div>
-                      <input 
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        id="regConfirmPassword"
-                        value={regConfirmPassword}
-                        onChange={(e) => setRegConfirmPassword(e.target.value)}
-                        className={`w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border rounded-2xl pl-10 pr-12 py-3 text-sm font-semibold text-slate-900 focus:outline-none transition-all shadow-sm ${
-                          regConfirmPassword && !passwordsMatch 
-                            ? 'border-rose-400 focus:ring-2 focus:ring-rose-400/20' 
-                            : 'border-slate-200 focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20'
-                        }`}
-                      />
-                      <button 
-                        type="button" 
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors p-1"
-                        tabIndex={-1}
-                      >
-                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Password Security Requirements Box */}
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 mt-2">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">
-                      Password Requirements
-                    </p>
-                    <div className="grid grid-cols-1 gap-1.5">
-                      {passwordRequirements.map((req, idx) => (
-                        <div key={idx} className="flex items-center gap-2 text-xs font-semibold">
-                          {req.valid ? (
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          ) : (
-                            <div className="w-3.5 h-3.5 rounded-full border border-slate-300 shrink-0" />
-                          )}
-                          <span className={req.valid ? 'text-emerald-800' : 'text-slate-400'}>
-                            {req.label}
+                  {(!isGoogleUser || regPassword.length > 0) && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                          Confirm Password {!isGoogleUser && <span className="text-rose-500">*</span>}
+                        </label>
+                        {regConfirmPassword && (
+                          <span className={`text-[10px] font-bold flex items-center gap-1 ${
+                            passwordsMatch ? 'text-emerald-600' : 'text-rose-500'
+                          }`}>
+                            {passwordsMatch ? <Check className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                            {passwordsMatch ? 'Passwords Match' : 'Passwords Do Not Match'}
                           </span>
+                        )}
+                      </div>
+                      <div className="relative group">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#c5a880] transition-colors pointer-events-none">
+                          <Lock className="w-4 h-4" />
                         </div>
-                      ))}
+                        <input 
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          id="regConfirmPassword"
+                          value={regConfirmPassword}
+                          placeholder="Re-enter your password"
+                          onChange={(e) => setRegConfirmPassword(e.target.value)}
+                          className={`w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border rounded-2xl pl-10 pr-12 py-3 text-sm font-semibold text-slate-900 focus:outline-none transition-all shadow-sm ${
+                            regConfirmPassword && !passwordsMatch 
+                              ? 'border-rose-400 focus:ring-2 focus:ring-rose-400/20' 
+                              : 'border-slate-200 focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20'
+                          }`}
+                        />
+                        <button 
+                          type="button" 
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors p-1"
+                          tabIndex={-1}
+                        >
+                          {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {/* Password Security Guidance Box */}
+                  {(!isGoogleUser || regPassword.length > 0) && (
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 mt-2">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">
+                        Password Requirements
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {passwordRequirements.map((req, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-xs font-semibold">
+                            {req.valid ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            ) : (
+                              <div className="w-3.5 h-3.5 rounded-full border border-slate-300 shrink-0" />
+                            )}
+                            <span className={req.valid ? 'text-emerald-800' : 'text-slate-400'}>
+                              {req.label}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Summary Review Pill */}
                   <div className="p-3 bg-amber-50/70 border border-amber-200/60 rounded-2xl flex items-center justify-between text-xs">
                     <div>
                       <p className="font-bold text-amber-950">Review Studio Profile</p>
                       <p className="text-[11px] text-amber-800 font-medium">
-                        {regStudioName} &bull; +91 {regPhone}
+                        {regStudioName || `${regName}'s Studio`} &bull; +91 {regPhone}
                       </p>
                     </div>
                     <button 
@@ -1018,7 +1027,7 @@ export default function SignupPage() {
                 </button>
               )}
 
-              {/* If on a non-final step: Continue button. If on the final step (Step 2 for Google, Step 3 for Standard): Submit button */}
+              {/* Step 1 & 2: Continue Button. Step 3: Submit Button */}
               {currentStep < totalSteps ? (
                 <button 
                   type="button" 
@@ -1031,7 +1040,7 @@ export default function SignupPage() {
                   }`}
                 >
                   {currentStep === 1 ? (
-                    <>Continue to Studio Setup <ArrowRight className="w-4 h-4" /></>
+                    <>Continue to Studio Details <ArrowRight className="w-4 h-4" /></>
                   ) : (
                     <>Continue to Security <ArrowRight className="w-4 h-4" /></>
                   )}
@@ -1100,7 +1109,7 @@ export default function SignupPage() {
                       return;
                     }
 
-                    // Brand-new Google user: Start 2-step setup
+                    // Brand-new Google user: Start 3-step setup
                     setRegName(name || '');
                     setRegEmail(email || '');
                     if (picture) setGooglePicture(picture);

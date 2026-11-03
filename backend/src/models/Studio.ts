@@ -114,4 +114,12 @@ const StudioSchema = new Schema<IStudio>({
   timestamps: true
 });
 
+// Ensure customDomain is strictly undefined if empty or null so sparse unique index is not violated
+StudioSchema.pre('validate', function (next) {
+  if (this.customDomain === '' || this.customDomain === null) {
+    this.customDomain = undefined;
+  }
+  next();
+});
+
 export const Studio = mongoose.model<IStudio>('Studio', StudioSchema);

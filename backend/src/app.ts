@@ -105,6 +105,7 @@ import { initializeQdrant } from './services/qdrantService';
 import { startEventRetentionScheduler } from './services/eventRetentionService';
 import { seedDefaultPlans } from './controllers/pricingController';
 import { seedStoragePlans } from './services/storageSubscriptionService';
+import { cleanObsoleteDatabaseIndexes } from './utils/dbIndexCleaner';
 
 // ── AI Service Keep-Alive Pinger ──────────────────────────────────
 // Prevents Render free-tier from sleeping the AI service after 5 min inactivity.
@@ -160,6 +161,8 @@ mongoose
   })
   .then(() => {
     console.log('Connected to MongoDB Database successfully.');
+    // Clean obsolete indexes (e.g. legacy subdomain_1 on studios) from MongoDB
+    cleanObsoleteDatabaseIndexes().catch((err) => console.warn('[DB Cleaner] Startup cleanup notice:', err?.message));
     
     // Start listening immediately to satisfy Render health check instantly
     const server = app.listen(PORT, () => {
