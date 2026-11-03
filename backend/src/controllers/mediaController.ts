@@ -718,7 +718,31 @@ export const uploadAsset = async (req: AuthRequest, res: Response) => {
     }
 
     const folderForR2 = `branding/assets`;
-    const { url } = await uploadFile(file.buffer, folderForR2, file.mimetype, file.originalname);
+    // Support both Multer diskStorage (file.path) and memoryStorage (file.buffer)
+    let fileBuffer: Buffer | null = file.buffer || null;
+    if (!fileBuffer && file.path && fs.existsSync(file.path)) {
+      fileBuffer = fs.readFileSync(file.path);
+    }
+    if (!fileBuffer) {
+      return res.status(400).json({ error: 'Could not read uploaded file content' });
+    }
+
+    let finalBuffer = fileBuffer;
+    try {
+      finalBuffer = await sharp(fileBuffer)
+        .rotate()
+        .resize({ width: 1920, height: 1080, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 88 })
+        .toBuffer();
+    } catch {
+      finalBuffer = fileBuffer;
+    }
+
+    const { url } = await uploadFile(finalBuffer, folderForR2, 'image/jpeg', file.originalname);
+
+    if (file.path && fs.existsSync(file.path)) {
+      fs.unlink(file.path, () => {});
+    }
 
     return res.json({ url });
   } catch (err: any) {

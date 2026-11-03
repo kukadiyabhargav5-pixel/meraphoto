@@ -369,7 +369,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 backendForm.append('folderPaths', file.webkitRelativePath);
               }
               const backendRes = await apiClient.post(`/media/event/${event._id}/upload`, backendForm, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+                
               });
               if (backendRes.data && backendRes.data.media) {
                 successful++;
@@ -1151,12 +1151,18 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="edit-label">Client Mobile</label>
+                  <label className="edit-label">Client Mobile (Max 10 Digits)</label>
                   <input 
-                    type="text" 
-                    className="edit-input" 
+                    type="tel" 
+                    maxLength={10}
+                    inputMode="numeric"
+                    placeholder="9876543210"
+                    className="edit-input font-bold" 
                     value={formData.clientMobile}
-                    onChange={e => setFormData({...formData, clientMobile: e.target.value})}
+                    onChange={e => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setFormData({...formData, clientMobile: digits});
+                    }}
                   />
                 </div>
                 <div>
