@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
@@ -212,7 +213,7 @@ export const streamMediaFile = async (req: Request, res: Response) => {
     const rawKey = (req.params as any).key || req.params[0] || (req.query as any).key;
     if (!rawKey) return res.status(400).send('Missing file key');
 
-    const key = cleanR2Key(decodeURIComponent(rawKey));
+    const key = cleanR2Key(rawKey);
     if (!key) return res.status(400).send('Invalid file key');
 
     const command = new GetObjectCommand({

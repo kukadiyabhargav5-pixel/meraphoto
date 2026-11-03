@@ -46,6 +46,18 @@ import EventHeaderNav from '@/components/events/EventHeaderNav';
 
 type QualityMode = 'ORIGINAL' | 'ULTRA_8MB' | 'STUDIO_5MB' | 'WEB_2MB' | 'CUSTOM';
 
+interface UploadQueueItem {
+  id: string;
+  file: File;
+  name: string;
+  size: number;
+  progress: number;
+  status: 'queued' | 'uploading' | 'verifying' | 'success' | 'failed';
+  speed?: string;
+  error?: string;
+  retryCount?: number;
+}
+
 export default function EventUploadDedicatedPage({
   params,
 }: {
@@ -93,6 +105,8 @@ export default function EventUploadDedicatedPage({
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [mediaFilter, setMediaFilter] = useState<'ALL' | 'PHOTO' | 'VIDEO'>('ALL');
   const [previewMedia, setPreviewMedia] = useState<any>(null);
+  const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
+  const [showQueueList, setShowQueueList] = useState(true);
 
   // Active storage subscription status check
   const hasPaidActivePlan = Boolean(
@@ -338,6 +352,101 @@ export default function EventUploadDedicatedPage({
   };
 
   // High-performance direct upload engine - supports Original or Target MB compression/upscaling
+  
+  // Recursive folder scanner for HTML5 Drag and Drop
+  const scanFiles = async (dataTransfer: DataTransfer): Promise<File[]> => {
+    const files: File[] = [];
+    const queue: any[] = [];
+    if (dataTransfer.items && dataTransfer.items.length > 0) {
+      for (let i = 0; i < dataTransfer.items.length; i++) {
+        const item = dataTransfer.items[i];
+        if (item.webkitGetAsEntry) {
+          const entry = item.webkitGetAsEntry();
+          if (entry) queue.push(entry);
+        }
+      }
+    }
+    if (queue.length === 0) {
+      return Array.from(dataTransfer.files || []);
+    }
+    const readEntry = async (entry: any, path = ''): Promise<void> => {
+      if (entry.isFile) {
+        return new Promise<void>((resolve) => {
+          entry.file((file: File) => {
+            const fullPath = path ? `${path}/${file.name}` : file.name;
+            try {
+              Object.defineProperty(file, 'webkitRelativePath', {
+                value: fullPath,
+                writable: false,
+              });
+            } catch {}
+            files.push(file);
+            resolve();
+          }, () => resolve());
+        });
+      } else if (entry.isDirectory) {
+        const dirReader = entry.createReader();
+        const readAll = async (): Promise<any[]> => {
+          const entries: any[] = [];
+          const readBatch = async (): Promise<void> => {
+            return new Promise<void>((resolve) => {
+              dirReader.readEntries((batch: any[]) => {
+                if (batch.length === 0) resolve();
+                else {
+                  entries.push(...batch);
+                  readBatch().then(resolve);
+                }
+              }, () => resolve());
+            });
+          };
+          await readBatch();
+          return entries;
+        };
+        const subEntries = await readAll();
+        for (const sub of subEntries) {
+          await readEntry(sub, path ? `${path}/${entry.name}` : entry.name);
+        }
+      }
+    };
+    for (const q of queue) {
+      await readEntry(q);
+    }
+    return files.length > 0 ? files : Array.from(dataTransfer.files || []);
+  };
+
+  // Byte-accurate XHR Uploader with continuous progress (0% -> 100%)
+  const uploadViaXhr = (
+    url: string,
+    file: File,
+    contentType: string,
+    onProgress: (pct: number, loaded: number, total: number) => void
+  ): Promise<boolean> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', url);
+      if (contentType) {
+        xhr.setRequestHeader('Content-Type', contentType);
+      }
+      xhr.upload.onprogress = (evt) => {
+        if (evt.lengthComputable && evt.total > 0) {
+          const pct = Math.min(100, Math.round((evt.loaded / evt.total) * 100));
+          onProgress(pct, evt.loaded, evt.total);
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(true);
+        } else {
+          reject(new Error(`Server returned HTTP ${xhr.status}`));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Network error during upload'));
+      xhr.ontimeout = () => reject(new Error('Upload timed out'));
+      xhr.timeout = 600000;
+      xhr.send(file);
+    });
+  };
+
   const handleFileUpload = async (files: FileList | File[]) => {
     if (!files || files.length === 0 || !event) return;
 
@@ -391,6 +500,18 @@ export default function EventUploadDedicatedPage({
         console.warn('Compression module load failed, using raw files:', err);
       }
     }
+
+    const initialQueue: UploadQueueItem[] = fileArray.map((f, i) => ({
+      id: `queue-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 6)}`,
+      file: f,
+      name: f.name,
+      size: f.size,
+      progress: 0,
+      status: 'queued',
+      retryCount: 0,
+    }));
+    setUploadQueue(initialQueue);
+    setShowQueueList(true);
 
     setUploadingMedia(true);
     setUploadProgress({ current: 0, total: fileArray.length });
@@ -474,6 +595,16 @@ export default function EventUploadDedicatedPage({
             // Mark newly uploaded items for visual highlight
             setNewlyUploadedIds((prev) => new Set([...Array.from(prev), ...Array.from(newDocIds)] as string[]));
 
+            // Mark completed items in upload queue
+            const completedNames = new Set(chunk.map((c: any) => c.originalName));
+            setUploadQueue((prev) =>
+              prev.map((item) =>
+                completedNames.has(item.name)
+                  ? { ...item, status: 'success', progress: 100 }
+                  : item
+              )
+            );
+
             // Instantly sync storage in background
             refreshStorage();
             window.dispatchEvent(new Event('storage_updated'));
@@ -550,24 +681,34 @@ export default function EventUploadDedicatedPage({
 
           let uploadedSuccessfully = false;
 
-          // Direct parallel PUT to presigned cloud storage URL for ultra-fast, high-capacity R2 upload (Photos and Videos)
-          if (presignedItem?.uploadUrl) {
-            try {
-              const putRes = await fetch(presignedItem.uploadUrl, {
-                method: 'PUT',
-                body: fileToUpload,
-                headers: {
-                  'Content-Type': fileToUpload.type || (isVideo ? 'video/mp4' : 'application/octet-stream'),
-                },
-              });
+          // Set item to uploading in queue
+          setUploadQueue((prev) =>
+            prev.map((q, qIdx) => (qIdx === idx ? { ...q, status: 'uploading', progress: 5 } : q))
+          );
 
-              if (putRes.ok) {
+          // Direct parallel PUT to presigned cloud storage URL using accurate continuous byte progress (0% -> 100%)
+          if (presignedItem?.uploadUrl) {
+            let attempt = 0;
+            const maxAttempts = 3;
+            while (attempt < maxAttempts && !uploadedSuccessfully) {
+              attempt++;
+              try {
+                const contentType = fileToUpload.type || (isVideo ? 'video/mp4' : 'application/octet-stream');
+                await uploadViaXhr(presignedItem.uploadUrl, fileToUpload, contentType, (pct) => {
+                  setUploadQueue((prev) =>
+                    prev.map((q, qIdx) => (qIdx === idx ? { ...q, progress: Math.max(5, pct) } : q))
+                  );
+                });
+
                 uploadedSuccessfully = true;
                 bytesUploadedTotal += fileToUpload.size;
                 successful++;
 
-                // Queue for instant server registration and real-time screen display
-                // Passes publicId, r2Key, url, r2Url and exact fileToUpload.size for exact storage count!
+                // Mark item as verifying with cloud storage
+                setUploadQueue((prev) =>
+                  prev.map((q, qIdx) => (qIdx === idx ? { ...q, status: 'verifying', progress: 100 } : q))
+                );
+
                 const key = presignedItem.publicId || presignedItem.key;
                 const publicUrl = presignedItem.url || presignedItem.publicUrl;
 
@@ -585,9 +726,12 @@ export default function EventUploadDedicatedPage({
                 });
 
                 flushToBackend();
+              } catch (putErr) {
+                console.warn(`[Direct Cloud PUT Attempt ${attempt} Failed for ${file.name}]:`, putErr);
+                if (attempt < maxAttempts) {
+                  await new Promise((res) => setTimeout(res, 500 * attempt));
+                }
               }
-            } catch (putErr) {
-              console.warn('[Direct Cloud PUT Failed, retrying via fallback]:', putErr);
             }
           }
 
@@ -647,6 +791,13 @@ export default function EventUploadDedicatedPage({
               console.error(`Upload failed for ${file.name}:`, errMsg, fallbackErr);
               lastUploadError = errMsg;
               failed++;
+
+              // Mark item as failed in queue so user can retry individually
+              setUploadQueue((prev) =>
+                prev.map((q, qIdx) =>
+                  qIdx === idx ? { ...q, status: 'failed', error: errMsg } : q
+                )
+              );
             }
           }
 
@@ -1265,10 +1416,11 @@ export default function EventUploadDedicatedPage({
               e.preventDefault();
               e.stopPropagation();
             }}
-            onDrop={(e) => {
+            onDrop={async (e) => {
               e.preventDefault();
               e.stopPropagation();
-              if (e.dataTransfer?.files) handleFileUpload(e.dataTransfer.files);
+              const droppedFiles = await scanFiles(e.dataTransfer);
+              if (droppedFiles && droppedFiles.length > 0) handleFileUpload(droppedFiles);
             }}
             onClick={() => {
               if (isStorageFull) return;
@@ -1329,6 +1481,121 @@ export default function EventUploadDedicatedPage({
                   }}
                 />
               </div>
+
+              {/* Upload Manager Queue List */}
+              {uploadQueue.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-[#e8dfd3]">
+                  <div className="flex items-center justify-between pb-2">
+                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <span>Upload Queue</span>
+                      <span className="text-[11px] font-mono font-medium text-slate-500">
+                        ({uploadQueue.filter(q => q.status === 'success').length}/{uploadQueue.length} completed)
+                      </span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {uploadQueue.some(q => q.status === 'failed') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const failedFiles = uploadQueue.filter(q => q.status === 'failed').map(q => q.file);
+                            if (failedFiles.length > 0) handleFileUpload(failedFiles);
+                          }}
+                          className="px-2 py-0.5 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[10px] font-bold transition-colors cursor-pointer"
+                        >
+                          Retry All Failed ({uploadQueue.filter(q => q.status === 'failed').length})
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowQueueList(!showQueueList)}
+                        className="text-[11px] text-slate-500 hover:text-slate-800 font-bold transition-colors cursor-pointer"
+                      >
+                        {showQueueList ? 'Collapse' : 'Expand'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {showQueueList && (
+                    <div className="max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                      {uploadQueue.map((item) => {
+                        const isVid = item.file.type.startsWith('video/') || /\.(mp4|mov|avi|mkv|webm|m4v|3gp)$/i.test(item.name);
+                        return (
+                          <div
+                            key={item.id}
+                            className="p-2 sm:p-2.5 rounded-lg bg-white border border-[#e8dfd3] shadow-2xs flex flex-col gap-1.5"
+                          >
+                            <div className="flex items-center justify-between gap-2 text-xs">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                {isVid ? (
+                                  <Video className="w-3.5 h-3.5 text-[#9e7b4f] shrink-0" />
+                                ) : (
+                                  <ImageIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                )}
+                                <span className="font-semibold text-slate-800 truncate text-[11px] sm:text-xs">
+                                  {item.name}
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                                  {(item.size / (1024 * 1024)).toFixed(1)} MB
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                {item.status === 'queued' && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                                    Queued
+                                  </span>
+                                )}
+                                {item.status === 'uploading' && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 flex items-center gap-1">
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    {item.progress}%
+                                  </span>
+                                )}
+                                {item.status === 'verifying' && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700 flex items-center gap-1">
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    Verifying...
+                                  </span>
+                                )}
+                                {item.status === 'success' && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                                    <Check className="w-3 h-3 text-emerald-600" />
+                                    Uploaded Successfully
+                                  </span>
+                                )}
+                                {item.status === 'failed' && (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                                      Failed
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleFileUpload([item.file])}
+                                      className="px-2 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-bold transition-colors cursor-pointer"
+                                    >
+                                      Retry
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Individual Item Progress Bar */}
+                            {(item.status === 'uploading' || item.status === 'verifying') && (
+                              <div className="w-full bg-slate-100 rounded-full h-1 overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-[#c5a880] to-[#9e7b4f] transition-all duration-150"
+                                  style={{ width: `${item.progress}%` }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

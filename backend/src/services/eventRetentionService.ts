@@ -7,10 +7,8 @@ import { deleteFile, deleteFiles } from './StorageService';
 import { deleteEventPoints } from './qdrantService';
 
 /**
- * Calculates days remaining for an event based strictly on the Studio's active Subscription Plan!
- * An event stays active for the entire duration of the studio's subscription (1 Month, 6 Months, or 1 Year).
- * When subscription expires, events and uploaded media are permanently purged from cloud storage,
- * while Customer and GalleryVisitor records are permanently preserved.
+ * Calculates days remaining for an event based on the Studio's active Subscription Plan.
+ * VIP Admin / Unlimited lifetime mode: never expires.
  */
 export const calculateEventDaysLeft = (event: any, customPlanExpiresAt?: Date | string | null) => {
   const now = new Date();
@@ -49,7 +47,7 @@ export const calculateEventDaysLeft = (event: any, customPlanExpiresAt?: Date | 
     };
   }
 
-  // Fallback: If no plan expiry is set, default to 6-month window from creation date
+  // Fallback: If no plan expiry is set, default to 180 days (6 months) window from creation date
   const createdRaw = event?.createdAt ? new Date(event.createdAt) : new Date();
   const defaultExpiry = new Date(createdRaw.getTime() + 180 * 24 * 60 * 60 * 1000);
   const diffMs = defaultExpiry.getTime() - now.getTime();
@@ -123,7 +121,6 @@ export const purgeEventPermanently = async (eventOrId: any): Promise<boolean> =>
     }
 
     // 2. Permanently preserve GalleryVisitor records with full event context
-    // Gallery visitor data is NEVER deleted. It is enriched with event info so the studio retains all visitor leads forever.
     try {
       await GalleryVisitor.updateMany(
         { eventId: event._id },
@@ -208,50 +205,43 @@ export const purgeEventPermanently = async (eventOrId: any): Promise<boolean> =>
 };
 
 /**
- * Automatically cleans up events and media from expired subscriptions,
- * freeing up cloud storage space while permanently preserving customer records and gallery visitor data.
+ * Genuinely expired event cleanup:
+ * Only purges events that:
+ * 1. Were created at least 30 days ago.
+ * 2. Whose calculated retention period has reached 0 days (daysLeft <= 0 and isExpired === true).
+ * NEVER deletes active, recent, or newly created events!
  */
 export const cleanupExpiredEvents = async () => {
   try {
     const now = new Date();
+    // Safety guard: only consider events older than 30 days
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    // 1. Find all active subscriptions and their studioIds
-    const activeSubs = await StorageSubscription.find({
-      status: 'ACTIVE',
-      paymentStatus: 'paid',
-      expiresAt: { $gt: now },
-    }).select('studioId expiresAt').lean();
+    const candidates = await Event.find({
+      createdAt: { $lt: thirtyDaysAgo }
+    }).populate('studioId').lean();
 
-    const activeStudioIds = new Set<string>(activeSubs.map((s) => s.studioId?.toString() || ''));
-
-    // Also check Studio collection directly for active plans
-    const activeStudios = await Studio.find({
-      subscriptionStatus: 'ACTIVE',
-      subscriptionPlan: { $ne: 'BASIC' },
-      $or: [
-        { subscriptionExpiresAt: { $gt: now } },
-        { subscriptionExpiresAt: null }
-      ],
-    }).select('_id subscriptionExpiresAt').lean();
-
-    activeStudios.forEach((s) => activeStudioIds.add(s._id.toString()));
-
-    // 2. Find all events and check which ones belong to an expired or non-subscribed studio
-    const allEvents = await Event.find({}).lean();
-    const eventsToPurge = allEvents.filter((ev) => {
-      const sId = ev.studioId?.toString();
-      // If studio has an active plan, DO NOT PURGE! Events stay valid for entire plan!
-      if (sId && activeStudioIds.has(sId)) {
-        return false;
-      }
-      return true;
-    });
-
-    if (!eventsToPurge || eventsToPurge.length === 0) {
+    if (!candidates || candidates.length === 0) {
       return { cleanedCount: 0 };
     }
 
-    console.log(`[EventRetention] Found ${eventsToPurge.length} event(s) from expired subscription(s). Purging media to release cloud storage while strictly preserving visitor & customer contacts...`);
+    const eventsToPurge: any[] = [];
+    for (const ev of candidates) {
+      const studio: any = ev.studioId;
+      if (!studio) continue;
+
+      let planExpiresAt = studio.subscriptionExpiresAt;
+      const { isExpired, daysLeft } = calculateEventDaysLeft(ev, planExpiresAt);
+      if (isExpired && daysLeft <= 0) {
+        eventsToPurge.push(ev);
+      }
+    }
+
+    if (eventsToPurge.length === 0) {
+      return { cleanedCount: 0 };
+    }
+
+    console.log(`[EventRetention] Found ${eventsToPurge.length} genuinely expired event(s). Purging media to release cloud storage...`);
 
     let cleanedCount = 0;
     for (const event of eventsToPurge) {
@@ -269,17 +259,14 @@ export const cleanupExpiredEvents = async () => {
 let retentionInterval: NodeJS.Timeout | null = null;
 
 /**
- * Initializes the automated event retention background schedule (runs hourly).
+ * Initializes the automated event retention background schedule (runs daily).
  */
 export const startEventRetentionScheduler = () => {
-  // Run once on server startup
-  cleanupExpiredEvents().catch((err) => console.error('[EventRetention] Initial run error:', err));
-
-  // Run automatically every 1 hour
+  // Run automatically once every 24 hours (not aggressively on startup)
   if (!retentionInterval) {
     retentionInterval = setInterval(() => {
       cleanupExpiredEvents().catch((err) => console.error('[EventRetention] Scheduled run error:', err));
-    }, 60 * 60 * 1000);
-    console.log('[EventRetention] Automated subscription-based event retention schedule initialized (runs hourly).');
+    }, 24 * 60 * 60 * 1000);
+    console.log('[EventRetention] Automated subscription-based event retention schedule initialized (runs daily).');
   }
 };

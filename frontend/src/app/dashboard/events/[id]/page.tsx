@@ -704,7 +704,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 ? event.daysLeft 
                 : typeof storageUsage?.activePlan?.daysLeft === 'number'
                 ? storageUsage.activePlan.daysLeft
-                : 30;
+                : 180;
               const label = days >= 9000 ? 'Active Lifetime' : days === 0 ? 'Plan Expired' : `${days} ${days === 1 ? 'day' : 'days'} left`;
               const isUrgent = days <= 1;
               const isWarning = days <= 5;

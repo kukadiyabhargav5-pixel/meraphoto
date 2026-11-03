@@ -1,13 +1,24 @@
 import multer from 'multer';
+import os from 'os';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 
-// In-memory buffer upload
-const storage = multer.memoryStorage();
+// Disk temporary storage: streams chunks directly to disk instead of holding entire files in RAM.
+// Prevents Out-Of-Memory (OOM) crashes on low-memory servers (e.g. Render 512MB RAM).
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, os.tmpdir());
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || '';
+    cb(null, `mara_up_${Date.now()}_${uuidv4().slice(0, 8)}${ext}`);
+  },
+});
 
-// Max file sizes (e.g. 100MB for photos, 1GB for high-res 4K videos)
 export const upload = multer({
   storage,
   limits: {
-    fileSize: 1024 * 1024 * 1024, // 1GB max limit
-    files: 250, // allow up to 250 files per multipart batch
+    fileSize: 1024 * 1024 * 1024, // 1GB max limit per file
+    files: 500, // allow up to 500 files per batch
   },
 });

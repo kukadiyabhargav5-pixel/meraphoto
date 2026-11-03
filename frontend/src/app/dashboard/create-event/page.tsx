@@ -416,7 +416,7 @@ export default function CreateEventPage() {
       await apiClient.post('/event', {
         name: eventName,
         clientName,
-        clientMobile,
+        clientMobile: clientMobile.replace(/\D/g, '').slice(-10),
         clientEmail: clientEmail.trim() || undefined,
         date: eventDate || new Date().toISOString(),
         type: getEffectiveEventType(),

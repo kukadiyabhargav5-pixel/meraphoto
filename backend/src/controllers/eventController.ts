@@ -8,6 +8,7 @@ import Customer from '../models/Customer';
 import { sendAdminNotificationEmail, sendEventInviteEmail } from '../services/EmailService';
 import { getFileUrl } from '../services/StorageService';
 import { calculateEventDaysLeft, cleanupExpiredEvents, purgeEventPermanently } from '../services/eventRetentionService';
+import { getUserStorageUsage } from '../services/storageSubscriptionService';
 
 /**
  * Creates a new event
@@ -37,6 +38,12 @@ export const createEvent = async (req: AuthRequest, res: Response) => {
 
   try {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+    // Strict Indian Mobile Number Validation (Exactly 10 digits starting with 6, 7, 8, or 9)
+    const cleanMobile = clientMobile ? String(clientMobile).replace(/\D/g, '').slice(-10) : '';
+    if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
+      return res.status(400).json({ error: 'Client mobile number must be exactly 10 digits starting with 6, 7, 8, or 9.' });
+    }
 
     const studio = await Studio.findOne({ ownerId: req.user._id });
     if (!studio) return res.status(404).json({ error: 'Studio not found' });
@@ -83,7 +90,7 @@ export const createEvent = async (req: AuthRequest, res: Response) => {
       name,
       code,
       clientName,
-      clientMobile,
+      clientMobile: cleanMobile,
       clientEmail: clientEmail ? clientEmail.toLowerCase().trim() : '',
       date: new Date(date),
       type,
@@ -111,7 +118,7 @@ export const createEvent = async (req: AuthRequest, res: Response) => {
     // Auto-sync client to Customers directory with permanent Event details
     try {
       const queryConditions: any[] = [];
-      if (clientMobile) queryConditions.push({ phone: clientMobile });
+      if (cleanMobile) queryConditions.push({ phone: cleanMobile });
       if (clientEmail) queryConditions.push({ email: clientEmail });
 
       let customer = null;
@@ -126,7 +133,7 @@ export const createEvent = async (req: AuthRequest, res: Response) => {
         await Customer.create({
           studioId: studio._id,
           name: clientName,
-          phone: clientMobile || '',
+          phone: cleanMobile || '',
           email: clientEmail || '',
           eventName: name,
           eventDate: new Date(date),
@@ -434,6 +441,12 @@ export const updateEvent = async (req: AuthRequest, res: Response) => {
       if (existing) {
         candidate = `${requestedCode}-${Math.random().toString(36).substring(2, 6)}`;
       }
+      if (event.code && event.code !== candidate) {
+        if (!event.previousCodes) (event as any).previousCodes = [];
+        if (!(event as any).previousCodes.includes(event.code)) {
+          (event as any).previousCodes.push(event.code);
+        }
+      }
       event.code = candidate;
     } else if (name && name.trim() && name.trim() !== event.name) {
       // Event name changed, automatically update the URL slug to match the new event name
@@ -444,13 +457,25 @@ export const updateEvent = async (req: AuthRequest, res: Response) => {
         if (existing) {
           candidate = `${nameSlug}-${Math.random().toString(36).substring(2, 6)}`;
         }
-        event.code = candidate;
+        if (event.code && event.code !== candidate) {
+        if (!event.previousCodes) (event as any).previousCodes = [];
+        if (!(event as any).previousCodes.includes(event.code)) {
+          (event as any).previousCodes.push(event.code);
+        }
+      }
+      event.code = candidate;
       }
     }
 
     if (name && name.trim()) event.name = name.trim();
     if (clientName) event.clientName = clientName;
-    if (clientMobile) event.clientMobile = clientMobile;
+    if (clientMobile !== undefined) {
+      const cleanMob = clientMobile ? String(clientMobile).replace(/\D/g, '').slice(-10) : '';
+      if (cleanMob && !/^[6-9]\d{9}$/.test(cleanMob)) {
+        return res.status(400).json({ error: 'Client mobile number must be exactly 10 digits starting with 6, 7, 8, or 9.' });
+      }
+      event.clientMobile = cleanMob;
+    }
     if (clientEmail !== undefined) event.clientEmail = clientEmail ? clientEmail.toLowerCase().trim() : '';
     if (date) event.date = new Date(date);
     if (type) event.type = type;

@@ -5,6 +5,7 @@ import {
   DeleteObjectsCommand,
   GetObjectCommand,
   ListObjectsV2Command,
+  HeadObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import dotenv from 'dotenv';
@@ -69,6 +70,76 @@ export const getFileUrl = (key: string): string => {
 };
 
 /**
+ * Cleans and sanitizes any full URL, API route, or raw identifier into a canonical Cloudflare R2 object key.
+ * Robust against malformed URI components and double-decoding errors.
+ */
+export const cleanR2Key = (keyOrUrl: string): string => {
+  if (!keyOrUrl || typeof keyOrUrl !== 'string') return '';
+  let str = keyOrUrl.split('?')[0].trim();
+  if (str.startsWith('data:') || str.startsWith('blob:') || str.startsWith('localdb://')) return '';
+
+  if (str.includes('/api/media/file/')) {
+    str = str.split('/api/media/file/')[1] || '';
+  } else if (str.includes('.r2.dev/')) {
+    str = str.split('.r2.dev/')[1] || '';
+  } else if (str.includes('.cloudflarestorage.com/')) {
+    const parts = str.split('.cloudflarestorage.com/')[1] || '';
+    const slashIdx = parts.indexOf('/');
+    str = slashIdx !== -1 ? parts.substring(slashIdx + 1) : parts;
+  } else if (process.env.R2_PUBLIC_URL && str.includes(process.env.R2_PUBLIC_URL)) {
+    str = str.replace(process.env.R2_PUBLIC_URL.replace(/\/+$/, '') + '/', '');
+  } else if (str.startsWith('http://') || str.startsWith('https://')) {
+    try {
+      const parsed = new URL(str);
+      str = parsed.pathname.replace(/^\/+/, '');
+      if (str.startsWith('api/media/file/')) {
+        str = str.replace('api/media/file/', '');
+      }
+    } catch {
+      return '';
+    }
+  }
+
+  const cleaned = str.replace(/^\/+/, '');
+  try {
+    return decodeURIComponent(cleaned);
+  } catch {
+    return cleaned;
+  }
+};
+
+/**
+ * Verifies that an object actually exists in Cloudflare R2 and has size > 0.
+ * Eliminates ghost/blank database records before marking uploads as successful.
+ */
+export const verifyR2Object = async (
+  keyOrUrl: string
+): Promise<{ exists: boolean; size: number; contentType?: string }> => {
+  try {
+    const key = cleanR2Key(keyOrUrl);
+    if (!key) return { exists: false, size: 0 };
+
+    const command = new HeadObjectCommand({
+      Bucket: R2_BUCKET,
+      Key: key,
+    });
+    const res = await r2Client.send(command);
+    const size = res.ContentLength || 0;
+    return {
+      exists: size > 0,
+      size,
+      contentType: res.ContentType,
+    };
+  } catch (err: any) {
+    if (err.name === 'NotFound' || err.name === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404) {
+      return { exists: false, size: 0 };
+    }
+    console.warn(`[StorageService] verifyR2Object warning for "${keyOrUrl}":`, err?.message || err);
+    return { exists: false, size: 0 };
+  }
+};
+
+/**
  * Uploads a buffer directly to Cloudflare R2 with high performance.
  * Returns the public access/stream URL and the R2 storage key (publicId).
  */
@@ -118,35 +189,30 @@ export const uploadFile = async (
 };
 
 /**
- * Cleans and sanitizes any full URL, API route, or raw identifier into a canonical Cloudflare R2 object key.
+ * Uploads a readable stream directly to Cloudflare R2.
+ * Zero-memory buffering for large files and 4K videos on low-memory servers.
  */
-export const cleanR2Key = (keyOrUrl: string): string => {
-  if (!keyOrUrl || typeof keyOrUrl !== 'string') return '';
-  let str = keyOrUrl.split('?')[0].trim();
-  if (str.startsWith('data:') || str.startsWith('blob:') || str.startsWith('localdb://')) return '';
-
-  if (str.includes('/api/media/file/')) {
-    str = str.split('/api/media/file/')[1] || '';
-  } else if (str.includes('.r2.dev/')) {
-    str = str.split('.r2.dev/')[1] || '';
-  } else if (str.includes('.cloudflarestorage.com/')) {
-    const parts = str.split('.cloudflarestorage.com/')[1] || '';
-    const slashIdx = parts.indexOf('/');
-    str = slashIdx !== -1 ? parts.substring(slashIdx + 1) : parts;
-  } else if (process.env.R2_PUBLIC_URL && str.includes(process.env.R2_PUBLIC_URL)) {
-    str = str.replace(process.env.R2_PUBLIC_URL.replace(/\/+$/, '') + '/', '');
-  } else if (str.startsWith('http://') || str.startsWith('https://')) {
-    try {
-      const parsed = new URL(str);
-      str = parsed.pathname.replace(/^\/+/, '');
-      if (str.startsWith('api/media/file/')) {
-        str = str.replace('api/media/file/', '');
-      }
-    } catch {
-      return '';
-    }
-  }
-  return decodeURIComponent(str.replace(/^\/+/, ''));
+export const uploadFileStream = async (
+  stream: NodeJS.ReadableStream,
+  key: string,
+  contentLength: number,
+  contentType: string = 'application/octet-stream'
+): Promise<{ url: string; publicId: string }> => {
+  const cleanKey = cleanR2Key(key);
+  await r2Client.send(
+    new PutObjectCommand({
+      Bucket: R2_BUCKET,
+      Key: cleanKey,
+      Body: stream as any,
+      ContentLength: contentLength,
+      ContentType: contentType,
+      CacheControl: 'public, max-age=31536000, immutable',
+    })
+  );
+  return {
+    url: getFileUrl(cleanKey),
+    publicId: cleanKey,
+  };
 };
 
 /**
@@ -199,12 +265,7 @@ export const deleteFiles = async (keys: string[]): Promise<void> => {
 };
 
 /**
- * Directly downloads an object from Cloudflare R2 as a Buffer.
- * High-speed internal transfer for video/photo processing workers.
- */
-
-/**
- * Recursively lists and permanently deletes all files under an R2 folder prefix (e.g. "studios/...", "events/...").
+ * Recursively lists and permanently deletes all files under an R2 folder prefix.
  */
 export const deleteFolderPrefix = async (prefix: string): Promise<void> => {
   try {
@@ -233,15 +294,12 @@ export const deleteFolderPrefix = async (prefix: string): Promise<void> => {
   }
 };
 
+/**
+ * Directly downloads an object from Cloudflare R2 as a Buffer.
+ */
 export const getFileBuffer = async (key: string): Promise<Buffer> => {
   try {
-    let cleanKey = key;
-    if (cleanKey.includes('/api/media/file/')) {
-      cleanKey = cleanKey.split('/api/media/file/')[1];
-    } else if (process.env.R2_PUBLIC_URL && cleanKey.includes(process.env.R2_PUBLIC_URL)) {
-      cleanKey = cleanKey.replace(process.env.R2_PUBLIC_URL.replace(/\/+$/, '') + '/', '');
-    }
-
+    const cleanKey = cleanR2Key(key);
     const command = new GetObjectCommand({
       Bucket: R2_BUCKET,
       Key: cleanKey,
@@ -257,16 +315,10 @@ export const getFileBuffer = async (key: string): Promise<Buffer> => {
 
 /**
  * Streams an object directly from Cloudflare R2 as a Readable stream.
- * Enables zero-buffer streaming into ZIP archives without high RAM usage.
+ * Enables zero-buffer streaming into ZIP archives and disk without high RAM usage.
  */
 export const getObjectStream = async (key: string): Promise<NodeJS.ReadableStream> => {
-  let cleanKey = key;
-  if (cleanKey.includes('/api/media/file/')) {
-    cleanKey = cleanKey.split('/api/media/file/')[1];
-  } else if (process.env.R2_PUBLIC_URL && cleanKey.includes(process.env.R2_PUBLIC_URL)) {
-    cleanKey = cleanKey.replace(process.env.R2_PUBLIC_URL.replace(/\/+$/, '') + '/', '');
-  }
-
+  const cleanKey = cleanR2Key(key);
   const command = new GetObjectCommand({
     Bucket: R2_BUCKET,
     Key: cleanKey,
@@ -277,16 +329,18 @@ export const getObjectStream = async (key: string): Promise<NodeJS.ReadableStrea
 
 /**
  * Generates a presigned PUT URL for direct client-to-R2 high-speed upload.
+ * NOTE: Omits restrictive signed Content-Type so clients can upload any valid file
+ * without signature mismatch or CORS errors.
  */
 export const generatePresignedUploadUrl = async (
   key: string,
-  contentType: string = 'image/jpeg',
-  expiresInSeconds: number = 3600
+  contentType?: string,
+  expiresInSeconds: number = 7200
 ): Promise<string> => {
+  const cleanKey = cleanR2Key(key);
   const command = new PutObjectCommand({
     Bucket: R2_BUCKET,
-    Key: key,
-    ContentType: contentType,
+    Key: cleanKey,
   });
   return getSignedUrl(r2Client, command, { expiresIn: expiresInSeconds });
 };
@@ -299,13 +353,7 @@ export const generatePresignedDownloadUrl = async (
   downloadFilename?: string,
   expiresInSeconds: number = 3600
 ): Promise<string> => {
-  let cleanKey = key;
-  if (cleanKey.includes('/api/media/file/')) {
-    cleanKey = cleanKey.split('/api/media/file/')[1];
-  } else if (process.env.R2_PUBLIC_URL && cleanKey.includes(process.env.R2_PUBLIC_URL)) {
-    cleanKey = cleanKey.replace(process.env.R2_PUBLIC_URL.replace(/\/+$/, '') + '/', '');
-  }
-
+  const cleanKey = cleanR2Key(key);
   const command = new GetObjectCommand({
     Bucket: R2_BUCKET,
     Key: cleanKey,

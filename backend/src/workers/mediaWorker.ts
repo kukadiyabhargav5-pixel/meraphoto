@@ -426,6 +426,7 @@ export const processVideo = async (mediaId: string, studioId: string) => {
 
   let duration = 0;
   let thumbnailUrl = media.thumbnailUrl || '';
+  let videoFileSize = media.size || 0;
 
   // Default ImageKit video thumbnail if available
   if (!thumbnailUrl && media.r2Url && media.r2Url.includes('imagekit.io')) {
@@ -576,15 +577,15 @@ export const processVideo = async (mediaId: string, studioId: string) => {
 
     // ── Video Compression to strictly max 15-20MB (Target ~17.5MB) ──
     let finalCompressedUrl = media.r2Url;
-    let finalSize = originalBuffer.length;
+    let finalSize = videoFileSize;
 
     try {
       const TARGET_MAX_BYTES = 18 * 1024 * 1024; // 18MB target size
       const tempCompressedPath = path.join(tempDir, `comp_${mediaId}.mp4`);
 
       // Compress if the video exceeds 18MB, or optimize for web streaming
-      if (originalBuffer.length > TARGET_MAX_BYTES) {
-        const safeDuration = (duration && duration > 0) ? duration : Math.max(30, Math.floor(originalBuffer.length / (1024 * 1024 * 1.5)));
+      if (videoFileSize > TARGET_MAX_BYTES) {
+        const safeDuration = (duration && duration > 0) ? duration : Math.max(30, Math.floor(videoFileSize / (1024 * 1024 * 1.5)));
         const totalTargetBits = TARGET_MAX_BYTES * 8; // ~150,994,944 bits (18MB max)
         const audioBitrateBps = 128 * 1000; // 128 kbps audio
         const totalAudioBits = audioBitrateBps * safeDuration;
@@ -601,7 +602,7 @@ export const processVideo = async (mediaId: string, studioId: string) => {
           ? 'scale=w=min(1920\\,iw):h=min(1080\\,ih):force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2'
           : 'scale=w=min(1280\\,iw):h=min(720\\,ih):force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2';
 
-        console.log(`[Video Proc] Compressing video ${mediaId} (${(originalBuffer.length / (1024 * 1024)).toFixed(2)}MB, duration: ${safeDuration}s) to target 15-20MB with bitrate ${targetBitrateKbps}kbps...`);
+        console.log(`[Video Proc] Compressing video ${mediaId} (${(videoFileSize / (1024 * 1024)).toFixed(2)}MB, duration: ${safeDuration}s) to target 15-20MB with bitrate ${targetBitrateKbps}kbps...`);
 
         await new Promise<void>((resolve) => {
           ffmpeg(tempVideoPath)

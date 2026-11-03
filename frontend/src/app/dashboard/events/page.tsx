@@ -26,7 +26,7 @@ export default function EventsManagementPage() {
   // Helper to calculate exact live days left out of 30 days based strictly on creation date
   const getDaysLeft = (event: any) => {
     if (typeof event?.daysLeft === 'number') return event.daysLeft;
-    return 30;
+    return 180;
   };
 
   useEffect(() => {

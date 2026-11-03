@@ -3,6 +3,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IEvent extends Document {
   name: string;
   code: string; // URL Slug, e.g. "sharma-wedding-2026"
+  previousCodes?: string[]; // History of past slugs so old URLs never return 404
   clientName: string;
   clientMobile: string;
   clientEmail?: string;
@@ -46,6 +47,7 @@ export interface IEvent extends Document {
 const EventSchema = new Schema<IEvent>({
   name: { type: String, required: true },
   code: { type: String, required: true, unique: true, index: true, lowercase: true, trim: true },
+  previousCodes: [{ type: String, lowercase: true, trim: true }],
   clientName: { type: String, required: true },
   clientMobile: { type: String, required: true },
   clientEmail: { type: String, required: false, lowercase: true, trim: true },
@@ -95,5 +97,6 @@ const EventSchema = new Schema<IEvent>({
 // Performance indexes for studio event listings and guest gallery lookup
 EventSchema.index({ studioId: 1, createdAt: -1 });
 EventSchema.index({ studioId: 1, date: -1 });
+EventSchema.index({ previousCodes: 1 });
 
 export const Event = mongoose.model<IEvent>('Event', EventSchema);
