@@ -306,7 +306,16 @@ export const processPhoto = async (mediaId: string, studioId: string) => {
       .toBuffer();
 
     const thumbFolder = `events/${media.eventId}/photos/thumb`;
-    const { url: thumbnailUrl } = await uploadFile(thumbnailImage, thumbFolder);
+    const { url: thumbnailUrl } = await uploadFile(thumbnailImage, thumbFolder, 'image/jpeg');
+
+    // Immediately persist thumbnail and preview to MongoDB so gallery loads without delay
+    await Media.findByIdAndUpdate(mediaId, {
+      thumbnailUrl,
+      compressedUrl,
+      width,
+      height,
+      processedStatus: 'PROCESSING',
+    });
 
     let faces: any[] = [];
     let faceIndexStatus: 'INDEXED' | 'NO_FACE' | 'FAILED' = media.faceIndexStatus === 'INDEXED' ? 'INDEXED' : 'NO_FACE';
@@ -327,7 +336,7 @@ export const processPhoto = async (mediaId: string, studioId: string) => {
 
           const aiResponse = await axios.post(`${baseUrl}/detect-faces`, formData, {
             headers: { ...formData.getHeaders(), 'bypass-tunnel-reminder': 'true' },
-            timeout: 60000,
+            timeout: 3500,
           });
           if (aiResponse.data && Array.isArray(aiResponse.data.faces)) {
             faces = aiResponse.data.faces;

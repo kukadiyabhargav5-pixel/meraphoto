@@ -794,8 +794,12 @@ export default function EventUploadDedicatedPage({
                 bytesUploadedTotal += fileToUpload.size;
                 successful++;
 
-                // Flatten and normalize incoming docs
-                const uploadedDocs = (Array.isArray(uploadRes.media) ? uploadRes.media : [uploadRes.media]).flat();
+                // Flatten and normalize incoming docs with instant local preview fallback
+                const localBlobPreview = URL.createObjectURL(fileToUpload);
+                const uploadedDocs = (Array.isArray(uploadRes.media) ? uploadRes.media : [uploadRes.media]).flat().map((doc: any) => {
+                  const actual = Array.isArray(doc) ? doc[0] : doc;
+                  return { ...actual, localPreviewUrl: localBlobPreview };
+                });
                 setMediaItems((prev) => {
                   const uniqueMap = new Map();
                   uploadedDocs.forEach((m: any) => {
@@ -1726,8 +1730,14 @@ export default function EventUploadDedicatedPage({
                   const isNewlyAdded = item._id ? newlyUploadedIds.has(String(item._id)) : false;
                   const isSelected = item._id ? selectedMediaIds.includes(String(item._id)) : false;
                   const isVideo = item.type === 'VIDEO' || (item.mimeType && item.mimeType.startsWith('video/'));
-                  const mediaSource = resolveMediaUrl(item.thumbnailUrl || item.compressedUrl || item.r2Url || item.url || item.r2Key) || null;
-                  const thumbSource = item.thumbnailUrl ? resolveMediaUrl(item.thumbnailUrl) : mediaSource;
+                  const thumbCandidate = item.thumbnailUrl ? resolveMediaUrl(item.thumbnailUrl) : '';
+                  const compCandidate = item.compressedUrl ? resolveMediaUrl(item.compressedUrl) : '';
+                  const origCandidate = resolveMediaUrl(item.r2Url || item.url || item.r2Key);
+                  const localCandidate = item.localPreviewUrl || '';
+
+                  // Progressive display priority: thumbnail -> compressed -> localPreview -> original
+                  const mediaSource = thumbCandidate || compCandidate || localCandidate || origCandidate;
+                  const thumbSource = thumbCandidate || compCandidate || localCandidate || origCandidate;
 
                   return (
                     <motion.div
@@ -1779,9 +1789,13 @@ export default function EventUploadDedicatedPage({
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           onError={(e) => {
                             const target = e.currentTarget;
-                            const fallbackSrc = resolveMediaUrl(item.r2Url || item.url || item.r2Key);
-                            if (fallbackSrc && target.src !== fallbackSrc && !target.src.endsWith(fallbackSrc)) {
-                              target.src = fallbackSrc;
+                            // Progressive 4-stage fallback chain
+                            if (target.src === thumbCandidate && compCandidate && compCandidate !== thumbCandidate) {
+                              target.src = compCandidate;
+                            } else if ((target.src === thumbCandidate || target.src === compCandidate) && origCandidate && origCandidate !== target.src) {
+                              target.src = origCandidate;
+                            } else if (localCandidate && target.src !== localCandidate) {
+                              target.src = localCandidate;
                             }
                           }}
                         />

@@ -1,4 +1,5 @@
 import fs from 'fs';
+import mongoose from 'mongoose';
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
@@ -86,24 +87,17 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
           }
         }
 
-        let finalBuffer = file.buffer;
-        let finalSize = file.size;
-
-        if (type === 'PHOTO') {
-          try {
-            // High-speed single pass optimization: preserve orientation & max 3840px (Ultra Fast)
-            finalBuffer = await sharp(file.buffer)
-              .rotate()
-              .resize({ width: 3840, height: 3840, fit: 'inside', withoutEnlargement: true })
-              .jpeg({ quality: 85 })
-              .toBuffer();
-            finalSize = finalBuffer.length;
-          } catch {
-            finalBuffer = file.buffer;
-            finalSize = file.size;
-          }
+        // Read file buffer from memory or Multer disk storage
+        let initialBuffer: Buffer | null = file.buffer || null;
+        if (!initialBuffer && file.path && fs.existsSync(file.path)) {
+          initialBuffer = fs.readFileSync(file.path);
+        }
+        if (!initialBuffer) {
+          throw new Error('Could not read uploaded file content for ' + file.originalname);
         }
 
+        let finalBuffer = initialBuffer;
+        let finalSize = initialBuffer.length;
         const ext = path.extname(file.originalname).toLowerCase();
         let mime = file.mimetype;
         if (!mime || mime === 'application/octet-stream') {
@@ -114,20 +108,72 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
           else mime = isVideo ? 'video/mp4' : 'image/jpeg';
         }
 
-        // Upload buffer directly to Cloudflare R2 with structured studio/album hierarchy
+        let thumbUrl = '';
+        let compressedUrl = '';
+        let imgWidth = 0;
+        let imgHeight = 0;
+        const baseNameWithoutExt = path.parse(file.originalname).name.replace(/[^a-zA-Z0-9._-]/g, '_');
+
+        if (type === 'PHOTO') {
+          try {
+            // High-speed single pass optimization: preserve orientation & max 3840px (Ultra Fast)
+            finalBuffer = await sharp(initialBuffer)
+              .rotate()
+              .resize({ width: 3840, height: 3840, fit: 'inside', withoutEnlargement: true })
+              .jpeg({ quality: 85 })
+              .toBuffer();
+            finalSize = finalBuffer.length;
+            mime = 'image/jpeg'; // Final buffer is guaranteed JPEG
+
+            const meta = await sharp(finalBuffer).metadata();
+            imgWidth = meta.width || 0;
+            imgHeight = meta.height || 0;
+
+            // Generate and upload immediate 400px thumbnail (ultra-fast, loads in ~15ms)
+            const thumbBuffer = await sharp(finalBuffer)
+              .rotate()
+              .resize({ width: 400, height: 400, fit: 'inside', withoutEnlargement: true })
+              .jpeg({ quality: 80 })
+              .toBuffer();
+            const thumbFolder = `events/${eventId}/photos/thumb`;
+            const { url: tUrl } = await uploadFile(thumbBuffer, thumbFolder, 'image/jpeg', `thumb_${baseNameWithoutExt}.jpg`);
+            thumbUrl = tUrl;
+
+            // Generate and upload immediate 1600px gallery preview
+            const galleryBuffer = await sharp(finalBuffer)
+              .rotate()
+              .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+              .jpeg({ quality: 85 })
+              .toBuffer();
+            const galleryFolder = `events/${eventId}/photos/gallery`;
+            const { url: gUrl } = await uploadFile(galleryBuffer, galleryFolder, 'image/jpeg', `gallery_${baseNameWithoutExt}.jpg`);
+            compressedUrl = gUrl;
+          } catch (sharpErr) {
+            console.warn('[uploadMedia] Direct photo optimization warning:', sharpErr);
+            finalBuffer = initialBuffer;
+            finalSize = initialBuffer.length;
+          }
+        }
+
+        // Upload original/optimized buffer directly to Cloudflare R2
         const folderPathForR2 = `studios/${event.studioId}/albums/${eventId}/${type.toLowerCase()}s`;
+        const uploadFileName = type === 'PHOTO' ? `${baseNameWithoutExt}.jpg` : file.originalname;
         const { url: r2Url, publicId: r2Key } = await uploadFile(
           finalBuffer,
           folderPathForR2,
           mime,
-          file.originalname
+          uploadFileName
         );
 
-        // Save media record as PENDING
+        // Save media record with immediate thumbnails and active URLs
         const media = await Media.create({
           type,
           r2Key,
           r2Url,
+          thumbnailUrl: thumbUrl || r2Url,
+          compressedUrl: compressedUrl || r2Url,
+          width: imgWidth || undefined,
+          height: imgHeight || undefined,
           folderPath,
           eventId: event._id,
           studioId: event.studioId,
@@ -135,9 +181,13 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
           mimeType: mime,
           originalName: file.originalname,
           uploadedBy: req.user?._id,
-          processedStatus: 'PENDING',
+          processedStatus: thumbUrl ? 'COMPLETED' : 'PENDING',
           creditDeducted: false,
         });
+
+        if (file.path && fs.existsSync(file.path)) {
+          fs.unlink(file.path, () => {});
+        }
 
         // Enqueue job or queue for synchronous processing
         if (isRedisAvailable && photoQueue && videoQueue) {
@@ -241,7 +291,7 @@ export const streamMediaFile = async (req: Request, res: Response) => {
     );
     res.setHeader('Accept-Ranges', 'bytes');
 
-    let contentType = s3Response.ContentType;
+    let contentType = s3Response.ContentType || '';
     const ext = path.extname(key).toLowerCase();
     if (!contentType || contentType === 'application/octet-stream' || contentType === 'binary/octet-stream') {
       if (ext === '.mp4') contentType = 'video/mp4';
@@ -254,32 +304,74 @@ export const streamMediaFile = async (req: Request, res: Response) => {
       else if (ext === '.svg') contentType = 'image/svg+xml';
       else contentType = 'application/octet-stream';
     }
-    res.setHeader('Content-Type', contentType);
-
-    if (s3Response.ContentLength) res.setHeader('Content-Length', s3Response.ContentLength);
-    if (s3Response.ETag) res.setHeader('ETag', s3Response.ETag);
 
     const isDownload = req.query.download === '1' || req.query.download === 'true';
     const downloadFilename = (req.query.filename as string) || path.basename(key);
-    if (isDownload) {
-      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadFilename)}"`);
-      res.setHeader('Cache-Control', 'no-cache');
-    } else {
-      res.setHeader('Content-Disposition', 'inline');
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    }
+
+    const sendHeadersWithMime = (finalMime: string) => {
+      if (res.headersSent) return;
+      if (s3Response.ContentRange) {
+        res.status(206);
+        res.setHeader('Content-Range', s3Response.ContentRange);
+      } else {
+        res.status(200);
+      }
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization, Accept');
+      res.setHeader(
+        'Access-Control-Expose-Headers',
+        'Content-Range, Accept-Ranges, Content-Length, Content-Type, ETag, Content-Disposition'
+      );
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Content-Type', finalMime);
+      if (s3Response.ContentLength) res.setHeader('Content-Length', s3Response.ContentLength);
+      if (s3Response.ETag) res.setHeader('ETag', s3Response.ETag);
+      if (isDownload) {
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadFilename)}"`);
+        res.setHeader('Cache-Control', 'no-cache');
+      } else {
+        res.setHeader('Content-Disposition', 'inline');
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    };
 
     if (req.method === 'HEAD') {
+      sendHeadersWithMime(contentType);
       return res.end();
     }
 
     const body = s3Response.Body as any;
-    if (body && typeof body.pipe === 'function') {
+    if (body && typeof body.on === 'function') {
+      let headersDispatched = false;
+      body.on('data', (chunk: Buffer) => {
+        if (!headersDispatched) {
+          headersDispatched = true;
+          // Magic-byte sniff on the very first chunk to guarantee correct browser image rendering
+          let detected = contentType;
+          if (chunk && chunk.length >= 4) {
+            if (chunk[0] === 0xFF && chunk[1] === 0xD8 && chunk[2] === 0xFF) {
+              detected = 'image/jpeg';
+            } else if (chunk[0] === 0x89 && chunk[1] === 0x50 && chunk[2] === 0x4E && chunk[3] === 0x47) {
+              detected = 'image/png';
+            } else if (chunk.length >= 12 && chunk[0] === 0x52 && chunk[1] === 0x49 && chunk[2] === 0x46 && chunk[3] === 0x46 && chunk[8] === 0x57 && chunk[9] === 0x45 && chunk[10] === 0x42 && chunk[11] === 0x50) {
+              detected = 'image/webp';
+            } else if (chunk.length >= 8 && (chunk.toString('ascii', 4, 8) === 'ftyp' || chunk.toString('ascii', 4, 8) === 'moov')) {
+              detected = 'video/mp4';
+            }
+          }
+          sendHeadersWithMime(detected);
+        }
+        res.write(chunk);
+      });
+      body.on('end', () => {
+        if (!headersDispatched) sendHeadersWithMime(contentType);
+        res.end();
+      });
       body.on('error', (streamErr: any) => {
         console.error('[StreamMediaFile Stream Error]:', streamErr);
         if (!res.headersSent) res.status(500).end();
       });
-      body.pipe(res);
     } else {
       res.status(500).send('Unable to stream response');
     }
@@ -387,7 +479,12 @@ export const getEventMedia = async (req: Request, res: Response) => {
   const { type } = req.query;
 
   try {
-    const query: any = { eventId };
+    const isObjId = mongoose.Types.ObjectId.isValid(eventId);
+    const eventQuery = isObjId
+      ? { $or: [{ eventId: new mongoose.Types.ObjectId(eventId) }, { eventId: String(eventId) }] }
+      : { eventId: String(eventId) };
+
+    const query: any = { ...eventQuery };
     if (type) {
       query.type = type;
     }
