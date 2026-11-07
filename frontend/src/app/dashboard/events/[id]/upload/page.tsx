@@ -144,13 +144,28 @@ export default function EventUploadDedicatedPage({
     }
   };
 
-  const fetchEventAndMedia = async () => {
+  const fetchEventAndMedia = async (retryCount = 0) => {
+    if (!eventId) return;
+    const cleanId = decodeURIComponent(eventId).trim();
+    setLoading(true);
     try {
-      const res = await apiClient.get(`/event/code/${eventId}`);
-      if (res.data?.event) {
-        setEvent(res.data.event);
+      let eventData: any = null;
+      try {
+        const res = await apiClient.get(`/event/code/${cleanId}`);
+        if (res.data?.event) eventData = res.data.event;
+      } catch (err1) {
         try {
-          const mediaRes = await apiClient.get(`/media/event/${res.data.event._id}?_t=${Date.now()}`);
+          const res2 = await apiClient.get(`/event/${cleanId}`);
+          if (res2.data?.event) eventData = res2.data.event;
+        } catch (err2) {
+          console.warn('Fallback ID fetch notice:', err2);
+        }
+      }
+
+      if (eventData) {
+        setEvent(eventData);
+        try {
+          const mediaRes = await apiClient.get(`/media/event/${eventData._id}?_t=${Date.now()}`);
           if (mediaRes.data?.media && Array.isArray(mediaRes.data.media)) {
             // Deduplicate incoming media and unwrap any nested arrays
             const uniqueMap = new Map();
@@ -166,10 +181,21 @@ export default function EventUploadDedicatedPage({
         } catch (me) {
           console.error('Failed to fetch media:', me);
         }
+      } else {
+        if (retryCount < 2) {
+          setTimeout(() => fetchEventAndMedia(retryCount + 1), 1000);
+          return;
+        }
+        setEvent(null);
       }
       refreshStorage();
     } catch (error) {
       console.error('Failed to load event:', error);
+      if (retryCount < 2) {
+        setTimeout(() => fetchEventAndMedia(retryCount + 1), 1000);
+        return;
+      }
+      setEvent(null);
     } finally {
       setLoading(false);
     }
@@ -619,7 +645,7 @@ export default function EventUploadDedicatedPage({
       const flushToBackend = async () => {
         if (isFlushing || pendingCreateBuffer.length === 0) return;
         isFlushing = true;
-        const chunk = pendingCreateBuffer.splice(0, Math.min(pendingCreateBuffer.length, 25));
+        const chunk = pendingCreateBuffer.splice(0, Math.min(pendingCreateBuffer.length, 3));
         try {
           const res = await apiClient.post(`/media/event/${event?._id || eventId}/bulk-create`, { mediaList: chunk });
           if (res.data?.media && Array.isArray(res.data.media)) {
@@ -697,7 +723,7 @@ export default function EventUploadDedicatedPage({
 
       // Ultra-Fast Parallel Stream Engine (Up to 6 streams directly to Cloudflare R2)
       // Uploads 100-200 photos in under 1 minute with accurate per-file status & auto-retry!
-      const concurrency = Math.min(6, Math.max(3, fileArray.length));
+      const concurrency = Math.min(3, Math.max(1, fileArray.length));
 
       const worker = async () => {
         while (currentFileIndex < fileArray.length) {
@@ -963,14 +989,29 @@ export default function EventUploadDedicatedPage({
 
   if (!event) {
     return (
-      <div className="flex-1 min-h-screen bg-[#faf9f6] flex items-center justify-center p-8 text-center">
-        <div>
-          <h2 className="text-xl font-black text-slate-900 mb-2">Event Not Found</h2>
+      <div className="flex-1 min-h-[70vh] bg-[#faf9f6] flex flex-col items-center justify-center p-8 text-center font-poppins">
+        <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center mb-4 text-amber-600 shadow-sm">
+          <AlertTriangle className="w-8 h-8" />
+        </div>
+        <h2 className="text-2xl font-black text-slate-900 mb-1.5">Event Not Found</h2>
+        <p className="text-slate-500 text-xs sm:text-sm mb-6 max-w-sm">
+          Could not find or load &quot;{eventId}&quot;. Please verify the URL or try reloading.
+        </p>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => fetchEventAndMedia(0)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry Loading</span>
+          </button>
           <Link
             href="/dashboard/events"
-            className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold"
+            className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-[#c5a880] hover:bg-[#b69970] text-slate-900 text-xs font-black rounded-xl transition-all shadow-md active:scale-95"
           >
-            Back to Events
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Events</span>
           </Link>
         </div>
       </div>
