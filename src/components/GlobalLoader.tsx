@@ -168,9 +168,11 @@ export default function GlobalLoader() {
     return false;
   });
 
-  const [displayProgress, setDisplayProgress] = useState(1);
+  const [displayProgress, setDisplayProgress] = useState(25);
   const [isFlashing, setIsFlashing] = useState(false);
   const keepAliveStartedRef = useRef(false);
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
 
   // Restore body scroll when dismissed
   useEffect(() => {
@@ -192,25 +194,29 @@ export default function GlobalLoader() {
     }
   }, []);
 
-  // Autonomous, smooth progress animation: 1% -> 100% in 450ms (NEVER STUCK AT 1%)
+  // Autonomous, ultra-fast & mobile-optimized progress animation: 25% -> 100% in 250ms (NEVER STUCK AT 1%)
   useEffect(() => {
     if (!isHome || isDismissed) return;
 
-    // Hard safety timeout: unconditionally dismiss after 750ms
+    const isMobileDevice = typeof window !== 'undefined' && (window.innerWidth < 768 || 'ontouchstart' in window);
+
+    // On mobile devices: fast-track dismiss in 180ms to guarantee zero freezing
+    const safetyCeiling = isMobileDevice ? 250 : 380;
     const hardSafetyTimer = setTimeout(() => {
       setIsDismissed(true);
+      document.body.style.overflow = '';
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('app_initial_ready', 'true');
       }
-    }, 750);
+    }, safetyCeiling);
 
     const startTime = Date.now();
-    const duration = 450; // 450ms total animation
+    const duration = isMobileDevice ? 180 : 250;
 
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTime;
-      const calculated = Math.min(100, Math.round(1 + (elapsed / duration) * 99));
-      const current = Math.max(calculated, Math.min(100, progress || 0));
+      const calculated = Math.min(100, Math.round(25 + (elapsed / duration) * 75));
+      const current = Math.max(calculated, Math.min(100, progressRef.current || 0));
       setDisplayProgress(current);
 
       if (current >= 100) {
@@ -218,18 +224,19 @@ export default function GlobalLoader() {
         setIsFlashing(true);
         setTimeout(() => {
           setIsDismissed(true);
+          document.body.style.overflow = '';
           if (typeof window !== 'undefined') {
             sessionStorage.setItem('app_initial_ready', 'true');
           }
-        }, 120);
+        }, 60);
       }
-    }, 20);
+    }, 16);
 
     return () => {
       clearInterval(interval);
       clearTimeout(hardSafetyTimer);
     };
-  }, [isHome, isDismissed, progress]);
+  }, [isHome, isDismissed]);
 
   if (!isHome || isDismissed) return null;
 

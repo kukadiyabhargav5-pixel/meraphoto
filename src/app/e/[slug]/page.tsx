@@ -237,7 +237,27 @@ export default function ClientGallery() {
 
     window.addEventListener('favorites_updated', handleFavUpdate);
     window.addEventListener('storage', handleFavUpdate);
-    return () => {
+    // Lightbox Keyboard Navigation (ArrowLeft / ArrowRight)
+  useEffect(() => {
+    if (!selectedItem || galleryMedia.length <= 1) return;
+    const handleGalleryKeyNav = (e: KeyboardEvent) => {
+      const curId = String(selectedItem?._id || selectedItem?.r2Key);
+      const curIdx = galleryMedia.findIndex(m => String(m._id || m.r2Key) === curId);
+      if (e.key === 'ArrowLeft') {
+        const prevIdx = curIdx > 0 ? curIdx - 1 : galleryMedia.length - 1;
+        setSelectedItem(galleryMedia[prevIdx]);
+      } else if (e.key === 'ArrowRight') {
+        const nextIdx = (curIdx >= 0 && curIdx < galleryMedia.length - 1) ? curIdx + 1 : 0;
+        setSelectedItem(galleryMedia[nextIdx]);
+      } else if (e.key === 'Escape') {
+        setSelectedItem(null);
+      }
+    };
+    window.addEventListener('keydown', handleGalleryKeyNav);
+    return () => window.removeEventListener('keydown', handleGalleryKeyNav);
+  }, [selectedItem, galleryMedia]);
+
+  return () => {
       window.removeEventListener('favorites_updated', handleFavUpdate);
       window.removeEventListener('storage', handleFavUpdate);
     };
@@ -1262,7 +1282,7 @@ export default function ClientGallery() {
                 </div>
                 <div>
                   <p className="font-bold text-xs sm:text-sm">Found {galleryMedia.length} matching photo{galleryMedia.length !== 1 ? 's' : ''}</p>
-                  <p className="text-[11px] sm:text-xs text-[#FF6B00] mt-0.5 font-medium">AI matched your face across the entire album. Photos are sorted by similarity.</p>
+                  <p className="text-[11px] sm:text-xs text-[#c5a880] mt-0.5 font-medium">Your personal album is ready with your photos.</p>
                 </div>
               </div>
             )}
@@ -1299,12 +1319,7 @@ export default function ClientGallery() {
                       }}
                     />
                     {/* Face Scan Similarity Match Badge on Mobile */}
-                    {searchActive && (m as any).similarityPercent && (
-                      <div className="absolute bottom-2 left-2 z-20 px-2 py-0.5 rounded-full bg-black/80 backdrop-blur-md border border-[#c5a880]/60 text-[#c5a880] text-[10px] font-black flex items-center gap-1 shadow-md">
-                        <Sparkles className="w-2.5 h-2.5 text-[#c5a880]" />
-                        <span>{(m as any).similarityPercent}% Match</span>
-                      </div>
-                    )}
+                    {/* Match % Badge Removed */}
                     {m.type === 'VIDEO' && (
                       <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
                         <div className="w-9 h-9 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center">
@@ -1405,12 +1420,7 @@ export default function ClientGallery() {
                       return (
                         <>
                           {/* Face Scan Similarity Match Badge on Desktop */}
-                          {searchActive && (m as any).similarityPercent && (
-                            <div className="absolute bottom-2.5 left-2.5 z-40 px-2.5 py-1 rounded-full bg-black/85 backdrop-blur-md border border-[#c5a880]/70 text-[#c5a880] text-xs font-black flex items-center gap-1.5 shadow-lg pointer-events-none">
-                              <Sparkles className="w-3 h-3 text-[#c5a880]" />
-                              <span>{(m as any).similarityPercent}% Match</span>
-                            </div>
-                          )}
+                          {/* Match % Badge Removed */}
                           {/* Favorite Heart Button on Hover / Active */}
                           <button
                             type="button"
@@ -1766,7 +1776,7 @@ export default function ClientGallery() {
                         </div>
 
                         <div className="bg-black/80 backdrop-blur-md border border-[#c5a880]/40 rounded-full px-3 py-1 text-[10px] font-mono font-black tracking-wider text-[#c5a880] shadow-lg">
-                          {isMatchedSuccess ? 'MATCHED' : `${searchProgress}%`}
+                          {isMatchedSuccess ? 'VERIFIED' : `${searchProgress}%`}
                         </div>
                       </div>
 
@@ -1790,10 +1800,10 @@ export default function ClientGallery() {
                     <div className="flex items-center justify-between mb-3 relative z-10">
                       <span className="text-[11px] font-black uppercase tracking-[0.2em] text-[#c5a880] flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-[#c5a880] animate-pulse" />
-                        {isMatchedSuccess ? 'Biometric Match Complete' : 'AI Facial Processing'}
+                        {isMatchedSuccess ? 'Face Verified' : 'AI Facial Processing'}
                       </span>
                       <span className="text-xs font-mono font-black text-slate-800 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-lg">
-                        {searchProgress}%
+                        {isMatchedSuccess ? 'Verified' : `${searchProgress}%`}
                       </span>
                     </div>
 
@@ -2144,14 +2154,21 @@ export default function ClientGallery() {
           </div>
 
           <div className="flex-1 flex items-center justify-center p-2 sm:p-4 relative h-full w-full">
-            {/* Previous Button */}
-            {galleryMedia.findIndex(m => m._id === selectedItem._id) > 0 && (
+            {/* Previous Photo Button (Left Arrow) */}
+            {galleryMedia.length > 1 && (
               <button 
-                onClick={(e) => { e.stopPropagation(); setSelectedItem(galleryMedia[galleryMedia.findIndex(m => m._id === selectedItem._id) - 1]); }} 
-                className="absolute left-1.5 sm:left-4 p-2 sm:p-3.5 rounded-full bg-black/50 hover:bg-black/80 text-white transition-all hover:scale-105 border border-white/15 z-20 backdrop-blur-md min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer shadow-lg"
-                title="Previous photo"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const curId = String(selectedItem?._id || selectedItem?.r2Key);
+                  const curIdx = galleryMedia.findIndex(m => String(m._id || m.r2Key) === curId);
+                  const prevIdx = curIdx > 0 ? curIdx - 1 : galleryMedia.length - 1;
+                  setSelectedItem(galleryMedia[prevIdx]);
+                }} 
+                className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-black/70 hover:bg-[#c5a880] text-white min-h-[48px] min-w-[48px] flex items-center justify-center cursor-pointer shadow-2xl z-30 backdrop-blur-md border border-white/20 transition-all hover:scale-110 active:scale-95"
+                title="Previous photo (Left Arrow)"
               >
-                <ChevronLeft className="h-5 w-5 sm:h-7 sm:w-7" />
+                <ChevronLeft className="h-6 w-6 sm:h-8 sm:w-8" />
               </button>
             )}
 
@@ -2161,14 +2178,21 @@ export default function ClientGallery() {
               <video ref={playerRef} controls src={resolveMediaUrl(selectedItem)} className="max-w-[95vw] sm:max-w-[85vw] max-h-[82dvh] sm:max-h-[85vh] object-contain rounded-xl" />
             )}
 
-            {/* Next Button */}
-            {galleryMedia.findIndex(m => m._id === selectedItem._id) < galleryMedia.length - 1 && (
+            {/* Next Photo Button (Right Arrow) */}
+            {galleryMedia.length > 1 && (
               <button 
-                onClick={(e) => { e.stopPropagation(); setSelectedItem(galleryMedia[galleryMedia.findIndex(m => m._id === selectedItem._id) + 1]); }} 
-                className="absolute right-1.5 sm:right-4 p-2 sm:p-3.5 rounded-full bg-black/50 hover:bg-black/80 text-white transition-all hover:scale-105 border border-white/15 z-20 backdrop-blur-md min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer shadow-lg"
-                title="Next photo"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const curId = String(selectedItem?._id || selectedItem?.r2Key);
+                  const curIdx = galleryMedia.findIndex(m => String(m._id || m.r2Key) === curId);
+                  const nextIdx = (curIdx >= 0 && curIdx < galleryMedia.length - 1) ? curIdx + 1 : 0;
+                  setSelectedItem(galleryMedia[nextIdx]);
+                }} 
+                className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-black/70 hover:bg-[#c5a880] text-white min-h-[48px] min-w-[48px] flex items-center justify-center cursor-pointer shadow-2xl z-30 backdrop-blur-md border border-white/20 transition-all hover:scale-110 active:scale-95"
+                title="Next photo (Right Arrow)"
               >
-                <ChevronRight className="h-5 w-5 sm:h-7 sm:w-7" />
+                <ChevronRight className="h-6 w-6 sm:h-8 sm:w-8" />
               </button>
             )}
           </div>

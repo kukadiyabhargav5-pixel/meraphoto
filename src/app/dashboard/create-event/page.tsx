@@ -164,8 +164,17 @@ export default function CreateEventPage() {
       if (showToast) toast.error('Please enter Client Full Name');
       return false;
     }
-    if (!clientMobile.trim()) {
+    const cleanedMobile = clientMobile.replace(/\D/g, '');
+    if (!cleanedMobile) {
       if (showToast) toast.error('Please enter Client Mobile Number');
+      return false;
+    }
+    if (cleanedMobile.length !== 10) {
+      if (showToast) toast.error('Client Mobile Number must be exactly 10 digits');
+      return false;
+    }
+    if (!/^[6-9]\d{9}$/.test(cleanedMobile)) {
+      if (showToast) toast.error('Please enter a valid 10-digit Indian Mobile Number');
       return false;
     }
     if (clientEmail.trim() && !/^\S+@\S+\.\S+$/.test(clientEmail.trim())) {
@@ -315,7 +324,7 @@ export default function CreateEventPage() {
         // Image is already 16:9! Upload directly
         setCoverDimensions({ width: w, height: h });
         setRatioMismatch(false);
-        await uploadCoverFile(file);
+        await uploadCoverFile(file, file.name, objectUrl);
       } else {
         // Image is NOT 16:9: Open the 16:9 interactive movement cropper!
         toast('Image is not 16:9. Please adjust the crop window to select your preferred frame.', {
@@ -333,15 +342,16 @@ export default function CreateEventPage() {
   /**
    * Uploads an image file to the asset upload endpoint.
    */
-  const uploadCoverFile = async (fileToUpload: File | Blob, customName?: string) => {
+  const uploadCoverFile = async (fileToUpload: File | Blob, customName?: string, localPreview?: string) => {
     try {
+      if (localPreview) {
+        setCoverImage(localPreview);
+      }
       setUploadingImage(true);
       const formData = new FormData();
       formData.append('file', fileToUpload, customName || 'cover-16x9.jpg');
 
-      const res = await apiClient.post('/media/upload-asset', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await apiClient.post('/media/upload-asset', formData);
 
       if (res.data?.url) {
         setCoverImage(res.data.url);
@@ -364,7 +374,7 @@ export default function CreateEventPage() {
   const handleCropComplete = async (croppedBlob: Blob, croppedFile: File, previewUrl: string) => {
     setCoverDimensions({ width: 1920, height: 1080 });
     setRatioMismatch(false);
-    await uploadCoverFile(croppedFile, croppedFile.name);
+    await uploadCoverFile(croppedFile, croppedFile.name, previewUrl);
   };
 
   /**
@@ -387,9 +397,7 @@ export default function CreateEventPage() {
       const formData = new FormData();
       formData.append('image', file);
 
-      const res = await apiClient.post('/dashboard/upload-asset', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await apiClient.post('/dashboard/upload-asset', formData);
 
       if (res.data && res.data.url) {
         setWatermarkLogoUrl(res.data.url);
@@ -416,8 +424,8 @@ export default function CreateEventPage() {
       await apiClient.post('/event', {
         name: eventName,
         clientName,
-        clientMobile,
-        clientEmail,
+        clientMobile: clientMobile.replace(/\D/g, '').slice(-10),
+        clientEmail: clientEmail.trim() || undefined,
         date: eventDate || new Date().toISOString(),
         type: getEffectiveEventType(),
         location: eventLocation,
@@ -462,6 +470,9 @@ export default function CreateEventPage() {
 
       try {
         sessionStorage.removeItem('mara_create_event_step');
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('mara_cached_events');
+        }
       } catch {}
 
       toast.success('Event created successfully!');
@@ -711,7 +722,7 @@ export default function CreateEventPage() {
                       {/* Mobile Number */}
                       <div className="space-y-1.5">
                         <label htmlFor="clientMobile" className="edit-label">
-                          Client Mobile Number <span className="text-rose-500">*</span>
+                          Client Mobile Number (Max 10 Digits) <span className="text-rose-500">*</span>
                         </label>
                         <div className="relative">
                           <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center w-5 h-5 pointer-events-none text-slate-400">
@@ -720,14 +731,20 @@ export default function CreateEventPage() {
                           <input
                             type="tel"
                             id="clientMobile"
+                            maxLength={10}
+                            inputMode="numeric"
+                            placeholder="Enter 10-digit number (e.g. 9876543210)"
                             className="edit-input edit-input-with-icon font-bold text-slate-900 border-[#e8dfd3] hover:border-[#c5a880] transition-colors"
                             style={{ paddingLeft: '44px' }}
                             value={clientMobile}
-                            onChange={(e) => setClientMobile(e.target.value)}
+                            onChange={(e) => {
+                              const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                              setClientMobile(digits);
+                            }}
                           />
                         </div>
                         <p className="text-[10px] text-slate-500 font-medium">
-                          Used for customer records and SMS gallery link sharing.
+                          Used for customer records and SMS gallery link sharing (strictly 10 digits).
                         </p>
                       </div>
 
@@ -1296,6 +1313,12 @@ export default function CreateEventPage() {
                             src={resolveMediaUrl(coverImage)}
                             alt="Cover"
                             className="w-full h-full object-cover block mx-auto select-none transition-transform duration-700 group-hover:scale-102"
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              if (rawImageForCrop && target.src !== rawImageForCrop) {
+                                target.src = rawImageForCrop;
+                              }
+                            }}
                           />
 
                           {/* Hover Overlay Desktop */}
@@ -1618,46 +1641,76 @@ export default function CreateEventPage() {
                     </div>
 
                     {/* Portfolio Toggle */}
-                    <div className="bg-white border border-[#e8dfd3] rounded-2xl p-4 sm:p-6 shadow-sm flex items-center justify-between gap-3">
+                    <div 
+                      onClick={() => setAddToPortfolio(!addToPortfolio)}
+                      className={`bg-white border rounded-2xl p-4 sm:p-6 shadow-sm flex items-center justify-between gap-3 cursor-pointer select-none transition-all ${
+                        addToPortfolio ? 'border-[#c5a880] ring-2 ring-[#c5a880]/20 bg-amber-50/20' : 'border-[#e8dfd3] hover:border-[#c5a880]/60'
+                      }`}
+                    >
                       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                        <span className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-black text-slate-600 shrink-0">
+                        <span className={`w-9 h-9 rounded-xl border flex items-center justify-center text-xs font-black shrink-0 transition-colors ${
+                          addToPortfolio ? 'bg-[#c5a880] text-white border-[#c5a880]' : 'bg-slate-100 border-slate-200 text-slate-600'
+                        }`}>
                           P
                         </span>
                         <div className="min-w-0">
-                          <h4 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider truncate">
-                            Add to Public Portfolio
-                          </h4>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider truncate">
+                              Add to Public Portfolio
+                            </h4>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                              addToPortfolio ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              {addToPortfolio ? 'ON' : 'OFF'}
+                            </span>
+                          </div>
                           <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium">
                             Showcase this event on your studio public portfolio
                           </p>
                         </div>
                       </div>
                       <div
+                        role="switch"
+                        aria-checked={addToPortfolio}
                         className="toggle-switch cursor-pointer shrink-0"
                         data-active={addToPortfolio}
-                        onClick={() => setAddToPortfolio(!addToPortfolio)}
                       />
                     </div>
 
                     {/* Album Download Toggle */}
-                    <div className="bg-white border border-[#e8dfd3] rounded-2xl p-4 sm:p-6 shadow-sm flex items-center justify-between gap-3">
+                    <div 
+                      onClick={() => setAllowDownload(!allowDownload)}
+                      className={`bg-white border rounded-2xl p-4 sm:p-6 shadow-sm flex items-center justify-between gap-3 cursor-pointer select-none transition-all ${
+                        allowDownload ? 'border-[#c5a880] ring-2 ring-[#c5a880]/20 bg-amber-50/20' : 'border-[#e8dfd3] hover:border-[#c5a880]/60'
+                      }`}
+                    >
                       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                        <span className="w-9 h-9 rounded-xl bg-[#c5a880]/15 border border-[#c5a880]/30 flex items-center justify-center text-xs font-black text-[#9c7c56] shrink-0">
+                        <span className={`w-9 h-9 rounded-xl border flex items-center justify-center text-xs font-black shrink-0 transition-colors ${
+                          allowDownload ? 'bg-[#c5a880] text-white border-[#c5a880]' : 'bg-slate-100 border-slate-200 text-slate-600'
+                        }`}>
                           D
                         </span>
                         <div className="min-w-0">
-                          <h4 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider truncate">
-                            Allow Album Photo Downloads
-                          </h4>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider truncate">
+                              Allow Album Photo Downloads
+                            </h4>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                              allowDownload ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              {allowDownload ? 'ON' : 'OFF'}
+                            </span>
+                          </div>
                           <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium">
                             Enable or disable download button for guests in this album
                           </p>
                         </div>
                       </div>
                       <div
+                        role="switch"
+                        aria-checked={allowDownload}
                         className="toggle-switch cursor-pointer shrink-0"
                         data-active={allowDownload}
-                        onClick={() => setAllowDownload(!allowDownload)}
                       />
                     </div>
                   </motion.div>

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, use, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, CheckCircle, Copy, ChevronDown, LayoutGrid, Sparkles, Crown, ArrowRight, ShieldCheck, Flame, RefreshCw, ZoomIn, Play, X, Clock, AlertTriangle, Zap, Activity, Gauge } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, CheckCircle, Copy, ChevronDown, LayoutGrid, Sparkles, Crown, ArrowRight, ShieldCheck, Flame, RefreshCw, ZoomIn, Play, X, Clock, AlertTriangle, Zap, Activity, Gauge } from 'lucide-react';
 import { apiClient, resolveMediaUrl } from '@/lib/api';
 import toast from 'react-hot-toast';
 import CustomDatePicker from '../../../../components/CustomDatePicker';
@@ -91,6 +91,27 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<any>(null);
 
+  useEffect(() => {
+    if (!previewMedia || mediaItems.length <= 1) return;
+    const handleKeyNav = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        const curId = String(previewMedia?._id || previewMedia?.r2Key || previewMedia?.publicId);
+        const curIdx = mediaItems.findIndex(p => String(p._id || p.r2Key || p.publicId) === curId);
+        const prevIdx = curIdx > 0 ? curIdx - 1 : mediaItems.length - 1;
+        setPreviewMedia(mediaItems[prevIdx]);
+      } else if (e.key === 'ArrowRight') {
+        const curId = String(previewMedia?._id || previewMedia?.r2Key || previewMedia?.publicId);
+        const curIdx = mediaItems.findIndex(p => String(p._id || p.r2Key || p.publicId) === curId);
+        const nextIdx = (curIdx >= 0 && curIdx < mediaItems.length - 1) ? curIdx + 1 : 0;
+        setPreviewMedia(mediaItems[nextIdx]);
+      } else if (e.key === 'Escape') {
+        setPreviewMedia(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyNav);
+    return () => window.removeEventListener('keydown', handleKeyNav);
+  }, [previewMedia, mediaItems]);
+
   const toggleSelection = (id: string) => {
     setSelectedMediaIds(prev => 
       prev.includes(id) ? prev.filter(mediaId => mediaId !== id) : [...prev, id]
@@ -130,20 +151,45 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
   };
 
   const fetchEventDetails = async () => {
+    if (!eventId) return;
+    setLoading(true);
+    const cleanId = decodeURIComponent(eventId).trim();
     try {
-      const res = await apiClient.get(`/event/code/${eventId}`);
-      if (res.data && res.data.event) {
-        setEvent(res.data.event);
-        try {
-           const mediaRes = await apiClient.get(`/media/event/${res.data.event._id}?_t=${Date.now()}`);
-           if (mediaRes.data && mediaRes.data.media) setMediaItems(mediaRes.data.media);
-        } catch (me) {
-           console.error("Failed to fetch media", me);
+      let eventData: any = null;
+      try {
+        const res = await apiClient.get(`/event/code/${cleanId}`);
+        if (res.data && res.data.event) {
+          eventData = res.data.event;
         }
+      } catch (codeErr) {
+        // Fallback: try by direct ID
+        try {
+          const res2 = await apiClient.get(`/event/${cleanId}`);
+          if (res2.data && res2.data.event) {
+            eventData = res2.data.event;
+          }
+        } catch (idErr) {
+          console.warn('Direct ID fetch also failed:', idErr);
+        }
+      }
+
+      if (eventData) {
+        setEvent(eventData);
+        // Load media asynchronously in background
+        apiClient.get(`/media/event/${eventData._id}?_t=${Date.now()}`)
+          .then((mediaRes) => {
+            if (mediaRes.data && mediaRes.data.media) {
+              setMediaItems(mediaRes.data.media);
+            }
+          })
+          .catch((me) => console.warn('Media fetch notice:', me));
+      } else {
+        setEvent(null);
       }
       fetchCredits();
     } catch (error) {
       console.error('Failed to fetch event:', error);
+      setEvent(null);
     } finally {
       setLoading(false);
     }
@@ -369,7 +415,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 backendForm.append('folderPaths', file.webkitRelativePath);
               }
               const backendRes = await apiClient.post(`/media/event/${event._id}/upload`, backendForm, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+                
               });
               if (backendRes.data && backendRes.data.media) {
                 successful++;
@@ -641,12 +687,25 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
   if (!event) {
     return (
-      <div className="flex-1 bg-white p-8">
-        <h1 className="text-2xl font-bold text-slate-900">Event not found</h1>
-        <Link href="/dashboard/events" className="inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-slate-900 hover:text-slate-700 text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer mt-4">
-          <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
-          <span>Back to Events</span>
-        </Link>
+      <div className="flex-1 bg-white p-8 flex flex-col items-center justify-center min-h-[60vh] text-center font-poppins">
+        <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center mb-4 text-amber-600">
+          <AlertTriangle className="w-8 h-8" />
+        </div>
+        <h1 className="text-2xl font-black text-slate-900 mb-1">Event not found</h1>
+        <p className="text-slate-500 text-sm mb-6 max-w-sm">Could not find or load &quot;{eventId}&quot;. Please verify the URL or try reloading.</p>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => fetchEventDetails()}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry Loading</span>
+          </button>
+          <Link href="/dashboard/events" className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-[#c5a880] hover:bg-[#b69970] text-slate-900 text-xs font-black rounded-xl transition-all shadow-md active:scale-95">
+            <span>Back to Events</span>
+          </Link>
+        </div>
       </div>
     );
   }
@@ -700,7 +759,11 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
               const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
               const createdMidnight = new Date(createdDate.getFullYear(), createdDate.getMonth(), createdDate.getDate()).getTime();
               const diffDays = Math.max(0, Math.floor((todayMidnight - createdMidnight) / (1000 * 60 * 60 * 24)));
-              const days = typeof event.daysLeft === 'number' ? event.daysLeft : 180;
+              const days = typeof event.daysLeft === 'number' 
+                ? event.daysLeft 
+                : typeof storageUsage?.activePlan?.daysLeft === 'number'
+                ? storageUsage.activePlan.daysLeft
+                : 180;
               const label = days >= 9000 ? 'Active Lifetime' : days === 0 ? 'Plan Expired' : `${days} ${days === 1 ? 'day' : 'days'} left`;
               const isUrgent = days <= 1;
               const isWarning = days <= 5;
@@ -1058,7 +1121,8 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                   }
                 };
 
-                const res = await apiClient.put(`/event/${eventId}`, payload);
+                const targetId = event?._id || eventId;
+                const res = await apiClient.put(`/event/${targetId}`, payload);
                 if (res.data.event) {
                   setEvent(res.data.event);
                   setFormData(prev => ({
@@ -1146,12 +1210,18 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="edit-label">Client Mobile</label>
+                  <label className="edit-label">Client Mobile (Max 10 Digits)</label>
                   <input 
-                    type="text" 
-                    className="edit-input" 
+                    type="tel" 
+                    maxLength={10}
+                    inputMode="numeric"
+                    placeholder="9876543210"
+                    className="edit-input font-bold" 
                     value={formData.clientMobile}
-                    onChange={e => setFormData({...formData, clientMobile: e.target.value})}
+                    onChange={e => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setFormData({...formData, clientMobile: digits});
+                    }}
                   />
                 </div>
                 <div>
@@ -1541,83 +1611,127 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
                 })()}
               </div>
 
-              <div className="flex items-center justify-between py-4">
-                <div className="flex items-center gap-2">
-                  <span className="w-4 h-4 rounded border border-slate-400 flex items-center justify-center text-[10px] text-slate-400 font-bold">P</span>
-                  <span className="text-xs font-bold text-slate-600 uppercase">Add to Portfolio</span>
-                  {saving && <Loader2 className="h-3 w-3 animate-spin text-slate-400 ml-2" />}
+              {/* Add to Portfolio Toggle */}
+              <div 
+                onClick={async () => {
+                  if (saving) return;
+                  const newValue = !formData.addToPortfolio;
+                  const targetId = event?._id || eventId;
+                  
+                  setFormData(prev => ({...prev, addToPortfolio: newValue}));
+                  setSaving(true);
+                  
+                  try {
+                    await apiClient.patch(`/event/${targetId}/portfolio-status`, { 
+                      addToPortfolio: newValue 
+                    });
+                    
+                    if (event) {
+                      setEvent((prev: any) => prev ? ({...prev, addToPortfolio: newValue}) : null);
+                    }
+                    toast.success(newValue ? 'Added to Public Portfolio!' : 'Removed from Public Portfolio');
+                    if (typeof window !== 'undefined') {
+                      localStorage.removeItem('mara_cached_events');
+                    }
+                  } catch (err) {
+                    toast.error("Failed to save portfolio status.");
+                    setFormData(prev => ({...prev, addToPortfolio: !newValue}));
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                className={`flex items-center justify-between py-3.5 px-4 rounded-xl border cursor-pointer select-none transition-all my-2 ${
+                  formData.addToPortfolio 
+                    ? 'bg-amber-50/40 border-[#c5a880] ring-1 ring-[#c5a880]/30' 
+                    : 'bg-white border-slate-200 hover:border-[#c5a880]/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className={`w-6 h-6 rounded-lg border flex items-center justify-center text-[10px] font-black shrink-0 transition-colors ${
+                    formData.addToPortfolio ? 'bg-[#c5a880] text-white border-[#c5a880]' : 'bg-slate-100 text-slate-500 border-slate-200'
+                  }`}>P</span>
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">Add to Portfolio</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                        formData.addToPortfolio ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {formData.addToPortfolio ? 'ON' : 'OFF'}
+                      </span>
+                      {saving && <Loader2 className="h-3 w-3 animate-spin text-[#c5a880]" />}
+                    </div>
+                    <span className="text-[10px] text-slate-400">Showcase this event on your studio public portfolio</span>
+                  </div>
                 </div>
                 <div 
-                  className={`toggle-switch ${saving ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                  role="switch"
+                  aria-checked={formData.addToPortfolio}
+                  className={`toggle-switch ${saving ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`} 
                   data-active={formData.addToPortfolio}
-                  onClick={async () => {
-                    if (saving) return;
-                    const newValue = !formData.addToPortfolio;
-                    
-                    setFormData({...formData, addToPortfolio: newValue});
-                    setSaving(true);
-                    
-                    try {
-                      await apiClient.patch(`/event/${eventId}/portfolio-status`, { 
-                        addToPortfolio: newValue 
-                      });
-                      
-                      if (event) {
-                        setEvent({...event, addToPortfolio: newValue});
-                      }
-                    } catch (err) {
-                      toast.error("Failed to save portfolio status.");
-                      setFormData({...formData, addToPortfolio: !newValue});
-                    } finally {
-                      setSaving(false);
-                    }
-                  }}
                 />
               </div>
 
               {/* Album Photo Download On/Off Toggle */}
-              <div className="flex items-center justify-between py-4 border-t border-slate-100">
-                <div className="flex items-center gap-2">
-                  <span className="w-4 h-4 rounded border border-[#c5a880] text-[#c5a880] flex items-center justify-center text-[10px] font-black">D</span>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-700 uppercase">Album Photo Download</span>
+              <div 
+                onClick={async () => {
+                  if (isUpdatingDownload || saving) return;
+                  const newValue = !formData.allowDownload;
+                  const targetId = event?._id || eventId;
+                  
+                  setFormData(prev => ({...prev, allowDownload: newValue}));
+                  setIsUpdatingDownload(true);
+                  
+                  try {
+                    await apiClient.patch(`/event/${targetId}/download-status`, { 
+                      allowDownload: newValue 
+                    });
+                    
+                    if (event) {
+                      setEvent((prev: any) => prev ? ({...prev, allowDownload: newValue}) : null);
+                    }
+                    toast.success(newValue ? 'Photo downloads enabled for album' : 'Photo downloads disabled for album');
+                  } catch (err) {
+                    toast.error("Failed to update download setting.");
+                    setFormData(prev => ({...prev, allowDownload: !newValue}));
+                  } finally {
+                    setIsUpdatingDownload(false);
+                  }
+                }}
+                className={`flex items-center justify-between py-3.5 px-4 rounded-xl border cursor-pointer select-none transition-all my-2 ${
+                  formData.allowDownload 
+                    ? 'bg-amber-50/40 border-[#c5a880] ring-1 ring-[#c5a880]/30' 
+                    : 'bg-white border-slate-200 hover:border-[#c5a880]/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className={`w-6 h-6 rounded-lg border flex items-center justify-center text-[10px] font-black shrink-0 transition-colors ${
+                    formData.allowDownload ? 'bg-[#c5a880] text-white border-[#c5a880]' : 'bg-slate-100 text-slate-500 border-slate-200'
+                  }`}>D</span>
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">Album Photo Download</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                        formData.allowDownload ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {formData.allowDownload ? 'ON' : 'OFF'}
+                      </span>
+                      {isUpdatingDownload && (
+                        <div className="flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded text-[9px] font-semibold">
+                          <Loader2 className="h-2.5 w-2.5 animate-spin text-amber-600" />
+                          <span>Saving...</span>
+                        </div>
+                      )}
+                    </div>
                     <span className="text-[10px] text-slate-400">
-                      {formData.allowDownload ? 'Download button ON in album' : 'Download button OFF (Disabled)'}
+                      {formData.allowDownload ? 'Download button enabled in album for guests' : 'Download button disabled in album'}
                     </span>
                   </div>
-                  {isUpdatingDownload && (
-                    <div className="flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-md text-[10px] font-semibold ml-2">
-                      <Loader2 className="h-3 w-3 animate-spin text-amber-600" />
-                      <span>Saving setting...</span>
-                    </div>
-                  )}
                 </div>
                 <div 
+                  role="switch"
+                  aria-checked={formData.allowDownload}
                   className={`toggle-switch ${isUpdatingDownload || saving ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'}`} 
                   data-active={formData.allowDownload}
-                  onClick={async () => {
-                    if (isUpdatingDownload || saving) return;
-                    const newValue = !formData.allowDownload;
-                    
-                    setFormData(prev => ({...prev, allowDownload: newValue}));
-                    setIsUpdatingDownload(true);
-                    
-                    try {
-                      await apiClient.patch(`/event/${eventId}/download-status`, { 
-                        allowDownload: newValue 
-                      });
-                      
-                      if (event) {
-                        setEvent((prev: any) => prev ? ({...prev, allowDownload: newValue}) : null);
-                      }
-                      toast.success(newValue ? 'Photo downloads enabled for album' : 'Photo downloads disabled for album');
-                    } catch (err) {
-                      toast.error("Failed to update download setting.");
-                      setFormData(prev => ({...prev, allowDownload: !newValue}));
-                    } finally {
-                      setIsUpdatingDownload(false);
-                    }
-                  }}
                 />
               </div>
 
@@ -1722,6 +1836,41 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
           onClick={() => setPreviewMedia(null)}
         >
           <div className="relative max-w-5xl w-full max-h-[90vh] flex flex-col items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            {/* Left Arrow Button (<) */}
+            {mediaItems.length > 1 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const curId = String(previewMedia?._id || previewMedia?.r2Key || previewMedia?.publicId);
+                  const curIdx = mediaItems.findIndex(p => String(p._id || p.r2Key || p.publicId) === curId);
+                  const prevIdx = curIdx > 0 ? curIdx - 1 : mediaItems.length - 1;
+                  setPreviewMedia(mediaItems[prevIdx]);
+                }}
+                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-black/70 hover:bg-[#c5a880] text-white min-h-[48px] min-w-[48px] flex items-center justify-center cursor-pointer shadow-2xl z-50 backdrop-blur-md border border-white/20 transition-all hover:scale-110 active:scale-95"
+                title="Previous photo (Left Arrow)"
+              >
+                <ChevronLeft className="w-6 h-6 sm:w-8 sm:h-8" />
+              </button>
+            )}
+
+            {/* Right Arrow Button (>) */}
+            {mediaItems.length > 1 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const curId = String(previewMedia?._id || previewMedia?.r2Key || previewMedia?.publicId);
+                  const curIdx = mediaItems.findIndex(p => String(p._id || p.r2Key || p.publicId) === curId);
+                  const nextIdx = (curIdx >= 0 && curIdx < mediaItems.length - 1) ? curIdx + 1 : 0;
+                  setPreviewMedia(mediaItems[nextIdx]);
+                }}
+                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-black/70 hover:bg-[#c5a880] text-white min-h-[48px] min-w-[48px] flex items-center justify-center cursor-pointer shadow-2xl z-50 backdrop-blur-md border border-white/20 transition-all hover:scale-110 active:scale-95"
+                title="Next photo (Right Arrow)"
+              >
+                <ChevronRight className="w-6 h-6 sm:w-8 sm:h-8" />
+              </button>
+            )}
             <button 
               onClick={() => setPreviewMedia(null)}
               className="absolute -top-12 right-0 text-white/80 hover:text-white p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"

@@ -128,15 +128,24 @@ export const DashboardProvider = ({ children }: { children: React.ReactNode }) =
     window.addEventListener('studio_plan_updated', handlePlanUpdated);
     window.addEventListener('studio_logo_updated', handleStudioUpdated);
     window.addEventListener('studio_updated', handleStudioUpdated);
+    let lastFocusRefresh = 0;
+    const throttledFocusRefresh = () => {
+      const now = Date.now();
+      if (now - lastFocusRefresh > 60000) {
+        lastFocusRefresh = now;
+        handlePlanUpdated();
+      }
+    };
+
     window.addEventListener('storage', handlePlanUpdated);
-    window.addEventListener('focus', handlePlanUpdated);
+    window.addEventListener('focus', throttledFocusRefresh);
 
     return () => {
       window.removeEventListener('studio_plan_updated', handlePlanUpdated);
       window.removeEventListener('studio_logo_updated', handleStudioUpdated);
       window.removeEventListener('studio_updated', handleStudioUpdated);
       window.removeEventListener('storage', handlePlanUpdated);
-      window.removeEventListener('focus', handlePlanUpdated);
+      window.removeEventListener('focus', throttledFocusRefresh);
     };
   }, []);
 

@@ -926,12 +926,7 @@ export default function EventPhotosPage() {
                     }}
                   />
                   {/* Face Scan Match Percentage Badge */}
-                  {isFiltered && (m as any).similarityPercent && (
-                    <div className="absolute bottom-2.5 left-2.5 z-20 px-2.5 py-1 rounded-full bg-black/80 backdrop-blur-md border border-[#c5a880]/70 text-[#c5a880] text-[10px] sm:text-xs font-black flex items-center gap-1 shadow-lg">
-                      <Sparkles className="w-3 h-3 text-[#c5a880]" />
-                      <span>{(m as any).similarityPercent}% Match</span>
-                    </div>
-                  )}
+                  {/* Match % Badge Removed */}
                   {/* Favorite Heart Button on Hover / Active */}
                   <button
                     type="button"

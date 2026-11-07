@@ -87,7 +87,7 @@ export default function MobileHero() {
               <span className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-white" />
               
               <div className="absolute -bottom-3.5 whitespace-nowrap bg-black/90 backdrop-blur-md px-2 py-0.5 rounded-md text-[9.5px] font-bold text-[#c5a880] border border-[#c5a880]/50 shadow-lg">
-                ✨ 99.8% Match
+                ✨ 100% Instant AI
               </div>
             </div>
 
