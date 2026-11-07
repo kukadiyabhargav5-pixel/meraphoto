@@ -564,7 +564,7 @@ export default function EventUploadDedicatedPage({
     let failed = 0;
     let lastUploadError = '';
     let currentFileIndex = 0;
-    let activeStreamsCount = Math.max(0, activeStreamsCount - 1);
+    let activeStreamsCount = 0;
 
     // Determine target size for compression/upscale
     let targetMaxMB = 0;
@@ -645,7 +645,7 @@ export default function EventUploadDedicatedPage({
       const flushToBackend = async () => {
         if (isFlushing || pendingCreateBuffer.length === 0) return;
         isFlushing = true;
-        const chunk = pendingCreateBuffer.splice(0, Math.min(pendingCreateBuffer.length, 3));
+        const chunk = pendingCreateBuffer.splice(0, Math.min(pendingCreateBuffer.length, 25));
         try {
           const res = await apiClient.post(`/media/event/${event?._id || eventId}/bulk-create`, { mediaList: chunk });
           if (res.data?.media && Array.isArray(res.data.media)) {
@@ -723,7 +723,7 @@ export default function EventUploadDedicatedPage({
 
       // Ultra-Fast Parallel Stream Engine (Up to 6 streams directly to Cloudflare R2)
       // Uploads 100-200 photos in under 1 minute with accurate per-file status & auto-retry!
-      const concurrency = Math.min(3, Math.max(1, fileArray.length));
+      const concurrency = Math.min(6, Math.max(1, fileArray.length));
 
       const worker = async () => {
         while (currentFileIndex < fileArray.length) {
@@ -775,6 +775,27 @@ export default function EventUploadDedicatedPage({
 
                 const key = presignedItem.publicId || presignedItem.key;
                 const publicUrl = presignedItem.url || presignedItem.publicUrl;
+
+                // Instant optimistic preview in gallery without waiting for server response
+                const localBlobPreview = URL.createObjectURL(fileToUpload);
+                const optimisticMediaDoc = {
+                  _id: `temp-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+                  publicId: key,
+                  r2Key: key,
+                  key,
+                  url: publicUrl,
+                  r2Url: publicUrl,
+                  thumbnailUrl: localBlobPreview,
+                  compressedUrl: localBlobPreview,
+                  localPreviewUrl: localBlobPreview,
+                  originalName: file.name,
+                  mimeType: fileToUpload.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+                  size: fileToUpload.size,
+                  type: isVideo ? 'VIDEO' : 'PHOTO',
+                  folderPath: file.webkitRelativePath || '',
+                  createdAt: new Date().toISOString(),
+                };
+                setMediaItems((prev) => [optimisticMediaDoc, ...prev]);
 
                 pendingCreateBuffer.push({
                   publicId: key,
@@ -879,7 +900,7 @@ export default function EventUploadDedicatedPage({
             }
           }
 
-          activeStreamsCount = 0;
+          activeStreamsCount = Math.max(0, activeStreamsCount - 1);
           setUploadProgress({ current: successful + failed, total: fileArray.length });
         }
       };
@@ -1534,46 +1555,109 @@ export default function EventUploadDedicatedPage({
             </p>
           </div>
 
-          {/* Real-time Streaming Upload Telemetry Bar */}
-          {uploadingMedia && (
-            <div className="mt-3.5 p-3 rounded-xl bg-[#faf8f5] border border-[#e8dfd3] shadow-xs animate-in fade-in duration-200">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 text-[#9e7b4f] animate-spin" />
-                  <span className="text-xs font-black uppercase text-slate-900 tracking-wider">
-                    Uploading {uploadProgress.current} of {uploadProgress.total} Files
+          {/* Real-time Streaming Upload Telemetry & Progress Line */}
+          {(uploadingMedia || uploadQueue.length > 0) && (
+            <div className="mt-3.5 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-[#faf8f5] via-white to-[#f4ece1]/40 border-2 border-[#c5a880]/35 shadow-sm animate-in fade-in duration-200">
+              {/* Top Header Row with Live Status and Clear Button */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  {uploadingMedia ? (
+                    <Loader2 className="w-4 h-4 text-[#9e7b4f] animate-spin shrink-0" />
+                  ) : uploadQueue.some((q) => q.status === 'failed') ? (
+                    <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  )}
+                  <span className="text-xs sm:text-sm font-black uppercase text-slate-900 tracking-wider truncate">
+                    {uploadingMedia
+                      ? `Uploading ${uploadProgress.current} of ${uploadProgress.total} Files`
+                      : uploadQueue.some((q) => q.status === 'failed')
+                      ? `Upload Completed • ${uploadQueue.filter((q) => q.status === 'failed').length} Error(s)`
+                      : `🎉 Bulk Upload Completed (${uploadQueue.filter((q) => q.status === 'success').length} Files Saved)`}
                   </span>
-                  <span className="text-[10px] text-slate-500 font-mono hidden xs:inline">
-                    • ⚡ {uploadStats.speedMBps} MB/s ({uploadStats.photosPerSec} files/s)
-                  </span>
+                  {uploadingMedia && (
+                    <span className="text-[11px] text-slate-500 font-mono hidden md:inline shrink-0">
+                      • ⚡ {uploadStats.speedMBps} MB/s ({uploadStats.photosPerSec} files/s)
+                    </span>
+                  )}
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {uploadStats.etaSec > 0 && (
-                    <span className="text-[10px] text-slate-500 font-mono">
+                <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
+                  {uploadingMedia && uploadStats.etaSec > 0 && (
+                    <span className="text-[11px] text-slate-600 font-mono bg-white px-2.5 py-0.5 rounded-lg border border-[#e8dfd3] shadow-2xs">
                       ETA ~{uploadStats.etaSec}s
                     </span>
                   )}
-                  <span className="text-xs font-black font-mono text-[#9e7b4f]">
+                  <span className="text-xs sm:text-sm font-black font-mono px-2.5 py-0.5 rounded-lg bg-[#c5a880]/15 text-[#9e7b4f] border border-[#c5a880]/25">
                     {uploadProgress.total > 0
                       ? Math.round((uploadProgress.current / uploadProgress.total) * 100)
                       : 0}
                     %
                   </span>
+                  {!uploadingMedia && (
+                    <button
+                      type="button"
+                      onClick={() => setUploadQueue([])}
+                      className="px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:text-slate-900 bg-white hover:bg-[#faf8f5] rounded-lg border border-[#e8dfd3] transition-colors cursor-pointer shadow-2xs"
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
               </div>
 
-              <div className="w-full bg-[#e8dfd3] rounded-full h-1.5 overflow-hidden">
+              {/* High-visibility Glowing Animated Upload Progress Bar Line */}
+              <div className="relative w-full bg-[#f4ece1] rounded-full h-2.5 sm:h-3 overflow-hidden shadow-inner mb-3">
                 <div
-                  className="h-full bg-gradient-to-r from-[#c5a880] via-[#b89665] to-[#9e7b4f] transition-all duration-200"
+                  className={`h-full transition-all duration-200 relative ${
+                    uploadingMedia
+                      ? 'bg-gradient-to-r from-amber-500 via-[#c5a880] to-emerald-500'
+                      : uploadQueue.some((q) => q.status === 'failed')
+                      ? 'bg-gradient-to-r from-amber-500 to-rose-500'
+                      : 'bg-emerald-500'
+                  }`}
                   style={{
                     width: `${
                       uploadProgress.total > 0
-                        ? (uploadProgress.current / uploadProgress.total) * 100
+                        ? Math.max(3, (uploadProgress.current / uploadProgress.total) * 100)
                         : 0
                     }%`,
                   }}
-                />
+                >
+                  {uploadingMedia && (
+                    <div className="absolute inset-0 bg-white/30 animate-pulse" />
+                  )}
+                </div>
+              </div>
+
+              {/* Step-by-Step 3-Phase Pipeline Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 py-2 px-1 border-y border-[#e8dfd3]/70 mb-3 text-[11px]">
+                <div className="flex items-center gap-1.5 text-slate-700 font-bold">
+                  <span className="w-4 h-4 rounded-full bg-[#c5a880]/25 text-[#9e7b4f] flex items-center justify-center text-[10px] font-black">1</span>
+                  <span>Handshake &amp; Presign</span>
+                  <Check className="w-3.5 h-3.5 text-emerald-600 ml-auto" />
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-700 font-bold">
+                  <span className="w-4 h-4 rounded-full bg-[#c5a880]/25 text-[#9e7b4f] flex items-center justify-center text-[10px] font-black">2</span>
+                  <span>Direct Cloud Upload</span>
+                  {uploadingMedia ? (
+                    <span className="text-[10px] font-mono text-[#9e7b4f] ml-auto font-black flex items-center gap-1 animate-pulse">
+                      <Zap className="w-3 h-3 text-amber-500 fill-amber-500" />
+                      6 Streams
+                    </span>
+                  ) : (
+                    <Check className="w-3.5 h-3.5 text-emerald-600 ml-auto" />
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-700 font-bold">
+                  <span className="w-4 h-4 rounded-full bg-[#c5a880]/25 text-[#9e7b4f] flex items-center justify-center text-[10px] font-black">3</span>
+                  <span>Live Gallery Display</span>
+                  {uploadingMedia ? (
+                    <Loader2 className="w-3 h-3 text-[#9e7b4f] animate-spin ml-auto" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5 text-emerald-600 ml-auto" />
+                  )}
+                </div>
               </div>
 
               {/* Upload Manager Queue List */}
@@ -1675,14 +1759,18 @@ export default function EventUploadDedicatedPage({
                             </div>
 
                             {/* Individual Item Progress Bar */}
-                            {(item.status === 'uploading' || item.status === 'verifying') && (
-                              <div className="w-full bg-slate-100 rounded-full h-1 overflow-hidden">
-                                <div
-                                  className="h-full bg-gradient-to-r from-[#c5a880] to-[#9e7b4f] transition-all duration-150"
-                                  style={{ width: `${item.progress}%` }}
-                                />
-                              </div>
-                            )}
+                            <div className="w-full bg-slate-100 rounded-full h-1 sm:h-1.5 overflow-hidden">
+                              <div
+                                className={`h-full transition-all duration-150 ${
+                                  item.status === 'success'
+                                    ? 'bg-emerald-500'
+                                    : item.status === 'failed'
+                                    ? 'bg-rose-500'
+                                    : 'bg-gradient-to-r from-[#c5a880] to-[#9e7b4f]'
+                                }`}
+                                style={{ width: `${item.status === 'success' ? 100 : item.progress}%` }}
+                              />
+                            </div>
                           </div>
                         );
                       })}
