@@ -333,7 +333,27 @@ export default function DedicatedFaceScanPage() {
     } else {
       stopCamera();
     }
-    return () => {
+    // Lightbox Keyboard Navigation (ArrowLeft / ArrowRight)
+  useEffect(() => {
+    if (!selectedPhoto || matchedPhotos.length <= 1) return;
+    const handleKeyNav = (e: KeyboardEvent) => {
+      const curId = String(selectedPhoto?._id || selectedPhoto?.r2Key || selectedPhoto?.publicId);
+      const curIdx = matchedPhotos.findIndex(p => String(p._id || p.r2Key || p.publicId) === curId);
+      if (e.key === 'ArrowLeft') {
+        const prevIdx = curIdx > 0 ? curIdx - 1 : matchedPhotos.length - 1;
+        setSelectedPhoto(matchedPhotos[prevIdx]);
+      } else if (e.key === 'ArrowRight') {
+        const nextIdx = (curIdx >= 0 && curIdx < matchedPhotos.length - 1) ? curIdx + 1 : 0;
+        setSelectedPhoto(matchedPhotos[nextIdx]);
+      } else if (e.key === 'Escape') {
+        setSelectedPhoto(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyNav);
+    return () => window.removeEventListener('keydown', handleKeyNav);
+  }, [selectedPhoto, matchedPhotos]);
+
+  return () => {
       stopCamera();
     };
   }, [activeTab, hasSearched]);
@@ -1481,26 +1501,28 @@ export default function DedicatedFaceScanPage() {
           </div>
 
           <div className="flex-1 flex items-center justify-center p-2 sm:p-4 overflow-hidden relative">
-            {/* Previous Button */}
-            {matchedPhotos.findIndex(p => p._id === selectedPhoto._id) > 0 && (
+            {/* Previous Photo Button (Left Arrow) */}
+            {matchedPhotos.length > 1 && (
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  const idx = matchedPhotos.findIndex(p => p._id === selectedPhoto._id);
-                  if (idx > 0) setSelectedPhoto(matchedPhotos[idx - 1]);
+                  const curId = String(selectedPhoto?._id || selectedPhoto?.r2Key || selectedPhoto?.publicId);
+                  const curIdx = matchedPhotos.findIndex(p => String(p._id || p.r2Key || p.publicId) === curId);
+                  const prevIdx = curIdx > 0 ? curIdx - 1 : matchedPhotos.length - 1;
+                  setSelectedPhoto(matchedPhotos[prevIdx]);
                 }}
-                className="absolute left-1 sm:left-4 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/80 text-white min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer shadow-lg z-20 backdrop-blur-md border border-white/10"
-                title="Previous photo"
+                className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-black/70 hover:bg-[#c5a880] text-white min-h-[48px] min-w-[48px] flex items-center justify-center cursor-pointer shadow-2xl z-30 backdrop-blur-md border border-white/20 transition-all hover:scale-110 active:scale-95"
+                title="Previous photo (Left Arrow)"
               >
-                <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+                <ChevronLeft className="w-6 h-6 sm:w-8 sm:h-8" />
               </button>
             )}
 
             <img
               src={resolveMediaUrl(selectedPhoto)}
               alt="Full Size View"
-              className="max-h-[75vh] sm:max-h-[82vh] max-w-[95vw] sm:max-w-full object-contain rounded-xl sm:rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-white/10"
+              className="max-h-[75vh] sm:max-h-[82vh] max-w-[95vw] sm:max-w-full object-contain rounded-xl sm:rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-white/10 select-none"
               onError={(e) => {
                 const fb = globalResolveMediaUrl(selectedPhoto?.r2Key || selectedPhoto?.compressedUrl || selectedPhoto?.thumbnailUrl || selectedPhoto?.url);
                 if (fb && e.currentTarget.src !== fb) {
@@ -1509,19 +1531,21 @@ export default function DedicatedFaceScanPage() {
               }}
             />
 
-            {/* Next Button */}
-            {matchedPhotos.findIndex(p => p._id === selectedPhoto._id) < matchedPhotos.length - 1 && (
+            {/* Next Photo Button (Right Arrow) */}
+            {matchedPhotos.length > 1 && (
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  const idx = matchedPhotos.findIndex(p => p._id === selectedPhoto._id);
-                  if (idx < matchedPhotos.length - 1) setSelectedPhoto(matchedPhotos[idx + 1]);
+                  const curId = String(selectedPhoto?._id || selectedPhoto?.r2Key || selectedPhoto?.publicId);
+                  const curIdx = matchedPhotos.findIndex(p => String(p._id || p.r2Key || p.publicId) === curId);
+                  const nextIdx = (curIdx >= 0 && curIdx < matchedPhotos.length - 1) ? curIdx + 1 : 0;
+                  setSelectedPhoto(matchedPhotos[nextIdx]);
                 }}
-                className="absolute right-1 sm:right-4 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/80 text-white min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer shadow-lg z-20 backdrop-blur-md border border-white/10"
-                title="Next photo"
+                className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-black/70 hover:bg-[#c5a880] text-white min-h-[48px] min-w-[48px] flex items-center justify-center cursor-pointer shadow-2xl z-30 backdrop-blur-md border border-white/20 transition-all hover:scale-110 active:scale-95"
+                title="Next photo (Right Arrow)"
               >
-                <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
+                <ChevronRight className="w-6 h-6 sm:w-8 sm:h-8" />
               </button>
             )}
           </div>

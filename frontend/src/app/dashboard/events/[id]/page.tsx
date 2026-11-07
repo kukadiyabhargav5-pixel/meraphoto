@@ -130,20 +130,45 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
   };
 
   const fetchEventDetails = async () => {
+    if (!eventId) return;
+    setLoading(true);
+    const cleanId = decodeURIComponent(eventId).trim();
     try {
-      const res = await apiClient.get(`/event/code/${eventId}`);
-      if (res.data && res.data.event) {
-        setEvent(res.data.event);
-        try {
-           const mediaRes = await apiClient.get(`/media/event/${res.data.event._id}?_t=${Date.now()}`);
-           if (mediaRes.data && mediaRes.data.media) setMediaItems(mediaRes.data.media);
-        } catch (me) {
-           console.error("Failed to fetch media", me);
+      let eventData: any = null;
+      try {
+        const res = await apiClient.get(`/event/code/${cleanId}`);
+        if (res.data && res.data.event) {
+          eventData = res.data.event;
         }
+      } catch (codeErr) {
+        // Fallback: try by direct ID
+        try {
+          const res2 = await apiClient.get(`/event/${cleanId}`);
+          if (res2.data && res2.data.event) {
+            eventData = res2.data.event;
+          }
+        } catch (idErr) {
+          console.warn('Direct ID fetch also failed:', idErr);
+        }
+      }
+
+      if (eventData) {
+        setEvent(eventData);
+        // Load media asynchronously in background
+        apiClient.get(`/media/event/${eventData._id}?_t=${Date.now()}`)
+          .then((mediaRes) => {
+            if (mediaRes.data && mediaRes.data.media) {
+              setMediaItems(mediaRes.data.media);
+            }
+          })
+          .catch((me) => console.warn('Media fetch notice:', me));
+      } else {
+        setEvent(null);
       }
       fetchCredits();
     } catch (error) {
       console.error('Failed to fetch event:', error);
+      setEvent(null);
     } finally {
       setLoading(false);
     }
@@ -641,12 +666,25 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
   if (!event) {
     return (
-      <div className="flex-1 bg-white p-8">
-        <h1 className="text-2xl font-bold text-slate-900">Event not found</h1>
-        <Link href="/dashboard/events" className="inline-flex w-fit items-center gap-1.5 px-4 py-2 bg-[#c5a880] hover:bg-[#b69970] text-slate-900 hover:text-slate-700 text-[11px] font-black uppercase tracking-wider rounded-xl border border-transparent transition-all duration-300 shadow-md hover:shadow-lg group cursor-pointer mt-4">
-          <span className="group-hover:-translate-x-1 transition-transform duration-300 text-base leading-none">←</span> 
-          <span>Back to Events</span>
-        </Link>
+      <div className="flex-1 bg-white p-8 flex flex-col items-center justify-center min-h-[60vh] text-center font-poppins">
+        <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center mb-4 text-amber-600">
+          <AlertTriangle className="w-8 h-8" />
+        </div>
+        <h1 className="text-2xl font-black text-slate-900 mb-1">Event not found</h1>
+        <p className="text-slate-500 text-sm mb-6 max-w-sm">Could not find or load &quot;{eventId}&quot;. Please verify the URL or try reloading.</p>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => fetchEventDetails()}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry Loading</span>
+          </button>
+          <Link href="/dashboard/events" className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-[#c5a880] hover:bg-[#b69970] text-slate-900 text-xs font-black rounded-xl transition-all shadow-md active:scale-95">
+            <span>Back to Events</span>
+          </Link>
+        </div>
       </div>
     );
   }
