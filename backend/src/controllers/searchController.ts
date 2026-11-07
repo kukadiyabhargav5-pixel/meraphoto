@@ -410,25 +410,27 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
     //    to capture all candid/stage/dancing moments of this exact person.
     // 3. If peakSimilarity >= 0.42: High confidence identity. Threshold = 0.38.
     // 4. If peakSimilarity >= 0.38: Confirmed identity. Threshold = 0.39.
-    let effectiveThreshold = 0.38;
-    if (event.searchThreshold && typeof event.searchThreshold === 'number' && event.searchThreshold >= 0.30 && event.searchThreshold <= 0.60) {
+    // High-Power Adaptive Face Recognition Threshold
+    // Boosted matching power: captures all genuine candid, stage, and side-profile moments
+    let effectiveThreshold = 0.34;
+    if (event.searchThreshold && typeof event.searchThreshold === 'number' && event.searchThreshold >= 0.28 && event.searchThreshold <= 0.60) {
       effectiveThreshold = event.searchThreshold;
     } else if (peakSimilarity >= 0.50) {
-      effectiveThreshold = 0.36;
-    } else if (peakSimilarity >= 0.42) {
-      effectiveThreshold = 0.38;
-    } else if (peakSimilarity >= 0.38) {
-      effectiveThreshold = 0.39;
+      effectiveThreshold = 0.33;
+    } else if (peakSimilarity >= 0.40) {
+      effectiveThreshold = 0.34;
+    } else if (peakSimilarity >= 0.34) {
+      effectiveThreshold = 0.34;
     } else {
-      effectiveThreshold = 0.38;
+      effectiveThreshold = 0.35;
     }
 
     console.log(
       `[Face Search] Event ${eventId}: queries=${normQueries.length}, faces=${allFaces.length}, peak=${peakSimilarity.toFixed(4)}, effectiveThreshold=${effectiveThreshold}`
     );
 
-    // If peakSimilarity is below minimum threshold or 0.38, immediately return 0 matches cleanly (Zero false positives!)
-    if (peakSimilarity < effectiveThreshold || peakSimilarity < 0.38) {
+    // Peak threshold check: 0.33 minimum to reject complete non-faces while capturing genuine guests
+    if (peakSimilarity < effectiveThreshold || peakSimilarity < 0.33) {
       const totalPhotos = await Media.countDocuments({ eventId, type: 'PHOTO' });
       const indexedMedia = await Media.countDocuments({ eventId, faceIndexStatus: 'INDEXED' });
       res.status(200).json({

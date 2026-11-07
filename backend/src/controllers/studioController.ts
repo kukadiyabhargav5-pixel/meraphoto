@@ -193,7 +193,25 @@ export const getMyStudio = async (req: AuthRequest, res: Response) => {
 
     const studioObj = studio.toObject ? studio.toObject() : { ...studio };
     if (studioObj.logoUrl) {
-      studioObj.logoUrl = getFileUrl(studioObj.logoUrl);
+      let rawL = studioObj.logoUrl;
+      if (typeof rawL === 'string' && rawL.startsWith('data:image/') && rawL.length > 2000) {
+        try {
+          const m = rawL.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+          if (m && m[2]) {
+            const buf = Buffer.from(m[2], 'base64');
+            const { uploadFile } = await import('../services/StorageService');
+            const comp = await sharp(buf).resize(512, 512, { fit: 'inside' }).png({ quality: 80, compressionLevel: 9 }).toBuffer();
+            const { url } = await uploadFile(comp, 'studios/' + studio._id + '/logo', 'image/png', 'logo.png');
+            studioObj.logoUrl = url;
+            studio.logoUrl = url;
+            Studio.findByIdAndUpdate(studio._id, { logoUrl: url }).exec();
+          }
+        } catch (e) {
+          studioObj.logoUrl = '';
+        }
+      } else {
+        studioObj.logoUrl = getFileUrl(rawL);
+      }
     }
     if (studioObj.watermark && studioObj.watermark.logoUrl) {
       studioObj.watermark.logoUrl = getFileUrl(studioObj.watermark.logoUrl);
@@ -552,17 +570,11 @@ export const getPublicStudio = async (req: Request, res: Response) => {
 
     const happyCustomersCount = Math.max(dbCustomersCount, distinctClientMobiles.length, eventsCount > 0 ? eventsCount : 0);
 
-    // Fetch portfolio events (prefer addToPortfolio: true, fallback to all studio events if none marked)
-    let portfolioEventsQuery = await Event.find({ studioId: studio._id, addToPortfolio: true })
+    // Fetch portfolio events (STRICT: ONLY events explicitly marked with addToPortfolio: true)
+    // If no events are marked, portfolioEventsQuery will be empty [] and zero events will be shown.
+    const portfolioEventsQuery = await Event.find({ studioId: studio._id, addToPortfolio: true })
       .sort({ date: -1, createdAt: -1 })
       .lean();
-
-    if (!portfolioEventsQuery || portfolioEventsQuery.length === 0) {
-      portfolioEventsQuery = await Event.find({ studioId: studio._id, accessType: 'PUBLIC' })
-        .sort({ date: -1, createdAt: -1 })
-        .limit(12)
-        .lean();
-    }
 
     // Enhance each portfolio event with resolved cover URL and exact photo count
     const portfolioEvents = await Promise.all(
@@ -594,7 +606,24 @@ export const getPublicStudio = async (req: Request, res: Response) => {
     );
 
     const branding = studio.branding || {};
-    const logoUrl = studio.logoUrl ? getFileUrl(studio.logoUrl) : null;
+    let rawPubLogo = studio.logoUrl;
+    if (typeof rawPubLogo === 'string' && rawPubLogo.startsWith('data:image/') && rawPubLogo.length > 2000) {
+      try {
+        const m = rawPubLogo.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (m && m[2]) {
+          const buf = Buffer.from(m[2], 'base64');
+          const { uploadFile } = await import('../services/StorageService');
+          const comp = await sharp(buf).resize(512, 512, { fit: 'inside' }).png({ quality: 80, compressionLevel: 9 }).toBuffer();
+          const { url } = await uploadFile(comp, 'studios/' + studio._id + '/logo', 'image/png', 'logo.png');
+          rawPubLogo = url;
+          studio.logoUrl = url;
+          Studio.findByIdAndUpdate(studio._id, { logoUrl: url }).exec();
+        }
+      } catch (e) {
+        rawPubLogo = '';
+      }
+    }
+    const logoUrl = rawPubLogo ? getFileUrl(rawPubLogo) : null;
     const rawBanner = (branding.bannerUrl && branding.bannerUrl !== '/wedding.jpg')
       ? branding.bannerUrl
       : (studio.bannerUrl && studio.bannerUrl !== '/wedding.jpg' ? studio.bannerUrl : (studio.bannerUrl || branding.bannerUrl || null));

@@ -297,7 +297,25 @@ export const getEventByCode = async (req: Request, res: Response) => {
     eventObj.autoDeleteAt = autoDeleteAt;
     if (eventObj.coverImageUrl) eventObj.coverImageUrl = getFileUrl(eventObj.coverImageUrl);
     if (eventObj.studioId && (eventObj.studioId as any).logoUrl) {
-      (eventObj.studioId as any).logoUrl = getFileUrl((eventObj.studioId as any).logoUrl);
+      const rawLogo = (eventObj.studioId as any).logoUrl;
+      if (typeof rawLogo === 'string' && rawLogo.startsWith('data:image/') && rawLogo.length > 2000) {
+        try {
+          const matches = rawLogo.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+          if (matches && matches[2]) {
+            const buf = Buffer.from(matches[2], 'base64');
+            const { uploadFile } = await import('../services/StorageService');
+            const compressed = await sharp(buf).resize(512, 512, { fit: 'inside' }).png({ quality: 80, compressionLevel: 9 }).toBuffer();
+            const targetStudioId = String((eventObj.studioId as any)._id || 'logo');
+            const { url } = await uploadFile(compressed, `studios/${targetStudioId}/logo`, 'image/png', 'logo.png');
+            (eventObj.studioId as any).logoUrl = url;
+            Studio.findByIdAndUpdate(targetStudioId, { logoUrl: url }).exec();
+          }
+        } catch (e) {
+          (eventObj.studioId as any).logoUrl = '';
+        }
+      } else {
+        (eventObj.studioId as any).logoUrl = getFileUrl(rawLogo);
+      }
     }
 
     if (event.accessType !== 'PASSWORD' && event.accessType !== 'OTP') {

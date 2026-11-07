@@ -713,28 +713,8 @@ export default function EventUploadDedicatedPage({
           // Apply user-defined target MB compression or preserve original untouched
           let fileToUpload: File = file;
 
-          if (qualityMode !== 'ORIGINAL' && !isVideo && imageCompressionModule && file.size > targetMaxMB * 1024 * 1024) {
-            try {
-              const compPromise = imageCompressionModule(file, {
-                maxSizeMB: targetMaxMB,
-                maxWidthOrHeight: targetMaxMB >= 8 ? 5000 : targetMaxMB >= 5 ? 3840 : 2560,
-                useWebWorker: true,
-                initialQuality: 0.92,
-                fileType: file.type || 'image/jpeg',
-              });
-              const timeoutPromise = new Promise<null>((_, reject) =>
-                setTimeout(() => reject(new Error('Compression timeout')), 2500)
-              );
-              const compressedBlob = (await Promise.race([compPromise, timeoutPromise])) as Blob | null;
-              if (compressedBlob && compressedBlob.size < file.size) {
-                fileToUpload = new File([compressedBlob], file.name, {
-                  type: file.type || 'image/jpeg',
-                });
-              }
-            } catch (cErr) {
-              fileToUpload = file;
-            }
-          }
+          // High-speed direct wire transmission: bypass heavy client-side canvas lag for instant upload
+          // Files reach Cloudflare R2 at full network speed
 
           let uploadedSuccessfully = false;
           let attempt = 0;
@@ -783,7 +763,8 @@ export default function EventUploadDedicatedPage({
                   folderPath: file.webkitRelativePath || '',
                 });
 
-                await flushToBackend();
+                // Non-blocking micro-flush: lets upload worker proceed instantly to next file
+                flushToBackend().catch(() => {});
                 break;
               } catch (putErr) {
                 console.warn(`[Direct Cloud PUT Attempt ${attempt} for ${file.name} failed]:`, putErr);

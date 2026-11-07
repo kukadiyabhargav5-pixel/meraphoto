@@ -1299,12 +1299,7 @@ export default function ClientGallery() {
                       }}
                     />
                     {/* Face Scan Similarity Match Badge on Mobile */}
-                    {searchActive && (m as any).similarityPercent && (
-                      <div className="absolute bottom-2 left-2 z-20 px-2 py-0.5 rounded-full bg-black/80 backdrop-blur-md border border-[#c5a880]/60 text-[#c5a880] text-[10px] font-black flex items-center gap-1 shadow-md">
-                        <Sparkles className="w-2.5 h-2.5 text-[#c5a880]" />
-                        <span>{(m as any).similarityPercent}% Match</span>
-                      </div>
-                    )}
+                    {/* Match % Badge Removed */}
                     {m.type === 'VIDEO' && (
                       <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
                         <div className="w-9 h-9 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center">
@@ -1405,12 +1400,7 @@ export default function ClientGallery() {
                       return (
                         <>
                           {/* Face Scan Similarity Match Badge on Desktop */}
-                          {searchActive && (m as any).similarityPercent && (
-                            <div className="absolute bottom-2.5 left-2.5 z-40 px-2.5 py-1 rounded-full bg-black/85 backdrop-blur-md border border-[#c5a880]/70 text-[#c5a880] text-xs font-black flex items-center gap-1.5 shadow-lg pointer-events-none">
-                              <Sparkles className="w-3 h-3 text-[#c5a880]" />
-                              <span>{(m as any).similarityPercent}% Match</span>
-                            </div>
-                          )}
+                          {/* Match % Badge Removed */}
                           {/* Favorite Heart Button on Hover / Active */}
                           <button
                             type="button"

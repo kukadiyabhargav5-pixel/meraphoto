@@ -34,7 +34,7 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000,
+  timeout: 12000,
 });
 
 // ─── IN-MEMORY API CACHE (Stale-While-Revalidate) ───
@@ -180,7 +180,7 @@ apiClient.interceptors.response.use(
         const directBase =
           host === 'localhost' || host === '127.0.0.1'
             ? 'http://127.0.0.1:5000/api'
-            : `http://${host}:5000/api`;
+            : 'https://meraphotoes.onrender.com/api';
         const currentBase = originalRequest.baseURL || '/api';
         const targetBase = currentBase === '/api' ? directBase : '/api';
 
