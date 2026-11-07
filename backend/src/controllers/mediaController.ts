@@ -42,8 +42,22 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
     const event = await Event.findById(eventId);
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
-    const studio = await Studio.findById(event.studioId);
-    if (!studio) return res.status(404).json({ error: 'Studio not found' });
+    let studio = event.studioId ? await Studio.findById(event.studioId) : null;
+    if (!studio) {
+      studio = await Studio.findOne({ ownerId: req.user._id });
+      if (!studio) {
+        studio = await Studio.create({
+          name: (req.user.name || 'Mara') + ' Studio',
+          ownerId: req.user._id,
+          subscriptionPlan: 'BASIC',
+          subscriptionStatus: 'ACTIVE',
+        });
+      }
+      if (!event.studioId) {
+        event.studioId = studio._id;
+        await event.save();
+      }
+    }
 
     // Enforce storage subscription limit on server side
     const totalIncomingBytes = files.reduce((acc, f) => acc + (f.size || 0), 0);
