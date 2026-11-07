@@ -1,3 +1,5 @@
+import fs from 'fs';
+import sharp from 'sharp';
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { AuthRequest, isSuperAdmin } from '../middlewares/auth';
@@ -334,10 +336,37 @@ export const uploadStudioLogo = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'No logo image file uploaded' });
     }
 
-    // Validate MIME type
-    const validMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
-    if (file.mimetype && !validMimes.includes(file.mimetype)) {
-      return res.status(400).json({ error: 'Invalid file format. Please upload JPG, PNG, WEBP, or SVG.' });
+    // Support both Multer memoryStorage (file.buffer) and diskStorage (file.path)
+    let initialBuffer: Buffer | null = file.buffer || null;
+    if (!initialBuffer && file.path && fs.existsSync(file.path)) {
+      initialBuffer = fs.readFileSync(file.path);
+    }
+    if (!initialBuffer) {
+      return res.status(400).json({ error: 'Could not read uploaded logo file content' });
+    }
+
+    // Compress logo to minimum KB using sharp (max 512x512, transparent PNG or WebP)
+    let finalBuffer = initialBuffer;
+    let finalMime = file.mimetype || 'image/png';
+    let finalExtension = 'png';
+
+    try {
+      if (file.mimetype === 'image/svg+xml') {
+        finalBuffer = initialBuffer;
+        finalMime = 'image/svg+xml';
+        finalExtension = 'svg';
+      } else {
+        // High compression PNG preserving crisp edges and transparency, under 50KB
+        finalBuffer = await sharp(initialBuffer)
+          .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
+          .png({ quality: 80, compressionLevel: 9, effort: 7 })
+          .toBuffer();
+        finalMime = 'image/png';
+        finalExtension = 'png';
+      }
+    } catch (compressErr) {
+      console.warn('[LogoUpload] Sharp compression fallback:', compressErr);
+      finalBuffer = initialBuffer;
     }
 
     let studio = await Studio.findOne({ ownerId: req.user._id });
@@ -353,12 +382,22 @@ export const uploadStudioLogo = async (req: AuthRequest, res: Response) => {
     const { uploadFile, deleteFile } = await import('../services/StorageService');
 
     // Store in structured R2 path: studios/{studioId}/logo/{filename}
+    const cleanFileName = `logo_${Date.now()}.${finalExtension}`;
     const folder = `studios/${studio._id}/logo`;
-    const { url, publicId } = await uploadFile(file.buffer, folder, file.mimetype, file.originalname);
+    const { url, publicId } = await uploadFile(finalBuffer, folder, finalMime, cleanFileName);
 
     // If previous logo key exists and is different, cleanup old logo from R2
     if (studio.logoKey && studio.logoKey !== publicId) {
       deleteFile(studio.logoKey).catch((delErr) => console.warn('[Logo] Old logo cleanup notice:', delErr));
+    }
+
+    // Clean up temporary disk file if created by multer
+    if (file.path && fs.existsSync(file.path)) {
+      try {
+        fs.unlinkSync(file.path);
+      } catch (unlinkErr) {
+        // non-fatal
+      }
     }
 
     studio.logoUrl = url;
@@ -371,7 +410,7 @@ export const uploadStudioLogo = async (req: AuthRequest, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Studio logo uploaded and saved successfully',
+      message: 'Studio logo compressed and saved successfully',
       logoUrl: url,
       logoKey: publicId,
       studio,
@@ -831,9 +870,38 @@ export const uploadStudioBanner = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'No banner image file uploaded' });
     }
 
+    // Support both Multer memoryStorage (file.buffer) and diskStorage (file.path)
+    let initialBuffer: Buffer | null = file.buffer || null;
+    if (!initialBuffer && file.path && fs.existsSync(file.path)) {
+      initialBuffer = fs.readFileSync(file.path);
+    }
+    if (!initialBuffer) {
+      return res.status(400).json({ error: 'Could not read uploaded banner file content' });
+    }
+
     const validMimes = ['image/jpeg', 'image/png', 'image/webp'];
     if (file.mimetype && !validMimes.includes(file.mimetype)) {
       return res.status(400).json({ error: 'Invalid file format. Please upload JPG, PNG, or WEBP.' });
+    }
+
+    // Compress cover banner to minimum KB: 16:9 (1920x1080) high-efficiency JPEG at 82% quality
+    let finalBuffer = initialBuffer;
+    let mime = 'image/jpeg';
+    let safeName = `banner_${Date.now()}.jpg`;
+
+    try {
+      finalBuffer = await sharp(initialBuffer)
+        .rotate()
+        .resize({ width: 1920, height: 1080, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 82, mozjpeg: true })
+        .toBuffer();
+      mime = 'image/jpeg';
+      safeName = `banner_${Date.now()}.jpg`;
+    } catch (bannerOptErr) {
+      console.warn('[StudioBanner] Sharp optimization warning, using raw buffer:', bannerOptErr);
+      finalBuffer = initialBuffer;
+      mime = file.mimetype || 'image/jpeg';
+      safeName = file.originalname || 'banner.jpg';
     }
 
     let studio = await Studio.findOne({ ownerId: req.user._id });
@@ -847,9 +915,12 @@ export const uploadStudioBanner = async (req: AuthRequest, res: Response) => {
     }
 
     const { uploadFile, deleteFile } = await import('../services/StorageService');
-
     const folder = `studios/${studio._id}/banner`;
-    const { url, publicId } = await uploadFile(file.buffer, folder, file.mimetype, file.originalname);
+    const { url, publicId } = await uploadFile(finalBuffer, folder, mime, safeName);
+
+    if (file.path && fs.existsSync(file.path)) {
+      fs.unlink(file.path, () => {});
+    }
 
     if (studio.bannerKey && studio.bannerKey !== publicId) {
       deleteFile(studio.bannerKey).catch((delErr) => console.warn('[Banner] Old banner cleanup notice:', delErr));

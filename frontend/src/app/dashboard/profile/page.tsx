@@ -93,14 +93,16 @@ export default function UnifiedProfilePage() {
     setUploadingLogo(true);
     const toastId = toast.loading('Uploading studio logo...');
 
+    // Instant local preview
+    const localPreview = URL.createObjectURL(file);
+    setLogoUrl(localPreview);
+
     try {
       const formData = new FormData();
       formData.append('logo', file);
       formData.append('image', file);
 
-      const res = await apiClient.post('/studio/logo', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await apiClient.post('/studio/logo', formData);
 
       if (res.data?.logoUrl) {
         const newUrl = resolveMediaUrl(res.data.logoUrl);

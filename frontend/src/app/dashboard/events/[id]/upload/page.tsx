@@ -684,15 +684,16 @@ export default function EventUploadDedicatedPage({
         });
       }, 200);
 
-      // 4. Parallel Direct Streams
-      const concurrency = Math.min(8, Math.max(2, fileArray.length));
+      // Strictly sequential step-by-step queue: process & upload ONE photo/video at a time
+      // Prevents memory exhaustion, socket resets, and mobile connection timeouts
+      const concurrency = 1;
 
       const worker = async () => {
         while (currentFileIndex < fileArray.length) {
           const idx = currentFileIndex++;
           const file = fileArray[idx];
           const presignedItem = presignedMap[idx];
-          activeStreamsCount++;
+          activeStreamsCount = 1;
 
           const isVideo =
             file.type.startsWith('video/') ||
@@ -725,136 +726,147 @@ export default function EventUploadDedicatedPage({
           }
 
           let uploadedSuccessfully = false;
+          let attempt = 0;
+          const maxAttempts = 2; // Auto-retry up to 2 times for temporary network glitches
 
-          // Set item to uploading in queue
-          setUploadQueue((prev) =>
-            prev.map((q, qIdx) => (qIdx === idx ? { ...q, status: 'uploading', progress: 5 } : q))
-          );
+          while (attempt < maxAttempts && !uploadedSuccessfully) {
+            attempt++;
 
-          // Direct parallel PUT to presigned cloud storage URL using accurate continuous byte progress (0% -> 100%)
-          if (presignedItem?.uploadUrl) {
-            try {
-              const contentType = fileToUpload.type || (isVideo ? 'video/mp4' : 'application/octet-stream');
-              await uploadViaXhr(presignedItem.uploadUrl, fileToUpload, contentType, (pct) => {
-                setUploadQueue((prev) =>
-                  prev.map((q, qIdx) => (qIdx === idx ? { ...q, progress: Math.max(5, pct) } : q))
-                );
-              });
+            // Set item to uploading in queue with progressive feedback
+            setUploadQueue((prev) =>
+              prev.map((q, qIdx) => (qIdx === idx ? { ...q, status: 'uploading', progress: attempt > 1 ? 10 : 5 } : q))
+            );
 
-              uploadedSuccessfully = true;
-              bytesUploadedTotal += fileToUpload.size;
-              successful++;
+            // Step A: Direct presigned PUT upload
+            if (presignedItem?.uploadUrl) {
+              try {
+                const contentType = fileToUpload.type || (isVideo ? 'video/mp4' : 'application/octet-stream');
+                await uploadViaXhr(presignedItem.uploadUrl, fileToUpload, contentType, (pct) => {
+                  setUploadQueue((prev) =>
+                    prev.map((q, qIdx) => (qIdx === idx ? { ...q, progress: Math.max(5, pct) } : q))
+                  );
+                });
 
-              // Mark item as verifying with cloud storage
-              setUploadQueue((prev) =>
-                prev.map((q, qIdx) => (qIdx === idx ? { ...q, status: 'verifying', progress: 100 } : q))
-              );
-
-              const key = presignedItem.publicId || presignedItem.key;
-              const publicUrl = presignedItem.url || presignedItem.publicUrl;
-
-              pendingCreateBuffer.push({
-                publicId: key,
-                r2Key: key,
-                key,
-                url: publicUrl,
-                r2Url: publicUrl,
-                originalName: file.name,
-                mimeType: fileToUpload.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
-                size: fileToUpload.size,
-                type: isVideo ? 'VIDEO' : 'PHOTO',
-                folderPath: file.webkitRelativePath || '',
-              });
-
-              flushToBackend();
-            } catch (putErr) {
-              console.warn(`[Direct Cloud PUT Failed for ${file.name}, routing via backend upload stream]:`, putErr);
-            }
-          }
-
-          // Fallback via high-speed multipart server route if direct presigned upload is blocked/unavailable
-          if (!uploadedSuccessfully) {
-            try {
-              const formData = new FormData();
-              formData.append('media', fileToUpload);
-              if (file.webkitRelativePath) {
-                formData.append('folderPath', file.webkitRelativePath);
-              }
-              const directUploadBase = getDirectUploadApiUrl();
-              const uploadUrl = `${directUploadBase}/media/event/${event._id}/upload`;
-
-              const uploadRes = await uploadViaMultipartXhr(uploadUrl, formData, (pct) => {
-                setUploadQueue((prev) =>
-                  prev.map((q, qIdx) => (qIdx === idx ? { ...q, progress: Math.max(5, pct) } : q))
-                );
-              });
-
-              if (uploadRes?.media) {
                 uploadedSuccessfully = true;
                 bytesUploadedTotal += fileToUpload.size;
                 successful++;
 
-                // Flatten and normalize incoming docs with instant local preview fallback
-                const localBlobPreview = URL.createObjectURL(fileToUpload);
-                const uploadedDocs = (Array.isArray(uploadRes.media) ? uploadRes.media : [uploadRes.media]).flat().map((doc: any) => {
-                  const actual = Array.isArray(doc) ? doc[0] : doc;
-                  return { ...actual, localPreviewUrl: localBlobPreview };
-                });
-                setMediaItems((prev) => {
-                  const uniqueMap = new Map();
-                  uploadedDocs.forEach((m: any) => {
-                    const actual = Array.isArray(m) ? m[0] : m;
-                    if (actual) {
-                      const k = String(actual._id || actual.r2Key || actual.publicId || '');
-                      if (k) uniqueMap.set(k, actual);
-                    }
-                  });
-                  prev.flat().forEach((m: any) => {
-                    const actual = Array.isArray(m) ? m[0] : m;
-                    if (actual) {
-                      const k = String(actual._id || actual.r2Key || actual.publicId || '');
-                      if (k && !uniqueMap.has(k)) uniqueMap.set(k, actual);
-                    }
-                  });
-                  return Array.from(uniqueMap.values());
-                });
-
-                uploadedDocs.forEach((doc: any) => {
-                  const actual = Array.isArray(doc) ? doc[0] : doc;
-                  if (actual?._id) {
-                    setNewlyUploadedIds((prev) => new Set([...Array.from(prev), String(actual._id)]));
-                  }
-                });
-
-                // Mark item as success in queue
+                // Mark item as verifying
                 setUploadQueue((prev) =>
-                  prev.map((q, qIdx) => (qIdx === idx ? { ...q, status: 'success', progress: 100 } : q))
+                  prev.map((q, qIdx) => (qIdx === idx ? { ...q, status: 'verifying', progress: 100 } : q))
                 );
 
-                refreshStorage();
-                window.dispatchEvent(new Event('storage_updated'));
-              }
-            } catch (fallbackErr: any) {
-              const errMsg = fallbackErr.message || 'Upload error';
-              console.error(`Upload failed for ${file.name}:`, errMsg);
-              lastUploadError = errMsg;
-              failed++;
+                const key = presignedItem.publicId || presignedItem.key;
+                const publicUrl = presignedItem.url || presignedItem.publicUrl;
 
-              // Mark item as failed in queue so user can retry individually
-              setUploadQueue((prev) =>
-                prev.map((q, qIdx) =>
-                  qIdx === idx ? { ...q, status: 'failed', error: errMsg } : q
-                )
-              );
+                pendingCreateBuffer.push({
+                  publicId: key,
+                  r2Key: key,
+                  key,
+                  url: publicUrl,
+                  r2Url: publicUrl,
+                  originalName: file.name,
+                  mimeType: fileToUpload.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+                  size: fileToUpload.size,
+                  type: isVideo ? 'VIDEO' : 'PHOTO',
+                  folderPath: file.webkitRelativePath || '',
+                });
+
+                await flushToBackend();
+                break;
+              } catch (putErr) {
+                console.warn(`[Direct Cloud PUT Attempt ${attempt} for ${file.name} failed]:`, putErr);
+              }
+            }
+
+            // Step B: Robust server multipart streaming fallback
+            if (!uploadedSuccessfully) {
+              try {
+                const formData = new FormData();
+                formData.append('media', fileToUpload);
+                if (file.webkitRelativePath) {
+                  formData.append('folderPath', file.webkitRelativePath);
+                }
+                const directUploadBase = getDirectUploadApiUrl();
+                const uploadUrl = `${directUploadBase}/media/event/${event._id}/upload`;
+
+                const uploadRes = await uploadViaMultipartXhr(uploadUrl, formData, (pct) => {
+                  setUploadQueue((prev) =>
+                    prev.map((q, qIdx) => (qIdx === idx ? { ...q, progress: Math.max(5, pct) } : q))
+                  );
+                });
+
+                if (uploadRes?.media) {
+                  uploadedSuccessfully = true;
+                  bytesUploadedTotal += fileToUpload.size;
+                  successful++;
+
+                  // Instant local preview caching
+                  const localBlobPreview = URL.createObjectURL(fileToUpload);
+                  const uploadedDocs = (Array.isArray(uploadRes.media) ? uploadRes.media : [uploadRes.media]).flat().map((doc: any) => {
+                    const actual = Array.isArray(doc) ? doc[0] : doc;
+                    return { ...actual, localPreviewUrl: localBlobPreview };
+                  });
+
+                  setMediaItems((prev) => {
+                    const uniqueMap = new Map();
+                    uploadedDocs.forEach((m: any) => {
+                      const actual = Array.isArray(m) ? m[0] : m;
+                      if (actual) {
+                        const k = String(actual._id || actual.r2Key || actual.publicId || '');
+                        if (k) uniqueMap.set(k, actual);
+                      }
+                    });
+                    prev.flat().forEach((m: any) => {
+                      const actual = Array.isArray(m) ? m[0] : m;
+                      if (actual) {
+                        const k = String(actual._id || actual.r2Key || actual.publicId || '');
+                        if (k && !uniqueMap.has(k)) uniqueMap.set(k, actual);
+                      }
+                    });
+                    return Array.from(uniqueMap.values());
+                  });
+
+                  uploadedDocs.forEach((doc: any) => {
+                    const actual = Array.isArray(doc) ? doc[0] : doc;
+                    if (actual?._id) {
+                      setNewlyUploadedIds((prev) => new Set([...Array.from(prev), String(actual._id)]));
+                    }
+                  });
+
+                  // Mark item as success in queue
+                  setUploadQueue((prev) =>
+                    prev.map((q, qIdx) => (qIdx === idx ? { ...q, status: 'success', progress: 100 } : q))
+                  );
+
+                  refreshStorage();
+                  window.dispatchEvent(new Event('storage_updated'));
+                  break;
+                }
+              } catch (fallbackErr: any) {
+                const errMsg = fallbackErr.message || 'Upload error';
+                console.warn(`Upload attempt ${attempt} for ${file.name} failed:`, errMsg);
+                if (attempt < maxAttempts) {
+                  await new Promise((r) => setTimeout(r, 1000)); // Pause 1s before retry
+                } else {
+                  lastUploadError = errMsg;
+                  failed++;
+                  setUploadQueue((prev) =>
+                    prev.map((q, qIdx) =>
+                      qIdx === idx ? { ...q, status: 'failed', error: errMsg } : q
+                    )
+                  );
+                }
+              }
             }
           }
 
-          activeStreamsCount--;
+          activeStreamsCount = 0;
           setUploadProgress({ current: successful + failed, total: fileArray.length });
         }
       };
 
-      await Promise.all(Array.from({ length: concurrency }).map(() => worker()));
+      await worker();
       clearInterval(statsTimer);
 
       // Drain remaining items in buffer

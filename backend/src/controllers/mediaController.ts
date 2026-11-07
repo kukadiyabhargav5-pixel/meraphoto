@@ -211,16 +211,14 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
       }
     };
 
-    // Process uploads with concurrency limit of 10 for maximum throughput
-    const concurrencyLimit = 10;
+    // Process uploads step-by-step sequentially (one-by-one) for rock-solid reliability and low memory footprint
     const results: any[] = [];
-    for (let i = 0; i < files.length; i += concurrencyLimit) {
-      const chunk = files.slice(i, i + concurrencyLimit);
+    for (let i = 0; i < files.length; i++) {
       try {
-        const chunkResults = await Promise.all(chunk.map((file, idx) => uploadFn(file, i + idx)));
-        results.push(...chunkResults);
+        const result = await uploadFn(files[i], i);
+        results.push(result);
       } catch (err: any) {
-        console.error('[uploadMedia] Chunk error:', err);
+        console.error('[uploadMedia] File upload error at index', i, err);
         throw err;
       }
     }

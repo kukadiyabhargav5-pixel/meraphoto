@@ -203,16 +203,18 @@ export default function StudioBrandingPage() {
       return;
     }
 
-    const toastId = toast.loading('Uploading studio logo...');
+    // Instant local preview for immediate responsive feedback
+    const localLogoPreview = URL.createObjectURL(file);
+    setLogoUrl(localLogoPreview);
+
+    const toastId = toast.loading('Compressing & uploading studio logo...');
     setUploadingLogo(true);
     try {
       const formData = new FormData();
       formData.append('logo', file);
       formData.append('image', file);
 
-      const res = await apiClient.post('/studio/logo', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await apiClient.post('/studio/logo', formData);
 
       if (res.data?.logoUrl) {
         const newUrl = resolveMediaUrl(res.data.logoUrl);
@@ -266,16 +268,18 @@ export default function StudioBrandingPage() {
       return;
     }
 
-    const toastId = toast.loading('Uploading studio banner...');
+    // Instant local preview for immediate responsive feedback
+    const localBannerPreview = URL.createObjectURL(file);
+    setBannerUrl(localBannerPreview);
+
+    const toastId = toast.loading('Compressing & uploading 16:9 banner...');
     setUploadingBanner(true);
     try {
       const formData = new FormData();
       formData.append('banner', file);
       formData.append('image', file);
 
-      const res = await apiClient.post('/studio/banner', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await apiClient.post('/studio/banner', formData);
 
       if (res.data?.bannerUrl) {
         setBannerUrl(resolveMediaUrl(res.data.bannerUrl));
