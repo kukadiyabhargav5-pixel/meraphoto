@@ -237,27 +237,7 @@ export default function ClientGallery() {
 
     window.addEventListener('favorites_updated', handleFavUpdate);
     window.addEventListener('storage', handleFavUpdate);
-    // Lightbox Keyboard Navigation (ArrowLeft / ArrowRight)
-  useEffect(() => {
-    if (!selectedItem || galleryMedia.length <= 1) return;
-    const handleGalleryKeyNav = (e: KeyboardEvent) => {
-      const curId = String(selectedItem?._id || selectedItem?.r2Key);
-      const curIdx = galleryMedia.findIndex(m => String(m._id || m.r2Key) === curId);
-      if (e.key === 'ArrowLeft') {
-        const prevIdx = curIdx > 0 ? curIdx - 1 : galleryMedia.length - 1;
-        setSelectedItem(galleryMedia[prevIdx]);
-      } else if (e.key === 'ArrowRight') {
-        const nextIdx = (curIdx >= 0 && curIdx < galleryMedia.length - 1) ? curIdx + 1 : 0;
-        setSelectedItem(galleryMedia[nextIdx]);
-      } else if (e.key === 'Escape') {
-        setSelectedItem(null);
-      }
-    };
-    window.addEventListener('keydown', handleGalleryKeyNav);
-    return () => window.removeEventListener('keydown', handleGalleryKeyNav);
-  }, [selectedItem, galleryMedia]);
-
-  return () => {
+    return () => {
       window.removeEventListener('favorites_updated', handleFavUpdate);
       window.removeEventListener('storage', handleFavUpdate);
     };
@@ -384,7 +364,7 @@ export default function ClientGallery() {
     }
   }, [webcamStream, searchTab]);
 
-  // Keyboard navigation for Lightbox
+  // Circular Keyboard navigation for Lightbox (< > and Escape)
   useEffect(() => {
     if (!selectedItem) return;
     
@@ -394,20 +374,26 @@ export default function ClientGallery() {
         return;
       }
       
-      const galleryMedia = searchActive ? matchedMedia : media;
-      const currentIndex = galleryMedia.findIndex(m => m._id === selectedItem._id);
-      if (currentIndex === -1) return;
+      const currentList = searchActive ? matchedMedia : media;
+      const filtered = currentList.filter(m => mediaTypeFilter === 'ALL' || (mediaTypeFilter === 'FAVORITES' ? favoriteIds.includes(String(m._id || m.r2Key)) : m.type === mediaTypeFilter));
+      if (filtered.length <= 1) return;
 
-      if (e.key === 'ArrowRight' && currentIndex < galleryMedia.length - 1) {
-        setSelectedItem(galleryMedia[currentIndex + 1]);
-      } else if (e.key === 'ArrowLeft' && currentIndex > 0) {
-        setSelectedItem(galleryMedia[currentIndex - 1]);
+      const curId = String(selectedItem._id || selectedItem.r2Key);
+      const curIdx = filtered.findIndex(m => String(m._id || m.r2Key) === curId);
+      if (curIdx === -1) return;
+
+      if (e.key === 'ArrowRight') {
+        const nextIdx = (curIdx + 1) % filtered.length;
+        setSelectedItem(filtered[nextIdx]);
+      } else if (e.key === 'ArrowLeft') {
+        const prevIdx = (curIdx - 1 + filtered.length) % filtered.length;
+        setSelectedItem(filtered[prevIdx]);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedItem, searchActive, matchedMedia, media]);
+  }, [selectedItem, searchActive, matchedMedia, media, mediaTypeFilter, favoriteIds]);
 
   const handleOtpChange = (index: number, val: string) => {
     if (val.length > 1) val = val[0];

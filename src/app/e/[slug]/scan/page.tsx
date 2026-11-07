@@ -333,17 +333,22 @@ export default function DedicatedFaceScanPage() {
     } else {
       stopCamera();
     }
-    // Lightbox Keyboard Navigation (ArrowLeft / ArrowRight)
+    return () => {
+      stopCamera();
+    };
+  }, [activeTab, hasSearched]);
+
+  // Lightbox Keyboard Navigation (ArrowLeft / ArrowRight)
   useEffect(() => {
     if (!selectedPhoto || matchedPhotos.length <= 1) return;
     const handleKeyNav = (e: KeyboardEvent) => {
       const curId = String(selectedPhoto?._id || selectedPhoto?.r2Key || selectedPhoto?.publicId);
       const curIdx = matchedPhotos.findIndex(p => String(p._id || p.r2Key || p.publicId) === curId);
       if (e.key === 'ArrowLeft') {
-        const prevIdx = curIdx > 0 ? curIdx - 1 : matchedPhotos.length - 1;
+        const prevIdx = (curIdx - 1 + matchedPhotos.length) % matchedPhotos.length;
         setSelectedPhoto(matchedPhotos[prevIdx]);
       } else if (e.key === 'ArrowRight') {
-        const nextIdx = (curIdx >= 0 && curIdx < matchedPhotos.length - 1) ? curIdx + 1 : 0;
+        const nextIdx = (curIdx + 1) % matchedPhotos.length;
         setSelectedPhoto(matchedPhotos[nextIdx]);
       } else if (e.key === 'Escape') {
         setSelectedPhoto(null);
@@ -352,11 +357,6 @@ export default function DedicatedFaceScanPage() {
     window.addEventListener('keydown', handleKeyNav);
     return () => window.removeEventListener('keydown', handleKeyNav);
   }, [selectedPhoto, matchedPhotos]);
-
-  return () => {
-      stopCamera();
-    };
-  }, [activeTab, hasSearched]);
 
   // Clean up selfie preview URL
   useEffect(() => {
