@@ -903,10 +903,10 @@ export default function DedicatedFaceScanPage() {
                   <div className="flex items-center justify-between mb-2.5 text-xs font-mono font-bold">
                     <span className="text-[#c5a880] flex items-center gap-1.5 uppercase tracking-wider text-[10px] sm:text-xs truncate">
                       <Sparkles className="w-3.5 h-3.5 animate-pulse shrink-0" />
-                      {isMatchedSuccess ? 'Match Complete' : 'AI Neural Analysis'}
+                      {isMatchedSuccess ? 'Face Verified' : 'AI Neural Analysis'}
                     </span>
                     <span className="text-slate-800 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold shrink-0">
-                      {searchProgress}%
+                      {isMatchedSuccess ? 'Verified' : `${searchProgress}%`}
                     </span>
                   </div>
 
@@ -1284,11 +1284,11 @@ export default function DedicatedFaceScanPage() {
               </div>
 
               <h2 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
-                {matchedPhotos.length > 0 ? 'Face Matched Successfully!' : 'No Matching Photos Found'}
+                {matchedPhotos.length > 0 ? 'Your Photos Found!' : 'No Matching Photos Found'}
               </h2>
               <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1.5 sm:mt-2 max-w-md mx-auto leading-relaxed px-1">
                 {matchedPhotos.length > 0
-                  ? `We found ${matchedPhotos.length} photo${matchedPhotos.length > 1 ? 's' : ''} containing your face in this album.`
+                  ? `We found ${matchedPhotos.length} photo${matchedPhotos.length > 1 ? 's' : ''} of you in this album.`
                   : 'We could not detect this face in any album photos. Try taking another selfie with good lighting.'}
               </p>
 
@@ -1310,7 +1310,7 @@ export default function DedicatedFaceScanPage() {
                       ) : (
                         <>
                           <Download className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-                          <span>Download {matchedPhotos.length} Matching Photos (.ZIP)</span>
+                          <span>Download {matchedPhotos.length} Photos (.ZIP)</span>
                         </>
                       )}
                     </button>
@@ -1477,7 +1477,7 @@ export default function DedicatedFaceScanPage() {
         >
           <div className="flex items-center justify-between w-full relative z-10">
             <span className="text-[10px] sm:text-xs font-mono font-bold text-[#c5a880] tracking-wider uppercase">
-              AI Matched Photo ({matchedPhotos.findIndex(p => p._id === selectedPhoto._id) + 1} / {matchedPhotos.length})
+              Photo {matchedPhotos.findIndex(p => String(p._id || p.r2Key || p.publicId) === String(selectedPhoto?._id || selectedPhoto?.r2Key || selectedPhoto?.publicId)) + 1} of {matchedPhotos.length}
             </span>
             <div className="flex items-center gap-2 sm:gap-3">
               {event?.allowDownload !== false && (

@@ -1282,7 +1282,7 @@ export default function ClientGallery() {
                 </div>
                 <div>
                   <p className="font-bold text-xs sm:text-sm">Found {galleryMedia.length} matching photo{galleryMedia.length !== 1 ? 's' : ''}</p>
-                  <p className="text-[11px] sm:text-xs text-[#FF6B00] mt-0.5 font-medium">AI matched your face across the entire album. Photos are sorted by similarity.</p>
+                  <p className="text-[11px] sm:text-xs text-[#c5a880] mt-0.5 font-medium">Your personal album is ready with your photos.</p>
                 </div>
               </div>
             )}
@@ -1776,7 +1776,7 @@ export default function ClientGallery() {
                         </div>
 
                         <div className="bg-black/80 backdrop-blur-md border border-[#c5a880]/40 rounded-full px-3 py-1 text-[10px] font-mono font-black tracking-wider text-[#c5a880] shadow-lg">
-                          {isMatchedSuccess ? 'MATCHED' : `${searchProgress}%`}
+                          {isMatchedSuccess ? 'VERIFIED' : `${searchProgress}%`}
                         </div>
                       </div>
 
@@ -1800,10 +1800,10 @@ export default function ClientGallery() {
                     <div className="flex items-center justify-between mb-3 relative z-10">
                       <span className="text-[11px] font-black uppercase tracking-[0.2em] text-[#c5a880] flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-[#c5a880] animate-pulse" />
-                        {isMatchedSuccess ? 'Biometric Match Complete' : 'AI Facial Processing'}
+                        {isMatchedSuccess ? 'Face Verified' : 'AI Facial Processing'}
                       </span>
                       <span className="text-xs font-mono font-black text-slate-800 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-lg">
-                        {searchProgress}%
+                        {isMatchedSuccess ? 'Verified' : `${searchProgress}%`}
                       </span>
                     </div>
 

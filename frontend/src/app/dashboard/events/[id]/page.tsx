@@ -2,7 +2,7 @@
 import React, { useState, useEffect, use, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, CheckCircle, Copy, ChevronDown, LayoutGrid, Sparkles, Crown, ArrowRight, ShieldCheck, Flame, RefreshCw, ZoomIn, Play, X, Clock, AlertTriangle, Zap, Activity, Gauge } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Upload, FolderUp, Image as ImageIcon, Video, Calendar, User, Phone, Mail, MapPin, Settings, Camera, Trash2, Loader2, Check, CheckCircle, Copy, ChevronDown, LayoutGrid, Sparkles, Crown, ArrowRight, ShieldCheck, Flame, RefreshCw, ZoomIn, Play, X, Clock, AlertTriangle, Zap, Activity, Gauge } from 'lucide-react';
 import { apiClient, resolveMediaUrl } from '@/lib/api';
 import toast from 'react-hot-toast';
 import CustomDatePicker from '../../../../components/CustomDatePicker';
@@ -90,6 +90,27 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
   );
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<any>(null);
+
+  useEffect(() => {
+    if (!previewMedia || mediaItems.length <= 1) return;
+    const handleKeyNav = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        const curId = String(previewMedia?._id || previewMedia?.r2Key || previewMedia?.publicId);
+        const curIdx = mediaItems.findIndex(p => String(p._id || p.r2Key || p.publicId) === curId);
+        const prevIdx = curIdx > 0 ? curIdx - 1 : mediaItems.length - 1;
+        setPreviewMedia(mediaItems[prevIdx]);
+      } else if (e.key === 'ArrowRight') {
+        const curId = String(previewMedia?._id || previewMedia?.r2Key || previewMedia?.publicId);
+        const curIdx = mediaItems.findIndex(p => String(p._id || p.r2Key || p.publicId) === curId);
+        const nextIdx = (curIdx >= 0 && curIdx < mediaItems.length - 1) ? curIdx + 1 : 0;
+        setPreviewMedia(mediaItems[nextIdx]);
+      } else if (e.key === 'Escape') {
+        setPreviewMedia(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyNav);
+    return () => window.removeEventListener('keydown', handleKeyNav);
+  }, [previewMedia, mediaItems]);
 
   const toggleSelection = (id: string) => {
     setSelectedMediaIds(prev => 
@@ -1815,6 +1836,41 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
           onClick={() => setPreviewMedia(null)}
         >
           <div className="relative max-w-5xl w-full max-h-[90vh] flex flex-col items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            {/* Left Arrow Button (<) */}
+            {mediaItems.length > 1 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const curId = String(previewMedia?._id || previewMedia?.r2Key || previewMedia?.publicId);
+                  const curIdx = mediaItems.findIndex(p => String(p._id || p.r2Key || p.publicId) === curId);
+                  const prevIdx = curIdx > 0 ? curIdx - 1 : mediaItems.length - 1;
+                  setPreviewMedia(mediaItems[prevIdx]);
+                }}
+                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-black/70 hover:bg-[#c5a880] text-white min-h-[48px] min-w-[48px] flex items-center justify-center cursor-pointer shadow-2xl z-50 backdrop-blur-md border border-white/20 transition-all hover:scale-110 active:scale-95"
+                title="Previous photo (Left Arrow)"
+              >
+                <ChevronLeft className="w-6 h-6 sm:w-8 sm:h-8" />
+              </button>
+            )}
+
+            {/* Right Arrow Button (>) */}
+            {mediaItems.length > 1 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const curId = String(previewMedia?._id || previewMedia?.r2Key || previewMedia?.publicId);
+                  const curIdx = mediaItems.findIndex(p => String(p._id || p.r2Key || p.publicId) === curId);
+                  const nextIdx = (curIdx >= 0 && curIdx < mediaItems.length - 1) ? curIdx + 1 : 0;
+                  setPreviewMedia(mediaItems[nextIdx]);
+                }}
+                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-black/70 hover:bg-[#c5a880] text-white min-h-[48px] min-w-[48px] flex items-center justify-center cursor-pointer shadow-2xl z-50 backdrop-blur-md border border-white/20 transition-all hover:scale-110 active:scale-95"
+                title="Next photo (Right Arrow)"
+              >
+                <ChevronRight className="w-6 h-6 sm:w-8 sm:h-8" />
+              </button>
+            )}
             <button 
               onClick={() => setPreviewMedia(null)}
               className="absolute -top-12 right-0 text-white/80 hover:text-white p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"

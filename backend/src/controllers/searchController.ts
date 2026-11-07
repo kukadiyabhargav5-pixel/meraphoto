@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { Event, Media, FaceEmbedding, SearchSession } from '../models';
+import { findEventByIdOrCode } from './mediaController';
 import { searchFaces, isQdrantAvailable, localCosineSearch } from '../services/qdrantService';
 import { getObjectStream, getFileUrl } from '../services/StorageService';
 import axios from 'axios';
@@ -275,7 +276,7 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const event = await Event.findById(eventId);
+    const event = await findEventByIdOrCode(eventId);
     if (!event) {
       res.status(404).json({ error: 'Event not found.' });
       return;

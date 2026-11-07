@@ -252,18 +252,30 @@ export const getMyEvents = async (req: AuthRequest, res: Response) => {
  * Get public gallery information by event code
  */
 export const getEventByCode = async (req: Request, res: Response) => {
-  const { code } = req.params;
+  const rawCode = req.params.code || req.params.eventId || (req.query.code as string) || (req.query.eventId as string) || '';
 
   try {
     let event = null;
-    const cleanCode = (code || '').toLowerCase().trim();
-    if (code.match(/^[0-9a-fA-F]{24}$/)) {
-      event = await Event.findById(code)
-        .populate('studioId', 'name logoUrl watermark customDomain instagramUrl facebookUrl subscriptionPlan subscriptionStartDate subscriptionExpiresAt');
+    const cleanCode = String(rawCode || '').trim();
+    const cleanLower = cleanCode.toLowerCase();
+
+    if (cleanCode.match(/^[0-9a-fA-F]{24}$/)) {
+      try {
+        event = await Event.findById(cleanCode)
+          .populate('studioId', 'name logoUrl watermark customDomain instagramUrl facebookUrl subscriptionPlan subscriptionStartDate subscriptionExpiresAt');
+      } catch {
+        // Fall through
+      }
     }
     if (!event) {
-      event = await Event.findOne({ code: cleanCode })
-        .populate('studioId', 'name logoUrl watermark customDomain instagramUrl facebookUrl subscriptionPlan subscriptionStartDate subscriptionExpiresAt');
+      const escaped = cleanCode.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      event = await Event.findOne({
+        $or: [
+          { code: cleanLower },
+          { previousCodes: cleanLower },
+          { name: { $regex: new RegExp(`^${escaped}$`, 'i') } }
+        ]
+      }).populate('studioId', 'name logoUrl watermark customDomain instagramUrl facebookUrl subscriptionPlan subscriptionStartDate subscriptionExpiresAt');
     }
     
     if (!event) {

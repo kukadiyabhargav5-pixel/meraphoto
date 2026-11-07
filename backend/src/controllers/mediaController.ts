@@ -27,6 +27,32 @@ import { PLAN_STORAGE_LIMITS } from './studioController';
 import { canUserUpload, recordStorageActivity } from '../services/storageSubscriptionService';
 
 /**
+ * Universal Event Resolver: Finds an event by MongoDB ObjectId, URL code/slug,
+ * previousCodes, or exact name. Never fails with CastError on slugs.
+ */
+export const findEventByIdOrCode = async (idOrCode: any) => {
+  if (!idOrCode) return null;
+  const clean = String(idOrCode).trim();
+  if (clean.match(/^[0-9a-fA-F]{24}$/)) {
+    try {
+      const ev = await Event.findById(clean);
+      if (ev) return ev;
+    } catch {
+      // Ignore CastError and fall through
+    }
+  }
+  const cleanLower = clean.toLowerCase();
+  const escaped = clean.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+  return await Event.findOne({
+    $or: [
+      { code: cleanLower },
+      { previousCodes: cleanLower },
+      { name: { $regex: new RegExp(`^${escaped}$`, 'i') } }
+    ]
+  });
+};
+
+/**
  * Handle bulk photo and video uploads (Backend route)
  */
 export const uploadMedia = async (req: AuthRequest, res: Response) => {
@@ -39,7 +65,7 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'No files uploaded' });
     }
 
-    const event = await Event.findById(eventId);
+    const event = await findEventByIdOrCode(eventId);
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
     let studio = event.studioId ? await Studio.findById(event.studioId) : null;
@@ -409,7 +435,7 @@ export const getPresignedUploadUrls = async (req: AuthRequest, res: Response) =>
       return res.status(400).json({ error: 'No files specified' });
     }
 
-    const event = await Event.findById(eventId);
+    const event = await findEventByIdOrCode(eventId);
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
     const studio = await Studio.findById(event.studioId);
@@ -579,10 +605,8 @@ export const downloadEventZip = async (req: Request, res: Response): Promise<voi
     const { mediaIds, slug, eventId } = { ...req.query, ...req.body } as any;
 
     let targetEvent: any = null;
-    if (eventId && typeof eventId === 'string' && eventId.match(/^[0-9a-fA-F]{24}$/)) {
-      targetEvent = await Event.findById(eventId);
-    } else if (slug) {
-      targetEvent = await Event.findOne({ code: slug });
+    if (eventId || slug) {
+      targetEvent = await findEventByIdOrCode(eventId || slug);
     }
 
     let mediaQuery: any = {};
@@ -742,7 +766,7 @@ export const deleteBulkMedia = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
-    const event = await Event.findById(eventId);
+    const event = await findEventByIdOrCode(eventId);
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
     const studio = await Studio.findOne({ ownerId: req.user._id });
@@ -896,7 +920,7 @@ export const bulkCreateMedia = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'No media data provided' });
     }
 
-    const event = await Event.findById(eventId);
+    const event = await findEventByIdOrCode(eventId);
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
     const studio = await Studio.findById(event.studioId);
@@ -1075,7 +1099,7 @@ export const batchUpscaleMedia = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
-    const event = await Event.findById(eventId);
+    const event = await findEventByIdOrCode(eventId);
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
     // Verify ownership or admin

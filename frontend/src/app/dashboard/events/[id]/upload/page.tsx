@@ -593,7 +593,7 @@ export default function EventUploadDedicatedPage({
       await Promise.all(
         presignBatches.map(async ({ startIdx, batch }) => {
           try {
-            const res = await apiClient.post(`/media/event/${event._id}/presigned-urls`, {
+            const res = await apiClient.post(`/media/event/${event?._id || eventId}/presigned-urls`, {
               files: batch.map((f) => ({
                 name: f.name,
                 type: f.type,
@@ -621,7 +621,7 @@ export default function EventUploadDedicatedPage({
         isFlushing = true;
         const chunk = pendingCreateBuffer.splice(0, Math.min(pendingCreateBuffer.length, 25));
         try {
-          const res = await apiClient.post(`/media/event/${event._id}/bulk-create`, { mediaList: chunk });
+          const res = await apiClient.post(`/media/event/${event?._id || eventId}/bulk-create`, { mediaList: chunk });
           if (res.data?.media && Array.isArray(res.data.media)) {
             const newDocs = res.data.media.flat();
             const newDocIds = new Set(newDocs.map((m: any) => (Array.isArray(m) ? m[0]?._id : m?._id)).filter(Boolean));
@@ -780,7 +780,7 @@ export default function EventUploadDedicatedPage({
                   formData.append('folderPath', file.webkitRelativePath);
                 }
                 const directUploadBase = getDirectUploadApiUrl();
-                const uploadUrl = `${directUploadBase}/media/event/${event._id}/upload`;
+                const uploadUrl = `${directUploadBase}/media/event/${event?._id || eventId}/upload`;
 
                 const uploadRes = await uploadViaMultipartXhr(uploadUrl, formData, (pct) => {
                   setUploadQueue((prev) =>
@@ -911,8 +911,9 @@ export default function EventUploadDedicatedPage({
   // Current index in modal for < > navigation
   const previewIndex = useMemo(() => {
     if (!previewMedia) return -1;
+    const curId = String(previewMedia._id || previewMedia.r2Key || previewMedia.publicId || '');
     return filteredMedia.findIndex(
-      (m) => (m._id && m._id === previewMedia._id) || (m.r2Key && m.r2Key === previewMedia.r2Key)
+      (m) => String(m._id || m.r2Key || m.publicId || '') === curId
     );
   }, [previewMedia, filteredMedia]);
 
