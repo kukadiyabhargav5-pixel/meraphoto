@@ -52,7 +52,7 @@ interface UploadQueueItem {
   name: string;
   size: number;
   progress: number;
-  status: 'queued' | 'uploading' | 'verifying' | 'success' | 'failed';
+  status: 'queued' | 'compressing' | 'uploading' | 'verifying' | 'success' | 'failed';
   speed?: string;
   error?: string;
   retryCount?: number;
@@ -99,6 +99,21 @@ export default function EventUploadDedicatedPage({
     etaSec: 0,
     activeStreams: 0,
   });
+
+  const [displayCount, setDisplayCount] = useState<number>(60);
+  const blobUrlsRef = useRef<Set<string>>(new Set());
+
+  // Prevent memory leaks by revoking object URLs on unmount
+  useEffect(() => {
+    return () => {
+      blobUrlsRef.current.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {}
+      });
+      blobUrlsRef.current.clear();
+    };
+  }, []);
   const [newlyUploadedIds, setNewlyUploadedIds] = useState<Set<string>>(new Set());
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -285,7 +300,7 @@ export default function EventUploadDedicatedPage({
     else if (tempQualityMode === 'STUDIO_5MB') chosenMb = 5;
     else if (tempQualityMode === 'ULTRA_8MB') chosenMb = 8;
     else if (tempQualityMode === 'CUSTOM') chosenMb = Number(tempCustomTargetMB) || 5;
-    else if (tempQualityMode === 'ORIGINAL') chosenMb = Number(tempCustomTargetMB) || 5;
+    else if (tempQualityMode === 'ORIGINAL') chosenMb = 0;
 
     chosenMb = Math.max(0.1, chosenMb);
     const targetSizeBytes = Math.round(chosenMb * 1024 * 1024);
@@ -296,13 +311,18 @@ export default function EventUploadDedicatedPage({
     const photoCount = photoItems.length;
 
     setQualityMode(tempQualityMode);
-    setCustomTargetMB(chosenMb);
+    if (tempQualityMode !== 'ORIGINAL') {
+      setCustomTargetMB(chosenMb);
+    }
     setShowQualityMenu(false);
 
-    if (photoCount === 0) {
-      toast.success(`✨ Target photo size set to ${chosenMb} MB! Upcoming uploads will match this size.`, {
-        icon: '⚡',
-      });
+    if (photoCount === 0 || tempQualityMode === 'ORIGINAL') {
+      toast.success(
+        tempQualityMode === 'ORIGINAL'
+          ? '✨ Upload mode set to Raw Original (Uncompressed).'
+          : `✨ Target photo size set to ${chosenMb} MB! Upcoming uploads will match this size.`,
+        { icon: '⚡' }
+      );
       return;
     }
 
@@ -573,13 +593,14 @@ export default function EventUploadDedicatedPage({
     if (qualityMode === 'ULTRA_8MB') targetMaxMB = 8;
     else if (qualityMode === 'STUDIO_5MB') targetMaxMB = 5;
     else if (qualityMode === 'WEB_2MB') targetMaxMB = 2;
-    else if (qualityMode === 'CUSTOM') targetMaxMB = Math.max(0.5, customTargetMB || 3);
+    else if (qualityMode === 'CUSTOM') targetMaxMB = Math.max(0.1, customTargetMB || 1);
 
     // Pre-load compression module if quality mode is active
     let imageCompressionModule: any = null;
     if (qualityMode !== 'ORIGINAL') {
       try {
-        imageCompressionModule = (await import('browser-image-compression')).default;
+        const mod = await import('browser-image-compression');
+        imageCompressionModule = mod.default || mod;
       } catch (err) {
         console.warn('Compression module load failed, using raw files:', err);
       }
@@ -622,12 +643,18 @@ export default function EventUploadDedicatedPage({
         presignBatches.map(async ({ startIdx, batch }) => {
           try {
             const res = await apiClient.post(`/media/event/${event?._id || eventId}/presigned-urls`, {
-              files: batch.map((f) => ({
-                name: f.name,
-                type: f.type,
-                size: f.size,
-                folderPath: f.webkitRelativePath || '',
-              })),
+              files: batch.map((f) => {
+                const isVid = f.type.startsWith('video/') || /\.(mp4|mov|avi|mkv|webm|m4v|3gp)$/i.test(f.name);
+                const estimatedSize = (!isVid && qualityMode !== 'ORIGINAL' && targetMaxMB > 0)
+                  ? Math.min(f.size, Math.round(targetMaxMB * 1024 * 1024))
+                  : f.size;
+                return {
+                  name: f.name,
+                  type: f.type,
+                  size: estimatedSize,
+                  folderPath: f.webkitRelativePath || '',
+                };
+              }),
             });
             if (res.data?.urls) {
               res.data.urls.forEach((item: any, idx: number) => {
@@ -741,8 +768,39 @@ export default function EventUploadDedicatedPage({
           // Apply user-defined target MB compression or preserve original untouched
           let fileToUpload: File = file;
 
-          // High-speed direct wire transmission: bypass heavy client-side canvas lag for instant upload
-          // Files reach Cloudflare R2 at full network speed
+          if (!isVideo && qualityMode !== 'ORIGINAL' && targetMaxMB > 0 && file.size > targetMaxMB * 1024 * 1024 && imageCompressionModule) {
+            try {
+              setUploadQueue((prev) =>
+                prev.map((q, qIdx) => (qIdx === idx ? { ...q, status: 'compressing', progress: 8 } : q))
+              );
+
+              const maxDimension = targetMaxMB <= 1 ? 1920 : targetMaxMB <= 2 ? 2560 : targetMaxMB <= 5 ? 3840 : 4096;
+              const initialQual = targetMaxMB <= 1 ? 0.80 : targetMaxMB <= 2 ? 0.85 : 0.90;
+
+              const compressedBlob = await imageCompressionModule(file, {
+                maxSizeMB: targetMaxMB,
+                maxWidthOrHeight: maxDimension,
+                useWebWorker: true,
+                initialQuality: initialQual,
+                fileType: 'image/jpeg',
+              });
+
+              if (compressedBlob && compressedBlob.size > 0 && compressedBlob.size < file.size) {
+                fileToUpload = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
+                  type: 'image/jpeg',
+                  lastModified: file.lastModified || Date.now(),
+                });
+
+                // Update queue display with new compressed size in real-time
+                setUploadQueue((prev) =>
+                  prev.map((q, qIdx) => (qIdx === idx ? { ...q, size: fileToUpload.size } : q))
+                );
+              }
+            } catch (compErr) {
+              console.warn(`[Compression error for ${file.name}, using original]:`, compErr);
+              fileToUpload = file;
+            }
+          }
 
           let uploadedSuccessfully = false;
           let attempt = 0;
@@ -780,6 +838,7 @@ export default function EventUploadDedicatedPage({
 
                 // Instant optimistic preview in gallery without waiting for server response
                 const localBlobPreview = URL.createObjectURL(fileToUpload);
+                blobUrlsRef.current.add(localBlobPreview);
                 const optimisticMediaDoc = {
                   _id: `temp-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
                   publicId: key,
@@ -1729,6 +1788,12 @@ export default function EventUploadDedicatedPage({
                                     Queued
                                   </span>
                                 )}
+                                {item.status === 'compressing' && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700 flex items-center gap-1 border border-amber-200">
+                                    <Loader2 className="w-3 h-3 animate-spin text-amber-600" />
+                                    Compressing...
+                                  </span>
+                                )}
                                 {item.status === 'uploading' && (
                                   <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 flex items-center gap-1">
                                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -1858,12 +1923,8 @@ export default function EventUploadDedicatedPage({
               </p>
             </div>
           ) : (
-            <motion.div
-              layout
-              className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3.5"
-            >
-              <AnimatePresence mode="popLayout">
-                {filteredMedia.map((rawItem, index) => {
+            <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3.5">
+                {filteredMedia.slice(0, displayCount).map((rawItem, index) => {
                   const item = Array.isArray(rawItem) ? rawItem[0] : rawItem;
                   if (!item) return null;
                   const itemKey = item._id ? String(item._id) : (item.r2Key || item.publicId || `${index}-${item.originalName || 'file'}`);
@@ -1880,13 +1941,9 @@ export default function EventUploadDedicatedPage({
                   const thumbSource = thumbCandidate || compCandidate || localCandidate || origCandidate;
 
                   return (
-                    <motion.div
-                      layout
-                      initial={{ opacity: 0, scale: 0.8, y: 15 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.45, transition: { duration: 0.2 } }}
-                      transition={{ duration: 0.25, ease: 'easeOut' }}
+                    <div
                       key={itemKey}
+                      style={{ contentVisibility: 'auto', containIntrinsicSize: '200px 200px' }}
                       onClick={() => {
                         if (isSelectionMode && item._id) toggleSelection(String(item._id));
                         else setPreviewMedia(item);
@@ -1926,6 +1983,7 @@ export default function EventUploadDedicatedPage({
                           src={mediaSource}
                           alt={item.originalName || 'Photo'}
                           loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           onError={(e) => {
                             const target = e.currentTarget;
@@ -2003,11 +2061,22 @@ export default function EventUploadDedicatedPage({
                           </button>
                         </div>
                       </div>
-                    </motion.div>
+                    </div>
                   );
                 })}
-              </AnimatePresence>
-            </motion.div>
+
+                {filteredMedia.length > displayCount && (
+                  <div className="col-span-full pt-4 pb-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setDisplayCount((prev) => prev + 60)}
+                      className="px-6 py-2.5 rounded-xl bg-white hover:bg-[#faf8f5] border border-[#c5a880] text-[#9e7b4f] hover:text-[#7d5f38] text-xs font-bold shadow-xs hover:shadow-md transition-all active:scale-95 cursor-pointer"
+                    >
+                      Load More Photos ({filteredMedia.length - displayCount} remaining)
+                    </button>
+                  </div>
+                )}
+            </div>
           )}
 
           {/* Generous Breathing Space Between Photos and Bottom Action Bar */}

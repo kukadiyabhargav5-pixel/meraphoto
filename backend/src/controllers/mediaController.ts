@@ -1172,10 +1172,23 @@ export const batchUpscaleMedia = async (req: AuthRequest, res: Response) => {
         const origWidth = meta.width || 2000;
         const origHeight = meta.height || 1500;
 
-        // Calculate upscale dimensions
-        const scaleFactor = targetBytes >= 8 * 1024 * 1024 ? 2.0 : targetBytes >= 5 * 1024 * 1024 ? 1.6 : 1.3;
-        const newWidth = Math.min(5000, Math.round(origWidth * scaleFactor));
-        const newHeight = Math.min(5000, Math.round(origHeight * scaleFactor));
+        const isCompression = targetBytes < inputBuffer.length;
+        let newWidth: number;
+        let newHeight: number;
+        let jpegQuality = 90;
+
+        if (isCompression) {
+          const targetMb = targetBytes / (1024 * 1024);
+          const maxDim = targetMb <= 1 ? 1920 : targetMb <= 2 ? 2560 : targetMb <= 5 ? 3840 : 4096;
+          jpegQuality = targetMb <= 1 ? 78 : targetMb <= 2 ? 84 : 88;
+          newWidth = Math.min(origWidth, maxDim);
+          newHeight = Math.min(origHeight, maxDim);
+        } else {
+          const scaleFactor = targetBytes >= 8 * 1024 * 1024 ? 2.0 : targetBytes >= 5 * 1024 * 1024 ? 1.6 : 1.3;
+          newWidth = Math.min(5000, Math.round(origWidth * scaleFactor));
+          newHeight = Math.min(5000, Math.round(origHeight * scaleFactor));
+          jpegQuality = 95;
+        }
 
         // High-resolution Lanczos3 resampling + high-quality JPEG encode
         let upscaledBuffer = await sharp(inputBuffer)
@@ -1184,17 +1197,20 @@ export const batchUpscaleMedia = async (req: AuthRequest, res: Response) => {
             width: newWidth,
             height: newHeight,
             fit: 'inside',
+            withoutEnlargement: isCompression,
             kernel: sharp.kernel.lanczos3,
           })
           .jpeg({
-            quality: 96,
-            chromaSubsampling: '4:4:4',
-            mozjpeg: false,
+            quality: jpegQuality,
+            chromaSubsampling: isCompression && targetBytes <= 1.5 * 1024 * 1024 ? '4:2:0' : '4:4:4',
+            mozjpeg: true,
           })
           .toBuffer();
 
-        // Pad to target size so file size on disk matches the requested MB
-        upscaledBuffer = padJpegToTargetSize(upscaledBuffer, targetBytes);
+        // If target size is larger (upscale), pad to target size so file size on disk matches the requested MB
+        if (!isCompression && upscaledBuffer.length < targetBytes) {
+          upscaledBuffer = padJpegToTargetSize(upscaledBuffer, targetBytes);
+        }
 
         // Upload upscaled file back to Cloudflare R2
         await r2Client.send(
