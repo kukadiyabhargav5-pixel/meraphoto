@@ -1,10 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    middlewareClientMaxBodySize: '100mb',
+  },
   typescript: {
+    // NOTE: Set to false before production deployment to catch type errors early
     ignoreBuildErrors: true,
   },
   eslint: {
+    // NOTE: Set to false before production deployment
     ignoreDuringBuilds: true,
   },
   transpilePackages: ['recharts', 'victory-vendor'],
@@ -53,7 +58,8 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/api/:path*`
       },
       {
-        source: '/admin-dashboard/:path+',
+        // Fixed: use '*' (zero or more) in both source and destination for consistency
+        source: '/admin-dashboard/:path*',
         destination: '/dashboard/:path*'
       }
     ];

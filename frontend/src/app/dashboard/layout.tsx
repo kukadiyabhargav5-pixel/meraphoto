@@ -159,7 +159,9 @@ function SidebarContent({
   const hasStudioPlan = Boolean(
     studioPlanKey &&
     ['STARTUP', 'STARTER', 'STANDARD', 'ESSENTIAL', 'PREMIUM', 'BUSINESS', 'ENTERPRISE'].includes(studioPlanKey) &&
-    studioPlanKey !== 'BASIC'
+    studioPlanKey !== 'BASIC' &&
+    (!studio?.subscriptionExpiresAt || new Date(studio.subscriptionExpiresAt).getTime() > Date.now()) &&
+    studio?.subscriptionStatus === 'ACTIVE'
   );
   const hasPaidPlan = Boolean(isSuperAdmin || hasStoragePlan || hasStudioPlan);
 
@@ -452,7 +454,9 @@ function DashboardSidebar({ children }: { children: React.ReactNode }) {
   const hasStudioPlan = Boolean(
     studioPlanKey &&
     ['STARTUP', 'STARTER', 'STANDARD', 'ESSENTIAL', 'PREMIUM', 'BUSINESS', 'ENTERPRISE'].includes(studioPlanKey) &&
-    studioPlanKey !== 'BASIC'
+    studioPlanKey !== 'BASIC' &&
+    (!studio?.subscriptionExpiresAt || new Date(studio.subscriptionExpiresAt).getTime() > Date.now()) &&
+    studio?.subscriptionStatus === 'ACTIVE'
   );
   const hasPaidPlan = Boolean(isSuperAdmin || hasStoragePlan || hasStudioPlan);
 

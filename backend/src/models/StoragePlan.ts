@@ -2,10 +2,10 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export const ONE_GB_BYTES = 1024 * 1024 * 1024; // 1,073,741,824 bytes
 
-export type BillingCategory = 'MONTHLY' | '6_MONTHS' | 'YEARLY';
+export type BillingCategory = 'MONTHLY' | '6_MONTHS' | 'YEARLY' | 'TOPUP';
 
 export interface IStoragePlan extends Document {
-  planId: string; // e.g. 'monthly-10gb', 'monthly-50gb', etc.
+  planId: string; // e.g. 'monthly-10gb', 'yearly-200gb', 'topup-25gb'
   name: string; // e.g. '10 GB Storage'
   storageGb: number; // in GB
   storageBytes: number; // in Bytes
@@ -18,6 +18,8 @@ export interface IStoragePlan extends Document {
   features: string[];
   isActive: boolean;
   sortOrder: number;
+  isTopUp?: boolean;
+  monthlyRate?: number;
   desc?: string;
   badge?: string;
   createdAt: Date;
@@ -36,7 +38,7 @@ const StoragePlanSchema = new Schema<IStoragePlan>(
     displayPrice: { type: String, required: true },
     billingCategory: {
       type: String,
-      enum: ['MONTHLY', '6_MONTHS', 'YEARLY'],
+      enum: ['MONTHLY', '6_MONTHS', 'YEARLY', 'TOPUP'],
       required: true,
       index: true,
     },
@@ -46,6 +48,8 @@ const StoragePlanSchema = new Schema<IStoragePlan>(
     features: { type: [String], default: [] },
     isActive: { type: Boolean, default: true },
     sortOrder: { type: Number, default: 0 },
+    isTopUp: { type: Boolean, default: false },
+    monthlyRate: { type: Number, default: 0 },
   },
   {
     timestamps: true,
@@ -58,6 +62,32 @@ export const StoragePlan = mongoose.model<IStoragePlan>('StoragePlan', StoragePl
  * EXACT 7 Canonical Storage Subscription Plans specified by user
  */
 export const CANONICAL_STORAGE_PLANS: Array<Omit<IStoragePlan, keyof Document | 'createdAt' | 'updatedAt'>> = [
+  // ── Free Starter Trial (30-Days, 5 GB) ──
+  {
+    planId: 'trial-5gb',
+    name: '30-Day Free Starter Trial',
+    desc: 'Full access to all studio features with 5 GB cloud storage free for 30 days.',
+    badge: 'Free 30 Days',
+    storageGb: 5,
+    storageBytes: 5 * ONE_GB_BYTES,
+    priceInr: 0,
+    displayPrice: '₹0',
+    billingCategory: 'MONTHLY',
+    billingPeriodText: 'for 30 days',
+    durationMonths: 1,
+    isRecommended: false,
+    sortOrder: 0,
+    isActive: true,
+    features: [
+      '5 GB High-Speed Cloud Storage (Free for 30 Days)',
+      'Store ~1,250 High-Res Photos',
+      'Full Access to All Dashboard & Studio Features',
+      'AI Face Indexing & Smart Client Sharing Links',
+      'Single Claim per Studio Account',
+      'No Credit Card or Payment Required',
+    ],
+  },
+
   // ── A. Monthly Plans ──
   {
     planId: 'monthly-10gb',
@@ -215,6 +245,86 @@ export const CANONICAL_STORAGE_PLANS: Array<Omit<IStoragePlan, keyof Document | 
       'High-Throughput Enterprise CDN',
       'VIP Dedicated Account Manager',
       'Custom Domain & Whitelabeling Ready',
+    ],
+  },
+
+  // ── D. Storage Booster Top-Up Add-ons (Matched to Main Plan Expiry) ──
+  {
+    planId: 'topup-25gb',
+    name: '+25 GB Booster',
+    desc: 'Instantly add 25 GB extra storage to your active base plan',
+    badge: 'Extra 25 GB',
+    storageGb: 25,
+    storageBytes: 25 * ONE_GB_BYTES,
+    priceInr: 99,
+    displayPrice: '₹99/mo',
+    billingCategory: 'TOPUP',
+    billingPeriodText: 'per month (matched to base plan)',
+    durationMonths: 1,
+    isTopUp: true,
+    monthlyRate: 99,
+    isRecommended: false,
+    sortOrder: 8,
+    isActive: true,
+    features: [
+      '+25 GB Instant High-Speed Cloud Storage Booster',
+      'Matches your active base plan expiry date',
+      'Store ~6,250 additional high-res photos',
+      'Full resolution downloads remain active',
+      'AI Face Search & Indexing included',
+      'Zero downtime or plan disruption',
+    ],
+  },
+  {
+    planId: 'topup-50gb',
+    name: '+50 GB Booster',
+    desc: 'Best value booster for active wedding and event seasons',
+    badge: 'Popular Booster',
+    storageGb: 50,
+    storageBytes: 50 * ONE_GB_BYTES,
+    priceInr: 199,
+    displayPrice: '₹199/mo',
+    billingCategory: 'TOPUP',
+    billingPeriodText: 'per month (matched to base plan)',
+    durationMonths: 1,
+    isTopUp: true,
+    monthlyRate: 199,
+    isRecommended: true,
+    sortOrder: 9,
+    isActive: true,
+    features: [
+      '+50 GB Instant High-Speed Cloud Storage Booster',
+      'Matches your active base plan expiry date',
+      'Store ~12,500 additional high-res photos',
+      'Supports high-capacity event albums',
+      'AI Face Recognition & Live Scanner',
+      'Priority Cloud CDN delivery',
+    ],
+  },
+  {
+    planId: 'topup-100gb',
+    name: '+100 GB Booster',
+    desc: 'Maximum extra storage for high-volume photography studios',
+    badge: 'Max Booster',
+    storageGb: 100,
+    storageBytes: 100 * ONE_GB_BYTES,
+    priceInr: 349,
+    displayPrice: '₹349/mo',
+    billingCategory: 'TOPUP',
+    billingPeriodText: 'per month (matched to base plan)',
+    durationMonths: 1,
+    isTopUp: true,
+    monthlyRate: 349,
+    isRecommended: false,
+    sortOrder: 10,
+    isActive: true,
+    features: [
+      '+100 GB Instant High-Speed Cloud Storage Booster',
+      'Matches your active base plan expiry date',
+      'Store ~25,000 additional high-res photos',
+      'Full 4K video storage & streaming support',
+      'VIP Priority 24/7 SLA Support',
+      'Automated Zip Download Archiver',
     ],
   },
 ];

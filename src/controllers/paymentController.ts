@@ -394,7 +394,7 @@ export const cancelMySubscription = async (req: AuthRequest, res: Response) => {
     if (!studio) return res.status(400).json({ error: 'Studio not found' });
 
     studio.subscriptionPlan = 'BASIC';
-    studio.subscriptionStatus = 'ACTIVE';
+    studio.subscriptionStatus = 'CANCELLED';
     studio.subscriptionStartDate = new Date();
     studio.subscriptionExpiresAt = undefined;
     studio.razorpaySubscriptionId = undefined;
@@ -450,7 +450,7 @@ export const verifyCancelOTP = async (req: AuthRequest, res: Response) => {
     if (!studio) return res.status(400).json({ error: 'Studio not found' });
 
     studio.subscriptionPlan = 'BASIC';
-    studio.subscriptionStatus = 'ACTIVE';
+    studio.subscriptionStatus = 'CANCELLED';
     studio.subscriptionStartDate = new Date();
     studio.subscriptionExpiresAt = undefined;
     studio.razorpaySubscriptionId = undefined;

@@ -34,7 +34,7 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 12000,
+  timeout: 60000, // 60 seconds — required for AI face search, bulk uploads, and cold-start Render responses
 });
 
 // ─── IN-MEMORY API CACHE (Stale-While-Revalidate) ───
@@ -327,19 +327,29 @@ export const resolveMediaUrl = (
 
   // Cloudflare R2 direct dev URL
   if (trimmed.includes('.r2.dev/')) {
-    const key = trimmed.split('.r2.dev/')[1] || '';
+    let key = trimmed.split('.r2.dev/')[1] || '';
+    while (key.startsWith('/api/media/file/') || key.startsWith('api/media/file/')) {
+      key = key.replace(/^\/?api\/media\/file\//, '');
+    }
     return `${mediaBase}/api/media/file/${key.replace(/^\/+/, '')}`;
   }
 
   // File stream endpoint
   if (trimmed.includes('/api/media/file/')) {
-    const key = trimmed.split('/api/media/file/')[1] || '';
+    let key = trimmed;
+    key = key.replace(/^https?:\/\/[^\/]+/, '');
+    while (key.startsWith('/api/media/file/') || key.startsWith('api/media/file/')) {
+      key = key.replace(/^\/?api\/media\/file\//, '');
+    }
     return `${mediaBase}/api/media/file/${key.replace(/^\/+/, '')}`;
   }
 
   // Localhost development URLs
   if (trimmed.includes('localhost:5000') || trimmed.includes('127.0.0.1:5000')) {
-    const clean = trimmed.replace(/^https?:\/\/(localhost|127\.0\.0\.1):5000\/api\/media\/file\//, '').replace(/^https?:\/\/(localhost|127\.0\.0\.1):5000\/?/, '');
+    let clean = trimmed.replace(/^https?:\/\/(localhost|127\.0\.0\.1):5000\/?/, '');
+    while (clean.startsWith('/api/media/file/') || clean.startsWith('api/media/file/')) {
+      clean = clean.replace(/^\/?api\/media\/file\//, '');
+    }
     return `${mediaBase}/api/media/file/${clean.replace(/^\/+/, '')}`;
   }
 

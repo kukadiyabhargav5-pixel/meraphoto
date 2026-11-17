@@ -3,7 +3,7 @@ import { apiClient } from './api';
 
 export const ONE_GB_BYTES = 1024 * 1024 * 1024;
 
-export type BillingCategory = 'MONTHLY' | '6_MONTHS' | 'YEARLY';
+export type BillingCategory = 'MONTHLY' | '6_MONTHS' | 'YEARLY' | 'TOPUP';
 
 export interface StoragePlan {
   _id?: string;
@@ -20,6 +20,10 @@ export interface StoragePlan {
   features: string[];
   isActive: boolean;
   sortOrder: number;
+  isTopUp?: boolean;
+  monthlyRate?: number;
+  desc?: string;
+  badge?: string;
 }
 
 export interface StorageSubscription {
@@ -31,6 +35,7 @@ export interface StorageSubscription {
   billingCategory: BillingCategory;
   durationMonths: number;
   amountInr: number;
+  isTopUp?: boolean;
   paymentStatus: 'pending' | 'paid' | 'failed';
   status: 'ACTIVE' | 'EXPIRED' | 'CANCELLED' | 'PENDING';
   startDate: string;
@@ -40,6 +45,8 @@ export interface StorageSubscription {
 }
 
 export interface StorageUsage {
+  freeTrialClaimed?: boolean;
+  freeTrialClaimedAt?: string | null;
   hasActivePlan?: boolean;
   totalStorageBytes: number;
   usedStorageBytes: number;
@@ -52,6 +59,14 @@ export interface StorageUsage {
   formattedAvailableStorage?: string;
   usagePercentage: number;
   warningState: 'NORMAL' | 'WARNING' | 'CRITICAL' | 'FULL';
+  baseStorageGb?: number;
+  topUpStorageGb?: number;
+  activeTopUps?: Array<{
+    planId: string;
+    planName: string;
+    storageLimitGb: number;
+    expiresAt: string | Date;
+  }>;
   activePlan: {
     planId: string;
     name: string;
@@ -243,6 +258,84 @@ export const CANONICAL_STORAGE_PLANS: StoragePlan[] = [
       'Custom Domain & Whitelabeling Ready',
     ],
   },
+  {
+    planId: 'topup-25gb',
+    name: '+25 GB Booster',
+    desc: 'Instantly add 25 GB extra storage to your active base plan',
+    badge: 'Extra 25 GB',
+    storageGb: 25,
+    storageBytes: 25 * ONE_GB_BYTES,
+    priceInr: 99,
+    displayPrice: '₹99/mo',
+    billingCategory: 'TOPUP',
+    billingPeriodText: 'per month (matched to base plan)',
+    durationMonths: 1,
+    isTopUp: true,
+    monthlyRate: 99,
+    isRecommended: false,
+    sortOrder: 8,
+    isActive: true,
+    features: [
+      '+25 GB Instant High-Speed Cloud Storage Booster',
+      'Matches your active base plan expiry date',
+      'Store ~6,250 additional high-res photos',
+      'Full resolution downloads remain active',
+      'AI Face Search & Indexing included',
+      'Zero downtime or plan disruption',
+    ],
+  },
+  {
+    planId: 'topup-50gb',
+    name: '+50 GB Booster',
+    desc: 'Best value booster for active wedding and event seasons',
+    badge: 'Popular Booster',
+    storageGb: 50,
+    storageBytes: 50 * ONE_GB_BYTES,
+    priceInr: 199,
+    displayPrice: '₹199/mo',
+    billingCategory: 'TOPUP',
+    billingPeriodText: 'per month (matched to base plan)',
+    durationMonths: 1,
+    isTopUp: true,
+    monthlyRate: 199,
+    isRecommended: true,
+    sortOrder: 9,
+    isActive: true,
+    features: [
+      '+50 GB Instant High-Speed Cloud Storage Booster',
+      'Matches your active base plan expiry date',
+      'Store ~12,500 additional high-res photos',
+      'Supports high-capacity event albums',
+      'AI Face Recognition & Live Scanner',
+      'Priority Cloud CDN delivery',
+    ],
+  },
+  {
+    planId: 'topup-100gb',
+    name: '+100 GB Booster',
+    desc: 'Maximum extra storage for high-volume photography studios',
+    badge: 'Max Booster',
+    storageGb: 100,
+    storageBytes: 100 * ONE_GB_BYTES,
+    priceInr: 349,
+    displayPrice: '₹349/mo',
+    billingCategory: 'TOPUP',
+    billingPeriodText: 'per month (matched to base plan)',
+    durationMonths: 1,
+    isTopUp: true,
+    monthlyRate: 349,
+    isRecommended: false,
+    sortOrder: 10,
+    isActive: true,
+    features: [
+      '+100 GB Instant High-Speed Cloud Storage Booster',
+      'Matches your active base plan expiry date',
+      'Store ~25,000 additional high-res photos',
+      'Full 4K video storage & streaming support',
+      'VIP Priority 24/7 SLA Support',
+      'Automated Zip Download Archiver',
+    ],
+  },
 ];
 
 export const formatInr = (amount: number): string => {
@@ -349,3 +442,8 @@ export const useStorageUsage = () => {
   return { usage, loading, refresh: load };
 };
 
+
+export const claimFreeTrial = async (): Promise<{ success: boolean; message: string; subscription?: any }> => {
+  const res = await apiClient.post('/storage/claim-free-trial');
+  return res.data;
+};

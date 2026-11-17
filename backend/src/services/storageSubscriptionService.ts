@@ -18,6 +18,8 @@ import { Event } from '../models/Event';
 export const DEFAULT_STARTER_STORAGE_BYTES = 2 * ONE_GB_BYTES; // 2 GB Free Starter
 
 export interface StorageUsageResult {
+  freeTrialClaimed?: boolean;
+  freeTrialClaimedAt?: Date | null;
   hasActivePlan: boolean;
   totalStorageBytes: number;
   usedStorageBytes: number;
@@ -30,6 +32,14 @@ export interface StorageUsageResult {
   formattedAvailableStorage: string;
   usagePercentage: number;
   warningState: 'NORMAL' | 'WARNING' | 'CRITICAL' | 'FULL';
+  baseStorageGb?: number;
+  topUpStorageGb?: number;
+  activeTopUps?: Array<{
+    planId: string;
+    planName: string;
+    storageLimitGb: number;
+    expiresAt: Date;
+  }>;
   activePlan: {
     planId: string;
     name: string;
@@ -71,11 +81,11 @@ export const seedStoragePlans = async (): Promise<void> => {
     for (const plan of CANONICAL_STORAGE_PLANS) {
       await StoragePlan.findOneAndUpdate(
         { planId: plan.planId },
-        { $setOnInsert: plan },
+        { $set: plan },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
     }
-    console.log('[StoragePlans] Canonical 7 storage plans verified & synchronized in DB.');
+    console.log('[StoragePlans] Canonical 10 storage plans verified & synchronized in DB.');
   } catch (err) {
     console.error('[StoragePlans Seed Error]:', err);
   }
@@ -103,6 +113,7 @@ export const getUserStorageUsage = async (
   isSuperAdmin: boolean = false
 ): Promise<StorageUsageResult> => {
   const sId = new mongoose.Types.ObjectId(studioId.toString());
+  const studioDoc = await Studio.findById(sId).lean();
 
   // 1. Calculate actual stored bytes from Media collection
   // Query both by studioId and through events belonging to this studio
@@ -174,15 +185,15 @@ export const getUserStorageUsage = async (
     };
   }
 
-  // 3. Find active storage subscription
+  // 3. Find active storage subscriptions (base plan + any active top-up packs)
   const now = new Date();
-  let activeSub = await StorageSubscription.findOne({
+  const activeSubs = await StorageSubscription.find({
     studioId: sId,
     status: 'ACTIVE',
     paymentStatus: 'paid',
     expiresAt: { $gt: now },
   })
-    .sort({ storageLimitBytes: -1, createdAt: -1 })
+    .sort({ createdAt: -1 })
     .lean();
 
   let totalLimitBytes = 0;
@@ -195,31 +206,51 @@ export const getUserStorageUsage = async (
     expiresAt: null,
   };
   let hasActivePlan = false;
+  let baseStorageGb = 0;
+  let topUpStorageGb = 0;
+  let activeTopUpsList: any[] = [];
 
-  if (activeSub) {
+  if (activeSubs.length > 0) {
     hasActivePlan = true;
-    totalLimitBytes = activeSub.storageLimitBytes;
-    const durationM = activeSub.durationMonths || (activeSub.billingCategory === 'YEARLY' ? 12 : activeSub.billingCategory === '6_MONTHS' ? 6 : 1);
-    const diffMs = new Date(activeSub.expiresAt).getTime() - now.getTime();
+    totalLimitBytes = activeSubs.reduce((acc, sub) => acc + (sub.storageLimitBytes || 0), 0);
+
+    // Differentiate base plan vs top-up boosters
+    const baseSub = activeSubs.find((s) => !s.isTopUp) || activeSubs[0];
+    const topUpSubs = activeSubs.filter((s) => s.isTopUp);
+
+    baseStorageGb = baseSub.storageLimitGb || 0;
+    topUpStorageGb = topUpSubs.reduce((acc, s) => acc + (s.storageLimitGb || 0), 0);
+    activeTopUpsList = topUpSubs.map((s) => ({
+      planId: s.planId,
+      planName: s.planName,
+      storageLimitGb: s.storageLimitGb,
+      expiresAt: s.expiresAt,
+    }));
+
+    const durationM = baseSub.durationMonths || (baseSub.billingCategory === 'YEARLY' ? 12 : baseSub.billingCategory === '6_MONTHS' ? 6 : 1);
+    const diffMs = new Date(baseSub.expiresAt).getTime() - now.getTime();
     const daysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 
+    const displayName = topUpStorageGb > 0
+      ? `${baseSub.planName} (+${topUpStorageGb} GB Booster)`
+      : baseSub.planName;
+
     activePlanInfo = {
-      planId: activeSub.planId,
-      name: activeSub.planName,
-      storageGb: activeSub.storageLimitGb,
-      billingCategory: activeSub.billingCategory,
+      planId: baseSub.planId,
+      name: displayName,
+      storageGb: Number((totalLimitBytes / ONE_GB_BYTES).toFixed(1)),
+      billingCategory: baseSub.billingCategory,
       durationMonths: durationM,
       durationText: durationM === 12 ? '1 Year (12 Months)' : durationM === 6 ? '6 Months' : 'Monthly (1 Month)',
       status: 'ACTIVE',
-      startDate: activeSub.startDate,
-      expiresAt: activeSub.expiresAt,
+      startDate: baseSub.startDate,
+      expiresAt: baseSub.expiresAt,
       daysLeft,
       isLifetime: false,
-      amountInr: activeSub.amountInr,
+      amountInr: activeSubs.reduce((acc, s) => acc + (s.amountInr || 0), 0),
     };
   } else {
     // Check if Studio document has a subscriptionPlan!
-    const studioDoc = await Studio.findById(sId).lean();
     if (studioDoc && studioDoc.subscriptionPlan && studioDoc.subscriptionPlan !== 'BASIC') {
       const tier = studioDoc.subscriptionPlan.toUpperCase();
       let planGb = 75;
@@ -340,6 +371,8 @@ export const getUserStorageUsage = async (
 
   return {
     hasActivePlan,
+    freeTrialClaimed: Boolean(studioDoc?.freeTrialClaimed),
+    freeTrialClaimedAt: studioDoc?.freeTrialClaimedAt || null,
     totalStorageBytes: totalLimitBytes,
     usedStorageBytes: usedBytes,
     availableStorageBytes: availableBytes,
@@ -351,6 +384,9 @@ export const getUserStorageUsage = async (
     formattedAvailableStorage: hasActivePlan ? formatStorageBytes(availableBytes) : '0 GB',
     usagePercentage: usagePct,
     warningState,
+    baseStorageGb,
+    topUpStorageGb,
+    activeTopUps: activeTopUpsList,
     activePlan: activePlanInfo,
     totalPhotos: photosCount,
     totalVideos: videosCount,
@@ -439,28 +475,59 @@ export const recordStorageActivity = async (
   metadata?: Record<string, any>
 ): Promise<void> => {
   try {
+    const StudioModel = mongoose.models.Studio || (await import('../models/Studio')).Studio;
+    let sId: any;
+    let uId: any;
+    let actType: any;
+    let actTitle: any;
+    let actDesc: any;
+    let bChange: any;
+    let cBytes: any;
+    let meta: any;
+
     if (typeof studioIdOrOptions === 'object' && studioIdOrOptions && studioIdOrOptions.studioId) {
-      const opts = studioIdOrOptions;
-      await StorageActivity.create({
-        studioId: new mongoose.Types.ObjectId(opts.studioId.toString()),
-        activityType: opts.activityType,
-        title: opts.title,
-        description: opts.description,
-        bytesChange: opts.bytesChange || 0,
-        currentTotalBytes: opts.currentTotalBytes || 0,
-        metadata: opts.metadata,
-      });
+      sId = studioIdOrOptions.studioId;
+      uId = studioIdOrOptions.userId;
+      actType = studioIdOrOptions.activityType;
+      actTitle = studioIdOrOptions.title;
+      actDesc = studioIdOrOptions.description;
+      bChange = studioIdOrOptions.bytesChange;
+      cBytes = studioIdOrOptions.currentTotalBytes;
+      meta = studioIdOrOptions.metadata;
+    } else {
+      sId = studioIdOrOptions;
+      actType = activityType;
+      actTitle = title;
+      actDesc = description;
+      bChange = bytesChange;
+      cBytes = currentTotalBytes;
+      meta = metadata;
+    }
+
+    if (!sId) return;
+
+    // If userId is missing, automatically resolve it from the studio's ownerId
+    if (!uId) {
+      const studioDoc = await StudioModel.findById(sId).select('ownerId').lean() as any;
+      if (studioDoc && studioDoc.ownerId) {
+        uId = studioDoc.ownerId;
+      }
+    }
+
+    if (!uId) {
+      // If still no user found, do not crash on validation
       return;
     }
 
     await StorageActivity.create({
-      studioId: new mongoose.Types.ObjectId(studioIdOrOptions.toString()),
-      activityType,
-      title,
-      description,
-      bytesChange: bytesChange || 0,
-      currentTotalBytes: currentTotalBytes || 0,
-      metadata,
+      userId: new mongoose.Types.ObjectId(uId.toString()),
+      studioId: new mongoose.Types.ObjectId(sId.toString()),
+      activityType: actType,
+      title: actTitle,
+      description: actDesc,
+      bytesChange: bChange || 0,
+      currentTotalBytes: cBytes || 0,
+      metadata: meta,
     });
   } catch (err) {
     console.error('[recordStorageActivity Error]:', err);

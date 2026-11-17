@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
+  experimental: {
+    middlewareClientMaxBodySize: '100mb',
+  },
   typescript: {
     ignoreBuildErrors: true,
   },

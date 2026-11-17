@@ -8,11 +8,7 @@ const getCandidateAiUrls = (): string[] => {
   const envUrl = process.env.AI_SERVICE_URL;
   const list = [
     envUrl,
-    'http://maraphotoes-ai:10000',
-    'http://meraphoto-ai:10000',
     'https://maraphotoes-ai.onrender.com',
-    'https://meraphoto-ai.onrender.com',
-    'http://127.0.0.1:8000',
   ].filter(Boolean) as string[];
   return Array.from(new Set(list));
 };

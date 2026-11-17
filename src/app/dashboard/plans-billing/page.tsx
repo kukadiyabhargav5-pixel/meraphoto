@@ -69,6 +69,7 @@ export default function PlansBillingPage() {
 
   // Checkout states
   const [loadingPlanKey, setLoadingPlanKey] = useState<string | null>(null);
+  const [claimingFreeTrial, setClaimingFreeTrial] = useState(false);
   const [successModalData, setSuccessModalData] = useState<{
     planName: string;
     amount: number;
@@ -118,6 +119,12 @@ export default function PlansBillingPage() {
      storageUsage?.activePlan?.status === 'ACTIVE' &&
      storageUsage?.activePlan?.planId &&
      storageUsage?.activePlan?.planId !== 'free-starter')
+  );
+
+  const freeTrialAlreadyClaimed = Boolean(
+    storageUsage?.freeTrialClaimed ||
+    studio?.freeTrialClaimed ||
+    authStudio?.freeTrialClaimed
   );
 
   const activePlanInfo = storageUsage?.activePlan;
@@ -184,14 +191,73 @@ export default function PlansBillingPage() {
     return 'Active';
   }, [hasPaidActivePlan, isSuperAdmin, activePlanInfo]);
 
-  // Filter plans based on selected tab
+  // Filter plans based on selected tab (excluding top-ups from main duration tabs)
   const filteredStoragePlans = useMemo(() => {
-    return storagePlans.filter((p) => p.billingCategory === selectedDuration);
+    return storagePlans.filter((p) => !p.isTopUp && p.billingCategory === selectedDuration);
   }, [storagePlans, selectedDuration]);
+
+  // Calculate accurate remaining calendar months for top-up matching
+  const remainingMonthsForTopUp = useMemo(() => {
+    if (!hasPaidActivePlan) return 1;
+    if (isSuperAdmin) return 12;
+    if (activePlanInfo?.expiresAt) {
+      const now = new Date();
+      const expiry = new Date(activePlanInfo.expiresAt);
+      if (expiry <= now) return 1;
+      let months = (expiry.getFullYear() - now.getFullYear()) * 12 + (expiry.getMonth() - now.getMonth());
+      if (expiry.getDate() > now.getDate()) {
+        months += 1;
+      }
+      return Math.max(1, months);
+    }
+    return 1;
+  }, [hasPaidActivePlan, isSuperAdmin, activePlanInfo]);
+
+  // Handle Claiming 30-Day Free Starter Trial
+  const handleClaimFreeTrial = async () => {
+    if (claimingFreeTrial) return;
+    setClaimingFreeTrial(true);
+    const toastId = toast.loading('30-દિવસની ફ્રી ટ્રાયલ શરૂ થઈ રહી છે... (Activating 30-day free trial...)');
+    try {
+      const res = await apiClient.post('/storage/claim-free-trial');
+      toast.success(res.data?.message || '🎉 30-દિવસની ફ્રી ટ્રાયલ સફળતાપૂર્વક શરૂ થઈ ગઈ છે! (5 GB Storage Activated)', { id: toastId, duration: 5000 });
+      
+      confetti({
+        particleCount: 120,
+        spread: 80,
+        origin: { y: 0.6 },
+      });
+
+      setSuccessModalData({
+        planName: '30-Day Free Starter Trial (5 GB)',
+        amount: 0,
+        orderNumber: 'FREE-TRIAL-30D',
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+
+      window.dispatchEvent(new Event('storage_updated'));
+      window.dispatchEvent(new Event('studio_plan_updated'));
+      await refreshStorageData();
+    } catch (err: any) {
+      console.error('Free trial claim error:', err);
+      toast.error(err?.response?.data?.error || 'Failed to claim 30-day free trial.', { id: toastId });
+    } finally {
+      setClaimingFreeTrial(false);
+    }
+  };
+
+  // Top-Up Booster Plans
+  const topUpPlans = useMemo(() => {
+    return storagePlans.filter((p) => p.isTopUp || p.billingCategory === 'TOPUP');
+  }, [storagePlans]);
 
   // Handle Storage Plan Checkout via Razorpay
   const handleSelectStoragePlan = async (plan: StoragePlan) => {
-    if (activePaidPlanId === plan.planId) {
+    // 30-Day Free Trial does not use Razorpay: claim directly!
+    if (plan.planId === 'trial-5gb' || plan.priceInr <= 0) {
+      return handleClaimFreeTrial();
+    }
+    if (!plan.isTopUp && plan.billingCategory !== 'TOPUP' && activePaidPlanId === plan.planId) {
       toast.success(`You are already subscribed to ${plan.name}`);
       return;
     }
@@ -381,18 +447,25 @@ export default function PlansBillingPage() {
                     {daysRemainingDisplay}
                   </span>
                 )}
+
+                {(storageUsage?.topUpStorageGb || 0) > 0 && (
+                  <span className="px-3 py-1 rounded-full text-xs font-black tracking-wider bg-amber-500 text-white shadow-xs flex items-center gap-1">
+                    <Zap className="w-3.5 h-3.5 fill-white text-white" />
+                    +{storageUsage?.topUpStorageGb} GB Booster Active
+                  </span>
+                )}
               </div>
 
               <div>
                 <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
                   {hasPaidActivePlan
                     ? (activePlanInfo?.name || 'Active Studio Plan')
-                    : 'Free Starter (Limited)'}
+                    : freeTrialAlreadyClaimed ? 'Trial Expired (0 GB)' : 'No Active Plan (0 GB)'}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
                   {hasPaidActivePlan
                     ? `Subscribed under ${studio?.name || 'Studio'} • Dedicated Cloud Storage Allocation`
-                    : 'Your studio currently has no active storage plan. Upgrade to unlock unlimited features.'}
+                    : freeTrialAlreadyClaimed ? 'તમારી 30-દિવસની ફ્રી ટ્રાયલ સમાપ્ત થઈ ગઈ છે. તમારા સ્ટુડિયો ફીચર્સ અનલોક રાખવા માટે નીચેથી પેઇડ પ્લાન પસંદ કરો.' : 'Your studio currently has no active storage plan. Claim your 30-day free trial or choose a plan below to unlock all features.'}
                 </p>
               </div>
             </div>
@@ -625,6 +698,139 @@ export default function PlansBillingPage() {
                         <>
                           <span>Choose {plan.name}</span>
                           <ArrowRight className="w-4 h-4" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ═══ EXTRA STORAGE BOOSTERS (ADD-ON PACKS) ═══ */}
+        <div className="space-y-4 pt-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-200 mb-1.5">
+                <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-600" />
+                <span>Instant Cloud Storage Boosters</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                Need More Space? Add a Storage Booster
+              </h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Running out of GBs? Instantly boost your storage without losing your existing plan. Validity automatically matches your active base plan expiry ({expiryDateDisplay}).
+              </p>
+            </div>
+
+            {hasPaidActivePlan && (
+              <div className="text-xs font-bold text-slate-600 bg-white border border-[#e8dfd3] px-3.5 py-2 rounded-xl shrink-0">
+                Remaining Duration: <strong className="text-slate-900">{remainingMonthsForTopUp} Month(s)</strong>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {topUpPlans.map((booster) => {
+              const monthlyRate = booster.monthlyRate || booster.priceInr;
+              const calculatedTotalPrice = monthlyRate * remainingMonthsForTopUp;
+              const isBest = booster.planId === 'topup-50gb';
+
+              return (
+                <div
+                  key={booster.planId}
+                  className={`relative rounded-3xl p-6 sm:p-7 flex flex-col justify-between transition-all duration-300 border bg-white ${
+                    isBest
+                      ? 'border-[#c5a880] shadow-md hover:shadow-xl ring-1 ring-[#c5a880]/30 hover:-translate-y-1'
+                      : 'border-[#e8dfd3] shadow-xs hover:shadow-md hover:border-[#c5a880]/60 hover:-translate-y-0.5'
+                  }`}
+                >
+                  {/* Badge */}
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase bg-[#c5a880]/15 text-[#8c6d3f] border border-[#c5a880]/30">
+                      +{booster.storageGb} GB Extra
+                    </span>
+
+                    {booster.badge && (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500 text-white shadow-xs">
+                        {booster.badge}
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                      {booster.name}
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium mt-1">
+                      {booster.desc || 'Instantly expand your cloud storage capacity'}
+                    </p>
+
+                    <div className="mt-4 flex items-baseline gap-1.5">
+                      <span className="text-3xl font-black text-slate-950 tracking-tight">
+                        ₹{monthlyRate}
+                      </span>
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                        / month
+                      </span>
+                    </div>
+
+                    {/* Calculated Total for remaining period */}
+                    <div className="mt-2.5 p-3 rounded-xl bg-[#faf8f5] border border-[#e8dfd3] text-xs">
+                      {hasPaidActivePlan ? (
+                        <div>
+                          <div className="flex items-center justify-between font-black text-slate-900">
+                            <span>Total Payable:</span>
+                            <span className="text-emerald-700 text-sm font-black">₹{calculatedTotalPrice.toLocaleString('en-IN')}</span>
+                          </div>
+                          <span className="text-[11px] text-slate-500 block mt-0.5">
+                            Covers all {remainingMonthsForTopUp} remaining month(s) until your plan renewal.
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-amber-700 font-bold text-[11px] flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          Requires an active base plan first
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Features list */}
+                    <div className="mt-4 space-y-2 pt-3 border-t border-slate-100 text-xs text-slate-600">
+                      {booster.features.map((feat, idx) => (
+                        <div key={idx} className="flex items-start gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                          <span className="leading-tight">{feat}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Add Booster Button */}
+                  <div className="mt-6 pt-4 border-t border-slate-100">
+                    <button
+                      onClick={() => handleSelectStoragePlan(booster)}
+                      disabled={!hasPaidActivePlan || loadingPlanKey === booster.planId}
+                      className={`w-full py-3 px-4 rounded-2xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        !hasPaidActivePlan
+                          ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                          : isBest
+                          ? 'bg-gradient-to-r from-[#c5a880] via-[#cbb08c] to-[#b89665] text-white shadow-md hover:shadow-lg hover:brightness-105 active:scale-95'
+                          : 'bg-slate-900 text-white hover:bg-slate-800 active:scale-95 shadow-xs'
+                      } disabled:opacity-60`}
+                    >
+                      {loadingPlanKey === booster.planId ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Setting up Booster...</span>
+                        </>
+                      ) : !hasPaidActivePlan ? (
+                        <span>Choose Base Plan First</span>
+                      ) : (
+                        <>
+                          <Zap className="w-4 h-4 fill-current" />
+                          <span>Add +{booster.storageGb} GB (₹{calculatedTotalPrice})</span>
                         </>
                       )}
                     </button>

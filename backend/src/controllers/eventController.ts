@@ -511,7 +511,7 @@ export const updateEvent = async (req: AuthRequest, res: Response) => {
     if (clientEmail !== undefined) event.clientEmail = clientEmail ? clientEmail.toLowerCase().trim() : '';
     if (date) event.date = new Date(date);
     if (type) event.type = type;
-    if (coverImageUrl !== undefined) event.coverImageUrl = coverImageUrl;
+    if (coverImageUrl !== undefined && coverImageUrl !== '') { event.coverImageUrl = getFileUrl(coverImageUrl); } else if (coverImageUrl === '' && req.body.removeCover) { event.coverImageUrl = undefined; }
     if (description !== undefined) event.description = description;
     if (location !== undefined && location.trim()) event.location = location.trim();
     if (time !== undefined && time.trim()) event.time = time.trim();

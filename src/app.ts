@@ -12,6 +12,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Enable trust proxy for reverse proxies (Render, Vercel, Next.js proxy)
+app.set('trust proxy', 1);
+
 // Rate limiting to secure API against brute-force/DDoS
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -19,6 +22,7 @@ const limiter = rateLimit({
   message: { error: 'Too many requests from this IP, please try again after 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
 });
 
 // Middlewares
@@ -27,17 +31,18 @@ const corsOptions: cors.CorsOptions = {
     if (!origin) return callback(null, true);
     const frontendUrl = process.env.FRONTEND_URL;
     const clientUrl = process.env.CLIENT_URL;
-    const isAllowed = 
-      process.env.NODE_ENV !== 'production' ||
-      origin.includes('localhost') || 
+    // Always restrict to known allowed origins — even in dev
+    const isAllowed =
+      origin.includes('localhost') ||
       origin.includes('127.0.0.1') ||
       origin.includes('10.') ||
       origin.includes('192.168.') ||
       origin.includes('172.') ||
-      origin.endsWith('.vercel.app') || 
+      origin.endsWith('.vercel.app') ||
       (Boolean(frontendUrl) && origin === frontendUrl) ||
       (Boolean(clientUrl) && origin === clientUrl) ||
-      origin.includes('techaarambh');
+      origin.includes('techaarambh') ||
+      origin.includes('maraphoto');
 
     if (isAllowed) {
       callback(null, true);

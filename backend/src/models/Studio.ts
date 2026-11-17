@@ -47,6 +47,8 @@ export interface IStudio extends Document {
   subscriptionStartDate?: Date;
   subscriptionExpiresAt?: Date;
   razorpaySubscriptionId?: string;
+  freeTrialClaimed?: boolean;
+  freeTrialClaimedAt?: Date;
   paymentDetails?: IPaymentDetails;
   branding?: any;
   usage: IUsageLimit;
@@ -100,6 +102,8 @@ const StudioSchema = new Schema<IStudio>({
   subscriptionStartDate: { type: Date },
   subscriptionExpiresAt: { type: Date },
   razorpaySubscriptionId: { type: String },
+  freeTrialClaimed: { type: Boolean, default: false },
+  freeTrialClaimedAt: { type: Date },
   paymentDetails: {
     upiId: { type: String },
     merchantName: { type: String },

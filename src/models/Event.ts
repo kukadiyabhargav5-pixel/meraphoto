@@ -37,6 +37,11 @@ export interface IEvent extends Document {
   };
   isFaceSearchEnabled?: boolean;
   searchThreshold?: number;
+  eventOtp?: {
+    code: string;
+    mobile: string;
+    expiresAt: Date;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -85,7 +90,12 @@ const EventSchema = new Schema<IEvent>({
     opacity: { type: Number, default: 0.5, min: 0, max: 1 }
   },
   isFaceSearchEnabled: { type: Boolean, default: true },
-  searchThreshold: { type: Number, default: 0.45, min: 0, max: 1 }
+  searchThreshold: { type: Number, default: 0.45, min: 0, max: 1 },
+  eventOtp: {
+    code: { type: String },
+    mobile: { type: String },
+    expiresAt: { type: Date },
+  },
 }, {
   timestamps: true
 });

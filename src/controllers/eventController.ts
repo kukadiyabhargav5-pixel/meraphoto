@@ -43,10 +43,20 @@ export const createEvent = async (req: AuthRequest, res: Response) => {
     // Validate plan limit (Bypass for SUPER_ADMIN)
     const activeEventsCount = await Event.countDocuments({ studioId: studio._id });
     if (!isSuperAdmin(req.user)) {
-      if (studio.subscriptionPlan === 'BASIC' && activeEventsCount >= 15) {
-        return res.status(403).json({ error: 'Basic plan limit reached (Max 15 events). Please upgrade.' });
-      } else if (studio.subscriptionPlan === 'STANDARD' && activeEventsCount >= 50) {
-        return res.status(403).json({ error: 'Standard plan limit reached (Max 50 events). Please upgrade.' });
+      // Event limits aligned with frontend canonical plan definitions
+      const EVENT_LIMITS: Record<string, number> = {
+        BASIC: 5,
+        STARTUP: 50,
+        STANDARD: 200,
+        ESSENTIAL: 500,
+        PREMIUM: 1000,
+      };
+      const planKey = (studio.subscriptionPlan || 'BASIC').toUpperCase();
+      const maxEvents = EVENT_LIMITS[planKey] ?? 5;
+      if (activeEventsCount >= maxEvents) {
+        return res.status(403).json({
+          error: `${planKey.charAt(0) + planKey.slice(1).toLowerCase()} plan limit reached (Max ${maxEvents} events). Please upgrade.`,
+        });
       }
     }
 
@@ -414,7 +424,7 @@ export const updateEvent = async (req: AuthRequest, res: Response) => {
     if (clientEmail) event.clientEmail = clientEmail;
     if (date) event.date = new Date(date);
     if (type) event.type = type;
-    if (coverImageUrl !== undefined) event.coverImageUrl = coverImageUrl;
+    if (coverImageUrl !== undefined && coverImageUrl !== '') { event.coverImageUrl = getFileUrl(coverImageUrl); } else if (coverImageUrl === '' && req.body.removeCover) { event.coverImageUrl = undefined; }
     if (description !== undefined) event.description = description;
     if (location !== undefined) event.location = location;
     if (time !== undefined) event.time = time;
@@ -512,7 +522,7 @@ export const updateEvent = async (req: AuthRequest, res: Response) => {
 };
 
 /**
- * Mock Request OTP for Event Download
+ * Request OTP for Event Access — generates real 6-digit OTP stored in DB
  */
 export const requestEventOtp = async (req: Request, res: Response) => {
   const { code } = req.params;
@@ -524,9 +534,16 @@ export const requestEventOtp = async (req: Request, res: Response) => {
 
     if (!mobile) return res.status(400).json({ error: 'Mobile number is required' });
 
-    console.log(`\n--- [MOCK OTP] ---`);
-    console.log(`Sending OTP 1234 to mobile: ${mobile} for event: ${event.name}`);
-    console.log(`-------------------\n`);
+    // Generate a real 6-digit OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Store the OTP on the event document (temporary field)
+    (event as any).eventOtp = { code: otpCode, mobile, expiresAt };
+    await event.save();
+
+    // In production, send via SMS/WhatsApp. For now, log securely.
+    console.log(`[Event OTP] Code ${otpCode} generated for event ${event.name}, mobile ${mobile} (expires in 10 min)`);
 
     return res.json({ message: 'OTP sent successfully to your mobile number' });
   } catch (err: any) {
@@ -535,7 +552,7 @@ export const requestEventOtp = async (req: Request, res: Response) => {
 };
 
 /**
- * Mock Verify OTP for Event Download
+ * Verify OTP for Event Access
  */
 export const verifyEventOtp = async (req: Request, res: Response) => {
   const { code } = req.params;
@@ -545,9 +562,22 @@ export const verifyEventOtp = async (req: Request, res: Response) => {
     const event = await Event.findOne({ code });
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
-    if (otp !== '1234') {
+    const storedOtp = (event as any).eventOtp;
+    if (!storedOtp || !storedOtp.code) {
+      return res.status(400).json({ error: 'No OTP found. Please request a new OTP.' });
+    }
+
+    if (new Date() > new Date(storedOtp.expiresAt)) {
+      return res.status(401).json({ error: 'OTP has expired. Please request a new one.' });
+    }
+
+    if (storedOtp.code !== otp) {
       return res.status(401).json({ error: 'Invalid OTP' });
     }
+
+    // Clear OTP after successful verification
+    (event as any).eventOtp = undefined;
+    await event.save();
 
     return res.json({ message: 'OTP verified successfully' });
   } catch (err: any) {

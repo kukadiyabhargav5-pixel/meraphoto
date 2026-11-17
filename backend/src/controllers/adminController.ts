@@ -328,16 +328,19 @@ const deleteEventInternal = async (eventId: string) => {
   if (!event) return;
 
   const eventIdStr = event._id.toString();
-  console.log(`[Admin] Purging event ${event.name} (${eventIdStr}) completely from cloud and DB...`);
+  console.log(`[Admin] Purging event "${event.name}" (${eventIdStr}) completely from cloud and DB...`);
 
   // 1. Collect all media file keys to delete from Cloudflare R2
-  const mediaList = await Media.find({ eventId: event._id }).select('r2Key r2Url compressedUrl thumbnailUrl').lean();
+  const mediaList = await Media.find({
+    $or: [{ eventId: event._id }, { eventId: eventIdStr }]
+  }).select('r2Key r2Url compressedUrl thumbnailUrl url').lean();
   const keysToDelete: string[] = [];
   for (const m of mediaList) {
     if (m.r2Key) keysToDelete.push(m.r2Key);
     if (m.r2Url) keysToDelete.push(m.r2Url);
     if (m.compressedUrl) keysToDelete.push(m.compressedUrl);
     if (m.thumbnailUrl) keysToDelete.push(m.thumbnailUrl);
+    if ((m as any).url) keysToDelete.push((m as any).url);
   }
   if (event.coverImageUrl) keysToDelete.push(event.coverImageUrl);
   if (event.watermark?.logoUrl) keysToDelete.push(event.watermark.logoUrl);
@@ -347,8 +350,16 @@ const deleteEventInternal = async (eventId: string) => {
     await deleteFiles(keysToDelete);
   }
 
-  // Also purge entire R2 prefix for this event: events/<eventId>/
+  // Also recursively purge entire R2 prefixes for this event
   await deleteFolderPrefix(`events/${eventIdStr}`);
+  if (event.code) {
+    await deleteFolderPrefix(`events/${event.code}`);
+  }
+  if (Array.isArray(event.previousCodes)) {
+    for (const prevCode of event.previousCodes) {
+      if (prevCode) await deleteFolderPrefix(`events/${prevCode}`);
+    }
+  }
 
   // 2. Delete all related database records for this event
   const mediaIds = mediaList.map((m) => m._id);
@@ -356,12 +367,12 @@ const deleteEventInternal = async (eventId: string) => {
     await FaceEmbedding.deleteMany({ mediaId: { $in: mediaIds } });
   }
   await FaceEmbedding.deleteMany({ eventId: event._id });
-  await Media.deleteMany({ eventId: event._id });
+  await Media.deleteMany({ $or: [{ eventId: event._id }, { eventId: eventIdStr }] });
   await GalleryVisitor.deleteMany({ eventId: event._id });
   await EventCover.deleteMany({ eventId: event._id });
   await ShootLog.deleteMany({ eventId: event._id });
   await Event.findByIdAndDelete(event._id);
-  console.log(`[Admin] Event ${eventIdStr} completely purged.`);
+  console.log(`[Admin] Event ${eventIdStr} completely purged from Cloud and Database.`);
 };
 
 const deleteStudioInternal = async (studioId: string) => {
@@ -372,30 +383,62 @@ const deleteStudioInternal = async (studioId: string) => {
   console.log(`[Admin] Starting 100% complete purge for Studio "${studio.name}" (${studioIdStr})...`);
 
   // 1. Find and purge all events and their media from Cloudflare R2 and DB
-  const events = await Event.find({ studioId: studio._id }).select('_id').lean();
+  const events = await Event.find({
+    $or: [{ studioId: studio._id }, { studioId: studioIdStr }]
+  }).select('_id code previousCodes').lean();
   for (const event of events) {
     await deleteEventInternal(event._id.toString());
   }
 
-  // 2. Delete studio branding assets (logo, banner, watermark) from R2
+  // 2. Delete studio branding assets (logo, banner, watermark, QR code) from R2
   const studioKeys: string[] = [];
   if (studio.logoUrl) studioKeys.push(studio.logoUrl);
   if (studio.bannerUrl) studioKeys.push(studio.bannerUrl);
   if ((studio as any).watermarkLogoUrl) studioKeys.push((studio as any).watermarkLogoUrl);
+  if ((studio as any).qrCodeUrl) studioKeys.push((studio as any).qrCodeUrl);
+
+  // Collect portfolio files from R2
+  const portfolios = await Portfolio.find({
+    $or: [{ userId: studio.ownerId }, { studioId: studio._id } as any]
+  }).lean();
+  for (const p of portfolios) {
+    if ((p as any).image) studioKeys.push((p as any).image);
+    if ((p as any).coverImage) studioKeys.push((p as any).coverImage);
+    if (Array.isArray((p as any).images)) {
+      (p as any).images.forEach((img: string) => { if (img) studioKeys.push(img); });
+    }
+  }
+
+  // Collect EventCover images from R2
+  const eventCovers = await EventCover.find({
+    $or: [{ userId: studio.ownerId }, { studioId: studio._id } as any]
+  }).lean();
+  for (const ec of eventCovers) {
+    if ((ec as any).image) studioKeys.push((ec as any).image);
+    if ((ec as any).imageUrl) studioKeys.push((ec as any).imageUrl);
+  }
+
   if (studioKeys.length > 0) {
     await deleteFiles(studioKeys);
   }
 
-  // Recursively clear entire R2 prefix for this studio: studios/<studioId>/
+  // Recursively clear all R2 folder prefixes for this studio:
   await deleteFolderPrefix(`studios/${studioIdStr}`);
+  if ((studio as any).code) {
+    await deleteFolderPrefix(`studios/${(studio as any).code}`);
+  }
+  await deleteFolderPrefix(`branding/${studioIdStr}`);
+  await deleteFolderPrefix(`watermarks/${studioIdStr}`);
 
   // 3. Purge any remaining media and face embeddings associated with this studio
-  const remainingMedia = await Media.find({ studioId: studio._id }).select('r2Key r2Url compressedUrl thumbnailUrl').lean();
+  const remainingMedia = await Media.find({
+    $or: [{ studioId: studio._id }, { studioId: studioIdStr }]
+  }).select('r2Key r2Url compressedUrl thumbnailUrl url').lean();
   if (remainingMedia.length > 0) {
-    const remKeys = remainingMedia.flatMap((m) => [m.r2Key, m.r2Url, m.compressedUrl, m.thumbnailUrl].filter(Boolean) as string[]);
+    const remKeys = remainingMedia.flatMap((m) => [m.r2Key, m.r2Url, m.compressedUrl, m.thumbnailUrl, (m as any).url].filter(Boolean) as string[]);
     await deleteFiles(remKeys);
   }
-  await Media.deleteMany({ studioId: studio._id });
+  await Media.deleteMany({ $or: [{ studioId: studio._id }, { studioId: studioIdStr }] });
   await FaceEmbedding.deleteMany({ studioId: studio._id });
 
   // 4. Permanently delete all other studio-related data from MongoDB
@@ -404,7 +447,7 @@ const deleteStudioInternal = async (studioId: string) => {
   await Booking.deleteMany({ studioId: studio._id });
   await Quotation.deleteMany({ studioId: studio._id });
   await Bill.deleteMany({ studioId: studio._id });
-  await Portfolio.deleteMany({ studioId: studio._id });
+  await Portfolio.deleteMany({ $or: [{ userId: studio.ownerId }, { studioId: studio._id } as any] });
   await SupportTicket.deleteMany({ studioId: studio._id });
   await ClientTicket.deleteMany({ studioId: studio._id });
   await StorageSubscription.deleteMany({ studioId: studio._id });
@@ -413,8 +456,8 @@ const deleteStudioInternal = async (studioId: string) => {
   await ShootLog.deleteMany({ studioId: studio._id });
   await SearchSession.deleteMany({ studioId: studio._id });
   await Team.deleteMany({ studioId: studio._id });
-  await EventCover.deleteMany({ studioId: studio._id });
-  await Event.deleteMany({ studioId: studio._id });
+  await EventCover.deleteMany({ $or: [{ userId: studio.ownerId }, { studioId: studio._id } as any] });
+  await Event.deleteMany({ $or: [{ studioId: studio._id }, { studioId: studioIdStr }] });
 
   // 5. Finally delete the Studio document
   await Studio.findByIdAndDelete(studio._id);
@@ -429,17 +472,32 @@ const deleteUserInternal = async (userId: string) => {
   console.log(`[Admin] Starting 100% complete purge for User "${user.email}" (${userIdStr})...`);
 
   // 1. Find and purge all studios owned by this user
-  const studios = await Studio.find({ ownerId: user._id }).select('_id').lean();
+  const studios = await Studio.find({
+    $or: [{ ownerId: user._id }, { ownerId: userIdStr }]
+  }).select('_id').lean();
   for (const studio of studios) {
     await deleteStudioInternal(studio._id.toString());
   }
 
-  // 2. Delete any orphaned user support tickets, client tickets, or activities
+  // 2. Also delete user avatar & personal files from R2
+  const userKeys: string[] = [];
+  if ((user as any).avatar) userKeys.push((user as any).avatar);
+  if ((user as any).avatarUrl) userKeys.push((user as any).avatarUrl);
+  if (userKeys.length > 0) {
+    await deleteFiles(userKeys);
+  }
+  await deleteFolderPrefix(`users/${userIdStr}`);
+
+  // 3. Delete any orphaned user portfolios, covers, support tickets, activities, orders, sessions
+  await Portfolio.deleteMany({ userId: user._id });
+  await EventCover.deleteMany({ userId: user._id });
   await SupportTicket.deleteMany({ userId: user._id });
   await ClientTicket.deleteMany({ userId: user._id });
   await StorageActivity.deleteMany({ userId: user._id });
+  await Order.deleteMany({ userId: user._id });
+  await SearchSession.deleteMany({ userId: user._id });
 
-  // 3. Finally delete the user
+  // 4. Finally delete the user document
   await User.findByIdAndDelete(user._id);
   console.log(`[Admin] User ${userIdStr} and ALL associated studios/data permanently deleted from Cloud and DB.`);
 };
@@ -451,7 +509,7 @@ export const deleteUser = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     await deleteUserInternal(id);
-    return res.json({ success: true, message: 'User deleted successfully' });
+    return res.json({ success: true, message: 'User and all associated cloud & database data permanently deleted' });
   } catch (err: any) {
     console.error('deleteUser Error:', err);
     return res.status(500).json({ error: err.message });
@@ -465,16 +523,13 @@ export const deleteStudio = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     await deleteStudioInternal(id);
-    return res.json({ success: true, message: 'Studio deleted successfully' });
+    return res.json({ success: true, message: 'Studio, all events, and cloud files permanently deleted' });
   } catch (err: any) {
     console.error('deleteStudio Error:', err);
     return res.status(500).json({ error: err.message });
   }
 };
 
-/**
- * Delete an event
- */
 export const deleteEvent = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;

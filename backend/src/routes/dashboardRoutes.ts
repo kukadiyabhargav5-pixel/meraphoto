@@ -258,7 +258,15 @@ router.post('/quotations', async (req: AuthRequest, res) => {
   try {
     const studio = await Studio.findOne({ ownerId: req.user!._id });
     if (!studio) return res.status(404).json({ error: 'No studio profile found. Please set up your studio first.' });
-    const quotation = new Quotation({ ...req.body, studioId: studio._id });
+    
+    let quotationNumber = req.body.quotationNumber;
+    if (!quotationNumber) {
+      const count = await Quotation.countDocuments({ studioId: studio._id });
+      const year = new Date().getFullYear();
+      quotationNumber = `QT-${year}-${String(count + 1).padStart(3, '0')}`;
+    }
+
+    const quotation = new Quotation({ ...req.body, quotationNumber, studioId: studio._id });
     await quotation.save();
     res.json(quotation);
   } catch (error) {

@@ -34,6 +34,7 @@ export const getStoragePlans = async (req: Request, res: Response) => {
     const monthlyPlans = plans.filter((p) => p.billingCategory === 'MONTHLY');
     const sixMonthPlans = plans.filter((p) => p.billingCategory === '6_MONTHS');
     const yearlyPlans = plans.filter((p) => p.billingCategory === 'YEARLY');
+    const topUpPlans = plans.filter((p) => p.billingCategory === 'TOPUP');
 
     return res.json({
       success: true,
@@ -42,6 +43,7 @@ export const getStoragePlans = async (req: Request, res: Response) => {
         MONTHLY: monthlyPlans,
         '6_MONTHS': sixMonthPlans,
         YEARLY: yearlyPlans,
+        TOPUP: topUpPlans,
       },
     });
   } catch (err: any) {
@@ -186,7 +188,50 @@ export const createStorageCheckoutOrder = async (req: AuthRequest, res: Response
       return res.status(404).json({ error: 'Storage plan not found or currently unavailable' });
     }
 
-    const priceInr = plan.priceInr;
+    // If user clicked or submitted 30-day Free Trial, route to claimFreeTrial directly
+    if (plan.planId === 'trial-5gb' || plan.priceInr === 0) {
+      return claimFreeTrial(req, res);
+    }
+
+    const isTopUp = Boolean(plan.isTopUp || plan.billingCategory === 'TOPUP');
+    let priceInr = plan.priceInr;
+    let durationMonths = plan.durationMonths;
+    const startDate = new Date();
+    let expiresAt: Date;
+
+    if (isTopUp) {
+      // Find active base plan for this studio
+      const activeBaseSub = await StorageSubscription.findOne({
+        studioId: studio._id,
+        status: 'ACTIVE',
+        paymentStatus: 'paid',
+        isTopUp: { $ne: true },
+        expiresAt: { $gt: startDate },
+      }).sort({ expiresAt: -1 });
+
+      if (!activeBaseSub) {
+        return res.status(400).json({
+          error: 'You must have an active base storage plan before purchasing an extra storage booster.',
+        });
+      }
+
+      // Calculate accurate calendar remaining months until active base plan expiry
+      const expDate = new Date(activeBaseSub.expiresAt);
+      let months = (expDate.getFullYear() - startDate.getFullYear()) * 12 + (expDate.getMonth() - startDate.getMonth());
+      if (expDate.getDate() > startDate.getDate()) {
+        months += 1;
+      }
+      const remainingMonths = Math.max(1, months);
+
+      durationMonths = remainingMonths;
+      const rate = plan.monthlyRate || plan.priceInr;
+      priceInr = rate * remainingMonths;
+      expiresAt = expDate;
+    } else {
+      expiresAt = new Date(startDate);
+      expiresAt.setMonth(expiresAt.getMonth() + plan.durationMonths);
+    }
+
     if (priceInr <= 0) {
       return res.status(400).json({ error: 'Invalid plan price' });
     }
@@ -232,7 +277,9 @@ export const createStorageCheckoutOrder = async (req: AuthRequest, res: Response
           price: priceInr,
           quantity: 1,
           planKey: plan.planId,
-          description: `${plan.storageGb} GB cloud storage ${plan.billingPeriodText}`,
+          description: isTopUp
+            ? `${plan.storageGb} GB booster for remaining ${durationMonths} month(s) (matches base plan expiry)`
+            : `${plan.storageGb} GB cloud storage ${plan.billingPeriodText}`,
         },
       ],
       customerDetails: sanitizedCustomerDetails,
@@ -245,7 +292,9 @@ export const createStorageCheckoutOrder = async (req: AuthRequest, res: Response
       paymentMethod: 'RAZORPAY',
       paymentStatus: 'pending',
       orderStatus: 'payment_pending',
-      notes: `Storage plan checkout: ${plan.name}`,
+      notes: isTopUp
+        ? `Storage booster checkout: ${plan.name} (${durationMonths} mos)`
+        : `Storage plan checkout: ${plan.name}`,
     });
 
     // 6. Create Razorpay Order
@@ -268,12 +317,7 @@ export const createStorageCheckoutOrder = async (req: AuthRequest, res: Response
     newOrder.razorpayOrderId = rzpOrder.id;
     await newOrder.save();
 
-    // 7. Calculate Expiry Date for pending subscription
-    const startDate = new Date();
-    const expiresAt = new Date(startDate);
-    expiresAt.setMonth(expiresAt.getMonth() + plan.durationMonths);
-
-    // Create pending subscription record
+    // 7. Create pending subscription record with calculated duration & expiry
     await StorageSubscription.create({
       userId: req.user._id,
       studioId: studio._id,
@@ -282,8 +326,9 @@ export const createStorageCheckoutOrder = async (req: AuthRequest, res: Response
       storageLimitBytes: plan.storageBytes,
       storageLimitGb: plan.storageGb,
       billingCategory: plan.billingCategory,
-      durationMonths: plan.durationMonths,
+      durationMonths,
       amountInr: totalAmount,
+      isTopUp,
       paymentStatus: 'pending',
       status: 'PENDING',
       startDate,
@@ -305,9 +350,12 @@ export const createStorageCheckoutOrder = async (req: AuthRequest, res: Response
         planId: plan.planId,
         name: plan.name,
         storageGb: plan.storageGb,
-        displayPrice: plan.displayPrice,
-        billingPeriodText: plan.billingPeriodText,
+        displayPrice: isTopUp ? `₹${priceInr}` : plan.displayPrice,
+        billingPeriodText: isTopUp ? `for ${durationMonths} month(s)` : plan.billingPeriodText,
         totalAmount,
+        isTopUp,
+        durationMonths,
+        expiresAt,
       },
       customerDetails: newOrder.customerDetails,
     });
@@ -380,13 +428,40 @@ export const verifyStoragePayment = async (req: AuthRequest, res: Response) => {
     const plan = await getAuthoritativeStoragePlan(planId);
 
     const now = new Date();
-    const durationMonths = plan?.durationMonths || 1;
-    const expiresAt = new Date(now);
-    expiresAt.setMonth(expiresAt.getMonth() + durationMonths);
+    const isTopUp = Boolean(plan?.isTopUp || plan?.billingCategory === 'TOPUP');
+
+    let expiresAt: Date;
+    let durationMonths = plan?.durationMonths || 1;
+
+    if (isTopUp) {
+      // Find active base plan to match its expiry exactly
+      const activeBaseSub = await StorageSubscription.findOne({
+        studioId: studio._id,
+        status: 'ACTIVE',
+        paymentStatus: 'paid',
+        isTopUp: { $ne: true },
+        expiresAt: { $gt: now },
+      }).sort({ expiresAt: -1 });
+
+      if (activeBaseSub) {
+        expiresAt = new Date(activeBaseSub.expiresAt);
+        let months = (expiresAt.getFullYear() - now.getFullYear()) * 12 + (expiresAt.getMonth() - now.getMonth());
+        if (expiresAt.getDate() > now.getDate()) months += 1;
+        durationMonths = Math.max(1, months);
+      } else if (subscription?.expiresAt && new Date(subscription.expiresAt) > now) {
+        expiresAt = new Date(subscription.expiresAt);
+      } else {
+        expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      }
+    } else {
+      expiresAt = new Date(now);
+      expiresAt.setMonth(expiresAt.getMonth() + durationMonths);
+    }
 
     if (subscription) {
       subscription.paymentStatus = 'paid';
       subscription.status = 'ACTIVE';
+      subscription.isTopUp = isTopUp;
       subscription.razorpayPaymentId = razorpayPaymentId;
       subscription.razorpaySignature = razorpaySignature;
       subscription.startDate = now;
@@ -400,11 +475,12 @@ export const verifyStoragePayment = async (req: AuthRequest, res: Response) => {
         planName: plan?.name || 'Storage Plan',
         storageLimitBytes: plan?.storageBytes || 10 * ONE_GB_BYTES,
         storageLimitGb: plan?.storageGb || 10,
-        billingCategory: plan?.billingCategory || 'MONTHLY',
+        billingCategory: plan?.billingCategory || (isTopUp ? 'TOPUP' : 'MONTHLY'),
         durationMonths,
         amountInr: order.totalAmount,
         paymentStatus: 'paid',
         status: 'ACTIVE',
+        isTopUp,
         startDate: now,
         expiresAt,
         razorpayOrderId,
@@ -414,23 +490,28 @@ export const verifyStoragePayment = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Deactivate older subscriptions for clean state
-    await StorageSubscription.updateMany(
-      {
-        studioId: studio._id,
-        _id: { $ne: subscription._id },
-        status: 'ACTIVE',
-      },
-      { $set: { status: 'CANCELLED' } }
-    );
+    // CRITICAL:
+    // If it's a top-up booster, DO NOT cancel older subscriptions!
+    // If it's a new base plan, cancel only older BASE subscriptions so active top-ups continue.
+    if (!isTopUp) {
+      await StorageSubscription.updateMany(
+        {
+          studioId: studio._id,
+          _id: { $ne: subscription._id },
+          isTopUp: { $ne: true },
+          status: 'ACTIVE',
+        },
+        { $set: { status: 'CANCELLED' } }
+      );
 
-    // 4b. Synchronize Studio subscription tier so all dashboard features unlock immediately!
-    const purchasedTier = subscription.storageLimitGb >= 100 ? 'PREMIUM' : subscription.storageLimitGb >= 50 ? 'STANDARD' : 'STARTUP';
-    studio.subscriptionPlan = purchasedTier;
-    studio.subscriptionStatus = 'ACTIVE';
-    studio.subscriptionStartDate = now;
-    studio.subscriptionExpiresAt = expiresAt;
-    await studio.save();
+      // 4b. Synchronize Studio subscription tier so all dashboard features unlock immediately!
+      const purchasedTier = subscription.storageLimitGb >= 100 ? 'PREMIUM' : subscription.storageLimitGb >= 50 ? 'STANDARD' : 'STARTUP';
+      studio.subscriptionPlan = purchasedTier;
+      studio.subscriptionStatus = 'ACTIVE';
+      studio.subscriptionStartDate = now;
+      studio.subscriptionExpiresAt = expiresAt;
+      await studio.save();
+    }
 
     // 5. Record Storage Activity
     await recordStorageActivity({
@@ -802,3 +883,117 @@ export const adminUpdateStoragePlan = async (req: AuthRequest, res: Response) =>
 };
 
 
+
+
+/**
+ * POST /api/storage/claim-free-trial
+ * Activate 30-day Free Starter Trial (5 GB) for newly registered studios.
+ * Strictly limited to ONE claim per studio account.
+ */
+export const claimFreeTrial = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+    let studio = await Studio.findOne({ ownerId: req.user._id });
+    if (!studio) {
+      studio = await Studio.create({
+        name: `${req.user.name || 'Mara'} Studio`,
+        ownerId: req.user._id,
+        subscriptionPlan: 'BASIC',
+        subscriptionStatus: 'ACTIVE',
+        subscriptionStartDate: new Date(),
+      });
+    }
+
+    if (studio.freeTrialClaimed) {
+      return res.status(400).json({
+        error: 'તમે આ સ્ટુડિયો એકાઉન્ટ પર 30-દિવસની ફ્રી ટ્રાયલ પહેલેથી ક્લેમ કરી લીધી છે. (You have already claimed your 30-day free trial on this studio account.)',
+      });
+    }
+
+    // Check if subscription record already exists
+    const existingTrial = await StorageSubscription.findOne({
+      studioId: studio._id,
+      planId: 'trial-5gb',
+    });
+    if (existingTrial) {
+      studio.freeTrialClaimed = true;
+      if (!studio.freeTrialClaimedAt) studio.freeTrialClaimedAt = existingTrial.createdAt;
+      await studio.save();
+      return res.status(400).json({
+        error: 'You have already claimed your 30-day free trial.',
+      });
+    }
+
+    // Check if user already has an active paid subscription
+    const activePaidSub = await StorageSubscription.findOne({
+      studioId: studio._id,
+      status: 'ACTIVE',
+      paymentStatus: 'paid',
+      expiresAt: { $gt: new Date() },
+      amountInr: { $gt: 0 },
+    });
+    if (activePaidSub) {
+      return res.status(400).json({
+        error: 'તમારી પાસે પહેલેથી એક્ટિવ પેઇડ પ્લાન છે! (You already have an active paid subscription!)',
+      });
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // exactly 30 days
+
+    // Cancel any previous pending or zero-cost starter subscriptions if any
+    await StorageSubscription.updateMany(
+      { studioId: studio._id, status: 'ACTIVE', amountInr: 0 },
+      { $set: { status: 'CANCELLED', cancelledAt: now } }
+    );
+
+    const subscription = await StorageSubscription.create({
+      userId: req.user._id,
+      studioId: studio._id,
+      planId: 'trial-5gb',
+      planName: '30-Day Free Starter (5 GB)',
+      storageLimitBytes: 5 * ONE_GB_BYTES,
+      storageLimitGb: 5,
+      billingCategory: 'MONTHLY',
+      durationMonths: 1,
+      amountInr: 0,
+      isTopUp: false,
+      paymentStatus: 'paid',
+      status: 'ACTIVE',
+      startDate: now,
+      expiresAt,
+      autoRenew: false,
+      notes: '30-Day Free Starter Trial (5 GB) claimed by user',
+    });
+
+    studio.freeTrialClaimed = true;
+    studio.freeTrialClaimedAt = now;
+    studio.subscriptionPlan = 'STARTER';
+    studio.subscriptionStatus = 'ACTIVE';
+    studio.subscriptionStartDate = now;
+    studio.subscriptionExpiresAt = expiresAt;
+    await studio.save();
+
+    await recordStorageActivity({
+      studioId: studio._id,
+      userId: req.user._id,
+      activityType: 'PLAN_PURCHASED',
+      title: '30-Day Free Starter Trial Activated (5 GB)',
+      description: 'Activated 5 GB cloud storage free for 30 days. Full access unlocked.',
+      bytesChange: 5 * ONE_GB_BYTES,
+      currentTotalBytes: 5 * ONE_GB_BYTES,
+      metadata: { planId: 'trial-5gb', durationDays: 30 },
+    });
+
+    return res.json({
+      success: true,
+      message: 'તમારી 30 દિવસની ફ્રી ટ્રાયલ (5 GB સ્ટોરેજ) સફળતાપૂર્વક શરૂ થઈ ગઈ છે! (Your 30-day free trial has been activated!)',
+      subscription,
+      studio,
+    });
+  } catch (err: any) {
+    console.error('[claimFreeTrial Error]:', err);
+    return res.status(500).json({ error: err.message || 'Failed to claim free trial' });
+  }
+};

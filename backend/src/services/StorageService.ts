@@ -39,33 +39,20 @@ export const getFileUrl = (key: string): string => {
     (process.env.NODE_ENV === 'production' ? 'https://meraphotoes.onrender.com' : 'http://localhost:5000')
   ).replace(/\/+$/, '');
 
-  // If key is a base64 data URI or blob URI, return it directly
   if (key.startsWith('data:') || key.startsWith('blob:')) {
     return key;
   }
 
-  // If key is a local frontend static asset (e.g. /wedding.jpg, /logo.png), return as is
-  if (key.startsWith('/') && !key.startsWith('/api/') && !key.startsWith('/studios/') && !key.startsWith('/branding/') && !key.startsWith('/events/') && !key.startsWith('/mara-photo/')) {
-    return key;
+  // Strip host/protocol and any repeated /api/media/file/ prefixes
+  let cleanKey = key.split('?')[0].trim();
+  cleanKey = cleanKey.replace(/^https?:\/\/[^\/]+/, '');
+  while (cleanKey.startsWith('/api/media/file/') || cleanKey.startsWith('api/media/file/')) {
+    cleanKey = cleanKey.replace(/^\/?api\/media\/file\//, '');
   }
-
-  // If key is already a full URL, sanitize any broken/localhost prefixes
-  if (key.startsWith('http://') || key.startsWith('https://')) {
-    if (key.includes('.r2.dev/')) {
-      const cleanKey = key.split('.r2.dev/')[1];
-      return `${prodApi}/api/media/file/${cleanKey.replace(/^\/+/, '')}`;
-    }
-    if (key.includes('/api/media/file/')) {
-      const cleanKey = key.split('/api/media/file/')[1];
-      return `${prodApi}/api/media/file/${cleanKey.replace(/^\/+/, '')}`;
-    }
-    if ((process.env.NODE_ENV === 'production' || process.env.RENDER) && (key.includes('localhost:5000') || key.includes('127.0.0.1:5000'))) {
-      return key.replace(/http:\/\/(localhost|127\.0\.0\.1):5000/g, prodApi);
-    }
-    return key;
+  if (cleanKey.includes('.r2.dev/')) {
+    cleanKey = cleanKey.split('.r2.dev/')[1] || cleanKey;
   }
-
-  const cleanKey = key.replace(/^\/+/, '');
+  cleanKey = cleanKey.replace(/^\/+/, '');
   return `${prodApi}/api/media/file/${cleanKey}`;
 };
 
@@ -78,9 +65,11 @@ export const cleanR2Key = (keyOrUrl: string): string => {
   let str = keyOrUrl.split('?')[0].trim();
   if (str.startsWith('data:') || str.startsWith('blob:') || str.startsWith('localdb://')) return '';
 
-  if (str.includes('/api/media/file/')) {
-    str = str.split('/api/media/file/')[1] || '';
-  } else if (str.includes('.r2.dev/')) {
+  str = str.replace(/^https?:\/\/[^\/]+/, '');
+  while (str.startsWith('/api/media/file/') || str.startsWith('api/media/file/')) {
+    str = str.replace(/^\/?api\/media\/file\//, '');
+  }
+  if (str.includes('.r2.dev/')) {
     str = str.split('.r2.dev/')[1] || '';
   } else if (str.includes('.cloudflarestorage.com/')) {
     const parts = str.split('.cloudflarestorage.com/')[1] || '';
@@ -88,24 +77,8 @@ export const cleanR2Key = (keyOrUrl: string): string => {
     str = slashIdx !== -1 ? parts.substring(slashIdx + 1) : parts;
   } else if (process.env.R2_PUBLIC_URL && str.includes(process.env.R2_PUBLIC_URL)) {
     str = str.replace(process.env.R2_PUBLIC_URL.replace(/\/+$/, '') + '/', '');
-  } else if (str.startsWith('http://') || str.startsWith('https://')) {
-    try {
-      const parsed = new URL(str);
-      str = parsed.pathname.replace(/^\/+/, '');
-      if (str.startsWith('api/media/file/')) {
-        str = str.replace('api/media/file/', '');
-      }
-    } catch {
-      return '';
-    }
   }
-
-  const cleaned = str.replace(/^\/+/, '');
-  try {
-    return decodeURIComponent(cleaned);
-  } catch {
-    return cleaned;
-  }
+  return str.replace(/^\/+/, '');
 };
 
 /**

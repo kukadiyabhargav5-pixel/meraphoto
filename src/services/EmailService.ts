@@ -142,7 +142,7 @@ export const sendWelcomeEmail = async (to: string, name: string = 'User', isStud
       ${roleText}
 
       <div style="text-align: center; margin: 40px 0;">
-        <a href="\${process.env.FRONTEND_URL || 'http://localhost:3000'}" style="background-color: #2563eb; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: 600; border-radius: 8px; display: inline-block; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);">
+        <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" style="background-color: #2563eb; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: 600; border-radius: 8px; display: inline-block; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);">
           Access Your Dashboard
         </a>
       </div>

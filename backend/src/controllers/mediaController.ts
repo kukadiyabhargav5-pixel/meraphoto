@@ -265,7 +265,7 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
     uploadedMediaList.push(...results);
 
     if (offlineQueue.length > 0) {
-      console.log(`[Upload] Processing ${offlineQueue.length} media items in background batches of 5.`);
+      console.log(`[Upload] Processing ${offlineQueue.length} media items in background batches of 2.`);
       setTimeout(async () => {
         const processInBatches = async (items: any[], batchSize: number) => {
           for (let i = 0; i < items.length; i += batchSize) {
@@ -279,7 +279,7 @@ export const uploadMedia = async (req: AuthRequest, res: Response) => {
             );
           }
         };
-        await processInBatches(offlineQueue, 5);
+        await processInBatches(offlineQueue, 2);
       }, 0);
     }
 
@@ -1021,8 +1021,8 @@ export const bulkCreateMedia = async (req: AuthRequest, res: Response) => {
     if (offlineQueue.length > 0) {
       console.log(`[BulkCreate] Processing ${offlineQueue.length} items in background.`);
       setTimeout(async () => {
-        for (let i = 0; i < offlineQueue.length; i += 5) {
-          const batch = offlineQueue.slice(i, i + 5);
+        for (let i = 0; i < offlineQueue.length; i += 2) {
+          const batch = offlineQueue.slice(i, i + 2);
           await Promise.all(
             batch.map((item) =>
               processMediaLocal(item.id, item.type, item.studioId).catch((procErr) => {

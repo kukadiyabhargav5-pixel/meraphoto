@@ -99,15 +99,21 @@ export const login = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // SUPER_ADMIN interception
-    if (email.toLowerCase() === 'maraphoto303@gmail.com' && password === 'maraphoto@2005') {
-      let adminUser = await User.findOne({ email: 'maraphoto303@gmail.com' });
+    // SUPER_ADMIN interception — credentials loaded from environment variables only
+    const adminEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase();
+    const adminPassword = process.env.SUPER_ADMIN_PASSWORD || '';
+    if (adminEmail && adminPassword && email.toLowerCase() === adminEmail) {
+      const isAdminMatch = await bcrypt.compare(password, adminPassword).catch(() => password === adminPassword);
+      if (!isAdminMatch) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+      let adminUser = await User.findOne({ email: adminEmail });
       if (!adminUser) {
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(password, salt);
         adminUser = await User.create({
           name: 'Super Admin',
-          email: 'maraphoto303@gmail.com',
+          email: adminEmail,
           passwordHash,
           role: 'SUPER_ADMIN'
         });
@@ -601,7 +607,13 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (name) user.name = name;
-    if (phone) user.phone = phone;
+    if (phone) {
+      const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+      if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+        return res.status(400).json({ error: 'Mobile number must be exactly 10 digits and start with 6, 7, 8, or 9.' });
+      }
+      user.phone = cleanPhone;
+    }
     if (password) {
       const salt = await bcrypt.genSalt(10);
       user.passwordHash = await bcrypt.hash(password, salt);
@@ -629,7 +641,11 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    return res.json({ message: 'Profile updated successfully', user, studio });
+    return res.json({
+      message: 'Profile updated successfully',
+      user: { id: user._id, name: user.name, email: user.email, role: user.role, phone: user.phone },
+      studio: studio ? { id: studio._id, name: studio.name, logoUrl: studio.logoUrl, customDomain: studio.customDomain, instagramUrl: studio.instagramUrl, facebookUrl: studio.facebookUrl } : null,
+    });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

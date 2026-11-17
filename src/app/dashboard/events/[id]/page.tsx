@@ -1107,6 +1107,7 @@ export default function EventUploadPage({ params }: { params: Promise<{ id: stri
 
                 const payload = {
                   ...formData,
+                  coverImageUrl: formData.coverImageUrl || event?.coverImageUrl || '',
                   name: formData.name.trim(),
                   code: cleanSlug,
                   watermark: {

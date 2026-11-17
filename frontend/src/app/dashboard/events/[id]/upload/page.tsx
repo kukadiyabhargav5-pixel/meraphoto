@@ -1150,7 +1150,7 @@ export default function EventUploadDedicatedPage({
 
             <button
               type="button"
-              onClick={fetchEventAndMedia}
+              onClick={() => fetchEventAndMedia(0)}
               className="p-1.5 sm:p-2 rounded-xl bg-white border border-[#e8dfd3] text-slate-500 hover:text-[#9e7b4f] hover:border-[#c5a880] transition-all shadow-xs cursor-pointer hover:bg-[#faf8f5]"
               title="Refresh Media Files & Storage"
             >

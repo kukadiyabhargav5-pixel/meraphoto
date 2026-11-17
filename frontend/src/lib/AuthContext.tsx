@@ -23,6 +23,8 @@ interface AuthStudio {
   subscriptionExpiresAt?: string | Date;
   logoUrl?: string;
   customDomain?: string;
+  freeTrialClaimed?: boolean;
+  freeTrialClaimedAt?: string | Date;
   instagramUrl?: string;
   facebookUrl?: string;
 }

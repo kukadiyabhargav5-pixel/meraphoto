@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   getStoragePlans,
+  claimFreeTrial,
   getStorageSubscription,
   getStorageUsage,
   getStorageActivity,
@@ -26,6 +27,7 @@ router.get('/usage', authenticateJWT, getStorageUsage);
 router.get('/activity', authenticateJWT, getStorageActivity);
 router.post('/checkout', authenticateJWT, createStorageCheckoutOrder);
 router.post('/verify-payment', authenticateJWT, verifyStoragePayment);
+router.post('/claim-free-trial', authenticateJWT, claimFreeTrial);
 
 // Super Admin Management Endpoints
 router.get('/admin/plans', authenticateJWT, requireRoles(['SUPER_ADMIN']), adminGetStoragePlans);

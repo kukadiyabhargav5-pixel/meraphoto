@@ -15,7 +15,8 @@
         "dev:all": "concurrently -n \"BACKEND,FRONTEND\" -c \"cyan.bold,green.bold\" \"npm run dev:backend\" \"npm run dev:frontend\"",
         "build:frontend": "npm run build --prefix frontend",
         "build:backend": "cd backend && npm install && npm run build",
-        "start:backend": "cd backend && npm start"
+        "start:backend": "cd backend && npm start",
+        "deploy": "git push all main"
     },
     "dependencies": {
         "@react-oauth/google": "^0.13.5",
@@ -35,6 +36,8 @@
         "file-saver": "^2.0.5",
         "framer-motion": "^12.40.0",
         "jimp": "^1.6.1",
+        "jspdf": "^4.2.1",
+        "jspdf-autotable": "^5.0.9",
         "jszip": "^3.10.1",
         "lucide-react": "^1.21.0",
         "napi-postinstall": "^0.3.4",

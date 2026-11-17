@@ -11,11 +11,7 @@ const getCandidateAiUrls = (): string[] => {
   const envUrl = process.env.AI_SERVICE_URL;
   const list = [
     envUrl,
-    'http://maraphotoes-ai:10000',
-    'http://meraphoto-ai:10000',
     'https://maraphotoes-ai.onrender.com',
-    'https://meraphoto-ai.onrender.com',
-    'http://127.0.0.1:8000',
   ].filter(Boolean) as string[];
   return Array.from(new Set(list));
 };
@@ -132,7 +128,7 @@ const extractEmbeddingsFromFile = async (file: Express.Multer.File): Promise<any
       } catch (err: any) {
         lastError = err;
         console.warn(`[Face Search] AI service attempt ${attempt}/3 on ${baseUrl} failed:`, err.message);
-        if (err.response?.status === 503 || err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT' || err.code === 'ECONNABORTED') {
+        if (err.response?.status === 503 || err.response?.status === 429 || err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT' || err.code === 'ECONNABORTED') {
           if (attempt < 3) {
             // Exponential backoff: 3s, 6s
             const delay = attempt * 3000;
@@ -155,6 +151,7 @@ const activeEventIndexing: Record<string, boolean> = {};
 
 /**
  * Background auto-indexer for pending photos in an event.
+ * Only targets PENDING or unindexed photos (never loops on FAILED photos).
  */
 const triggerAutoIndexing = async (eventId: string) => {
   if (activeEventIndexing[eventId]) return;
@@ -164,7 +161,7 @@ const triggerAutoIndexing = async (eventId: string) => {
     const pendingPhotos = await Media.find({
       eventId,
       type: 'PHOTO',
-      faceIndexStatus: { $in: ['PENDING', null, 'FAILED'] },
+      faceIndexStatus: { $in: ['PENDING', null] },
     }).select('_id compressedUrl r2Url url studioId eventId').lean();
 
     if (pendingPhotos.length === 0) {
@@ -172,12 +169,15 @@ const triggerAutoIndexing = async (eventId: string) => {
       return;
     }
 
-    console.log(`[AutoIndex] Background indexing ${pendingPhotos.length} photos for event ${eventId}`);
+    console.log(`[AutoIndex] Background indexing ${pendingPhotos.length} pending photos for event ${eventId}`);
 
     for (const photo of pendingPhotos) {
       try {
         const imageUrl = photo.compressedUrl || photo.r2Url || (photo as any).url;
-        if (!imageUrl) continue;
+        if (!imageUrl) {
+          await Media.findByIdAndUpdate(photo._id, { faceIndexStatus: 'FAILED' });
+          continue;
+        }
 
         const imgRes = await axios.get(imageUrl, {
           responseType: 'arraybuffer',
@@ -186,6 +186,7 @@ const triggerAutoIndexing = async (eventId: string) => {
         const buffer = Buffer.from(imgRes.data);
 
         let faces: any[] = [];
+        let aiSuccess = false;
         const urls = getCandidateAiUrls();
         for (const baseUrl of urls) {
           try {
@@ -199,12 +200,24 @@ const triggerAutoIndexing = async (eventId: string) => {
 
             if (aiRes.data && Array.isArray(aiRes.data.faces)) {
               faces = aiRes.data.faces;
+              aiSuccess = true;
               break;
             }
           } catch (err: any) {
             console.warn(`[AutoIndex] Failed with ${baseUrl}:`, err.message);
+            if (err.response?.status === 429 || err.response?.status === 503) {
+              console.warn(`[AutoIndex] Service busy or rate-limited (${err.response?.status}), pausing 4s...`);
+              await new Promise(r => setTimeout(r, 4000));
+            }
           }
         }
+
+        if (!aiSuccess) {
+          // AI service failed: mark as FAILED so it doesn't get marked NO_FACE or re-queried in an infinite loop
+          await Media.findByIdAndUpdate(photo._id, { faceIndexStatus: 'FAILED' });
+          continue;
+        }
+
         await FaceEmbedding.deleteMany({ mediaId: photo._id });
 
         for (const face of faces) {
@@ -234,8 +247,12 @@ const triggerAutoIndexing = async (eventId: string) => {
           faceIndexStatus: faces.length > 0 ? 'INDEXED' : 'NO_FACE',
           faceCount: faces.length,
         });
+
+        // Gentle pause between photos to ensure Render free tier isn't overloaded
+        await new Promise(r => setTimeout(r, 350));
       } catch (err: any) {
         console.warn(`[AutoIndex] Failed photo ${photo._id}:`, err.message);
+        await Media.findByIdAndUpdate(photo._id, { faceIndexStatus: 'FAILED' });
       }
     }
   } catch (err: any) {
@@ -316,7 +333,7 @@ export const faceSearch = async (req: Request, res: Response): Promise<void> => 
     const pendingCount = await Media.countDocuments({
       eventId,
       type: 'PHOTO',
-      faceIndexStatus: { $in: ['PENDING', null, 'FAILED'] },
+      faceIndexStatus: { $in: ['PENDING', null] },
     });
     if (pendingCount > 0) {
       triggerAutoIndexing(eventId.toString());

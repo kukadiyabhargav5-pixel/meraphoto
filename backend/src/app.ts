@@ -12,6 +12,9 @@ import apiRouter from './routes';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Enable trust proxy for reverse proxies (Render, Vercel, Next.js proxy)
+app.set('trust proxy', 1);
+
 // Rate limiting to secure API against brute-force/DDoS
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -19,6 +22,7 @@ const limiter = rateLimit({
   message: { error: 'Too many requests from this IP, please try again after 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
 });
 
 // Middlewares

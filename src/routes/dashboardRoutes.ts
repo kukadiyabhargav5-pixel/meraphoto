@@ -139,7 +139,10 @@ router.post('/customers', async (req: AuthRequest, res) => {
 
 router.delete('/customers/:id', async (req: AuthRequest, res) => {
   try {
-    await Customer.findByIdAndDelete(req.params.id);
+    const studio = await Studio.findOne({ ownerId: req.user!._id }).select('_id').lean();
+    if (!studio) return res.status(404).json({ error: 'Studio not found' });
+    const deleted = await Customer.findOneAndDelete({ _id: req.params.id, studioId: studio._id });
+    if (!deleted) return res.status(404).json({ error: 'Customer not found or access denied' });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -189,7 +192,10 @@ router.post('/team', async (req: AuthRequest, res) => {
 
 router.delete('/team/:id', async (req: AuthRequest, res) => {
   try {
-    await Team.findByIdAndDelete(req.params.id);
+    const studio = await Studio.findOne({ ownerId: req.user!._id }).select('_id').lean();
+    if (!studio) return res.status(404).json({ error: 'Studio not found' });
+    const deleted = await Team.findOneAndDelete({ _id: req.params.id, studioId: studio._id });
+    if (!deleted) return res.status(404).json({ error: 'Team member not found or access denied' });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -232,7 +238,10 @@ router.post('/bookings', async (req: AuthRequest, res) => {
 
 router.delete('/bookings/:id', async (req: AuthRequest, res) => {
   try {
-    await Booking.findByIdAndDelete(req.params.id);
+    const studio = await Studio.findOne({ ownerId: req.user!._id }).select('_id').lean();
+    if (!studio) return res.status(404).json({ error: 'Studio not found' });
+    const deleted = await Booking.findOneAndDelete({ _id: req.params.id, studioId: studio._id });
+    if (!deleted) return res.status(404).json({ error: 'Booking not found or access denied' });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -256,7 +265,15 @@ router.post('/quotations', async (req: AuthRequest, res) => {
   try {
     const studio = await Studio.findOne({ ownerId: req.user!._id });
     if (!studio) return res.status(404).json({ error: 'No studio profile found. Please set up your studio first.' });
-    const quotation = new Quotation({ ...req.body, studioId: studio._id });
+    
+    let quotationNumber = req.body.quotationNumber;
+    if (!quotationNumber) {
+      const count = await Quotation.countDocuments({ studioId: studio._id });
+      const year = new Date().getFullYear();
+      quotationNumber = `QT-${year}-${String(count + 1).padStart(3, '0')}`;
+    }
+
+    const quotation = new Quotation({ ...req.body, quotationNumber, studioId: studio._id });
     await quotation.save();
     res.json(quotation);
   } catch (error) {
@@ -266,7 +283,10 @@ router.post('/quotations', async (req: AuthRequest, res) => {
 
 router.delete('/quotations/:id', async (req: AuthRequest, res) => {
   try {
-    await Quotation.findByIdAndDelete(req.params.id);
+    const studio = await Studio.findOne({ ownerId: req.user!._id }).select('_id').lean();
+    if (!studio) return res.status(404).json({ error: 'Studio not found' });
+    const deleted = await Quotation.findOneAndDelete({ _id: req.params.id, studioId: studio._id });
+    if (!deleted) return res.status(404).json({ error: 'Quotation not found or access denied' });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -275,11 +295,16 @@ router.delete('/quotations/:id', async (req: AuthRequest, res) => {
 
 router.put('/quotations/:id', async (req: AuthRequest, res) => {
   try {
-    const quotation = await Quotation.findByIdAndUpdate(
-      req.params.id,
-      { $set: req.body },
+    const studio = await Studio.findOne({ ownerId: req.user!._id }).select('_id').lean();
+    if (!studio) return res.status(404).json({ error: 'Studio not found' });
+    // Destructure only safe fields — never allow overwriting studioId
+    const { clientName, eventName, eventDate, services, totalAmount, status, notes, discount, taxPercent, items } = req.body;
+    const quotation = await Quotation.findOneAndUpdate(
+      { _id: req.params.id, studioId: studio._id },
+      { $set: { clientName, eventName, eventDate, services, totalAmount, status, notes, discount, taxPercent, items } },
       { new: true }
     );
+    if (!quotation) return res.status(404).json({ error: 'Quotation not found or access denied' });
     res.json(quotation);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -313,7 +338,10 @@ router.post('/bills', async (req: AuthRequest, res) => {
 
 router.delete('/bills/:id', async (req: AuthRequest, res) => {
   try {
-    await Bill.findByIdAndDelete(req.params.id);
+    const studio = await Studio.findOne({ ownerId: req.user!._id }).select('_id').lean();
+    if (!studio) return res.status(404).json({ error: 'Studio not found' });
+    const deleted = await Bill.findOneAndDelete({ _id: req.params.id, studioId: studio._id });
+    if (!deleted) return res.status(404).json({ error: 'Bill not found or access denied' });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });

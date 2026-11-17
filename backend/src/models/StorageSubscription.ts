@@ -13,6 +13,7 @@ export interface IStorageSubscription extends Document {
   billingCategory: BillingCategory;
   durationMonths: number;
   amountInr: number;
+  isTopUp?: boolean;
   paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
   status: StorageSubscriptionStatus;
   startDate: Date;
@@ -37,11 +38,12 @@ const StorageSubscriptionSchema = new Schema<IStorageSubscription>(
     storageLimitGb: { type: Number, required: true },
     billingCategory: {
       type: String,
-      enum: ['MONTHLY', '6_MONTHS', 'YEARLY'],
+      enum: ['MONTHLY', '6_MONTHS', 'YEARLY', 'TOPUP'],
       required: true,
     },
     durationMonths: { type: Number, required: true, default: 1 },
     amountInr: { type: Number, required: true },
+    isTopUp: { type: Boolean, default: false },
     paymentStatus: {
       type: String,
       enum: ['pending', 'paid', 'failed', 'refunded'],
