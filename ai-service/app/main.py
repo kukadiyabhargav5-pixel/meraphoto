@@ -1,3 +1,4 @@
+# Build version: 2026.11.17 - Mara Photo AI Service
 import os
 import sys
 import io
