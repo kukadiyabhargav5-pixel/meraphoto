@@ -1252,32 +1252,43 @@ export const batchUpscaleMedia = async (req: AuthRequest, res: Response) => {
       }
     };
 
-    // Concurrently process in batches of 4
-    for (let i = 0; i < photos.length; i += 4) {
-      const chunk = photos.slice(i, i + 4);
-      await Promise.all(chunk.map((p) => upscaleSinglePhoto(p, newSizeBytes)));
-    }
+    // 1. Immediately update all Media records in database so UI and storage reflect changes in 0ms
+    await Media.updateMany(query, { size: newSizeBytes });
 
-    // Record storage activity
+    // 2. Record storage activity
     recordStorageActivity({
       userId: req.user._id,
       studioId: event.studioId,
       activityType: 'CAPACITY_CHANGED',
       title: 'Photos Upscaled / Resized',
-      description: `Upscaled ${photos.length} photo(s) to ${(newSizeBytes / (1024 * 1024)).toFixed(1)} MB (${(diffBytes >= 0 ? '+' : '') + (diffBytes / (1024 * 1024)).toFixed(1)} MB storage change)`,
+      description: `Resized ${photos.length} photo(s) to ${(newSizeBytes / (1024 * 1024)).toFixed(1)} MB (${(diffBytes >= 0 ? '+' : '') + (diffBytes / (1024 * 1024)).toFixed(1)} MB storage change)`,
       bytesChange: diffBytes,
       metadata: { eventId, count: photos.length, newSizeBytes },
     }).catch(console.error);
 
-    return res.json({
+    // 3. Return HTTP response immediately to prevent Vercel/Render 30s timeout
+    res.json({
       success: true,
-      message: `Successfully upscaled ${photos.length} photo(s) to ${(newSizeBytes / (1024 * 1024)).toFixed(1)} MB with HD resampling`,
+      message: `Successfully resized ${photos.length} photo(s) to ${(newSizeBytes / (1024 * 1024)).toFixed(1)} MB`,
       updatedCount: photos.length,
       newSizeBytes,
       oldTotalBytes,
       newTotalBytes,
       diffBytes,
     });
+
+    // 4. Run Sharp re-encoding sequentially (1 at a time) in background to maintain low RAM (<150MB) on Render Free Tier
+    (async () => {
+      for (const p of photos) {
+        try {
+          await upscaleSinglePhoto(p, newSizeBytes);
+          await new Promise((r) => setTimeout(r, 100)); // Graceful yield for garbage collection
+        } catch (procErr) {
+          console.warn(`[Upscale Background Error for ${p._id}]:`, procErr);
+        }
+      }
+    })().catch((bgErr) => console.error('[Background Upscale Error]:', bgErr));
+    return;
   } catch (err: any) {
     console.error('Batch Upscale Error:', err);
     return res.status(500).json({ error: err.message });

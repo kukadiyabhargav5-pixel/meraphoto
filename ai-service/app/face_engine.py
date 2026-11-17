@@ -1,5 +1,14 @@
 import os
 import io
+import gc
+
+# Restrict thread pools in BLAS / OpenMP / ONNX Runtime to avoid RAM explosion on Render Free Tier (512MB limit)
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
+
 import cv2
 import numpy as np
 import base64
@@ -20,7 +29,7 @@ class FaceEngine:
     def __init__(self):
         self.ready = False
         if HAS_INSIGHTFACE:
-            model_name = os.environ.get('INSIGHTFACE_MODEL', 'buffalo_l')
+            model_name = os.environ.get('INSIGHTFACE_MODEL', 'buffalo_sc')
             print(f"[FaceEngine] Initializing InsightFace {model_name} model...")
             try:
                 # Initialize the FaceAnalysis app with buffalo_sc (SCRFD-500M + MobileFaceNet)
@@ -45,20 +54,33 @@ class FaceEngine:
         else:
             print("[FaceEngine] WARNING: insightface package not found. Using Mock FaceEngine fallback.")
 
-    def _decode_image_upright(self, image_bytes: bytes) -> np.ndarray:
+    def _decode_image_upright(self, image_bytes: bytes, max_dim: int = 1280) -> np.ndarray:
         """
-        Decode image bytes and automatically apply EXIF rotation (orientation tag).
-        Ensures portrait photos taken on iPhones/Androids are not decoded sideways.
+        Decode image bytes, apply EXIF rotation, and downscale to max_dim (default 1280px).
+        A 4000x3000 raw image consumes ~48MB per buffer; downscaling to 1280px saves 90% RAM
+        with zero loss in InsightFace detection accuracy (detector runs on 640x640).
         """
         try:
             pil_img = Image.open(io.BytesIO(image_bytes))
             pil_img = ImageOps.exif_transpose(pil_img)
             if pil_img.mode != 'RGB':
                 pil_img = pil_img.convert('RGB')
+
+            w, h = pil_img.size
+            if max(w, h) > max_dim:
+                scale = max_dim / max(w, h)
+                new_w, new_h = max(1, int(w * scale)), max(1, int(h * scale))
+                pil_img = pil_img.resize((new_w, new_h), Image.Resampling.BILINEAR)
+
             return cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
         except Exception:
             nparr = np.frombuffer(image_bytes, np.uint8)
-            return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if img is not None and max(img.shape[:2]) > max_dim:
+                scale = max_dim / max(img.shape[:2])
+                new_w, new_h = max(1, int(img.shape[1] * scale)), max(1, int(img.shape[0] * scale))
+                img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+            return img
 
     def _enhance_contrast(self, img: np.ndarray) -> np.ndarray:
         """Apply CLAHE adaptive histogram equalization on luminance to recover dark/backlit faces."""
@@ -218,6 +240,11 @@ class FaceEngine:
         except Exception as e:
             print(f"[FaceEngine] Face detection error: {e}")
             traceback.print_exc()
+        finally:
+            try:
+                gc.collect()
+            except Exception:
+                pass
 
         return results
 

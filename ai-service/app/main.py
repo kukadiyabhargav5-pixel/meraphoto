@@ -2,7 +2,15 @@
 import os
 import sys
 import io
+import gc
 import asyncio
+
+# Restrict thread pools to avoid OOM on Render Free Tier (512MB RAM limit)
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1' 
 from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI, UploadFile, File, HTTPException
@@ -21,12 +29,13 @@ except ImportError:
 
 engine: Optional[FaceEngine] = None
 is_engine_loading: bool = False
+ai_concurrency_lock = asyncio.Lock()
 
 async def init_engine_background():
     """Load FaceEngine asynchronously in background thread so port binds instantly."""
     global engine, is_engine_loading
     is_engine_loading = True
-    model_name = os.environ.get("INSIGHTFACE_MODEL", "buffalo_l")
+    model_name = os.environ.get("INSIGHTFACE_MODEL", "buffalo_sc")
     print(f"[AI Service] Background initialization of InsightFace ({model_name}) started...")
     try:
         loop = asyncio.get_running_loop()
@@ -89,7 +98,7 @@ def ping():
 
 @app.get("/health")
 def health():
-    model_name = os.environ.get("INSIGHTFACE_MODEL", "buffalo_l")
+    model_name = os.environ.get("INSIGHTFACE_MODEL", "buffalo_sc")
     return {
         "status": "healthy",
         "model": model_name,
@@ -104,30 +113,35 @@ def health():
 async def detect_faces(file: UploadFile = File(...)):
     """
     Accepts an image upload, detects all faces, and returns embeddings + thumbnails + quality metadata.
-    Used by both:
-      1. Upload pipeline (when photos are uploaded to an event)
-      2. Selfie search (when a guest uploads their selfie to find matching photos)
+    Serialized with ai_concurrency_lock to prevent OOM on 512MB RAM instances.
     """
-    eng = await get_engine()
+    async with ai_concurrency_lock:
+        eng = await get_engine()
 
-    try:
-        contents = await file.read()
-        if len(contents) == 0:
-            raise HTTPException(status_code=400, detail="Empty file received.")
+        try:
+            contents = await file.read()
+            if len(contents) == 0:
+                raise HTTPException(status_code=400, detail="Empty file received.")
 
-        faces = eng.extract_faces(contents)
-        return {
-            "faces": faces,
-            "count": len(faces),
-        }
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Face detection failed: {str(e)}")
+            loop = asyncio.get_running_loop()
+            faces = await loop.run_in_executor(None, eng.extract_faces, contents)
+            return {
+                "faces": faces,
+                "count": len(faces),
+            }
+        except HTTPException:
+            raise
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Face detection failed: {str(e)}")
+        finally:
+            try:
+                gc.collect()
+            except Exception:
+                pass
 
 # ================================================================
 # MULTI-FRAME QUERY ENDPOINT — for multi-capture face search

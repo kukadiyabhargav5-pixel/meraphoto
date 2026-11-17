@@ -347,12 +347,12 @@ export const processPhoto = async (mediaId: string, studioId: string) => {
       let aiDetectionBuffer = originalBuffer;
       let scaleX = 1;
       let scaleY = 1;
-      if (width > 1600 || height > 1600) {
+      if (width > 1280 || height > 1280) {
         try {
           aiDetectionBuffer = await sharp(originalBuffer)
             .rotate()
-            .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
-            .jpeg({ quality: 85 })
+            .resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 80 })
             .toBuffer();
           const meta = await sharp(aiDetectionBuffer).metadata();
           const aiW = meta.width || width;
