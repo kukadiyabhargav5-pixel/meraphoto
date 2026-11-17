@@ -461,6 +461,7 @@ export default function EventUploadDedicatedPage({
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('PUT', url);
+      xhr.withCredentials = false;
       if (contentType) {
         xhr.setRequestHeader('Content-Type', contentType);
       }
@@ -493,6 +494,7 @@ export default function EventUploadDedicatedPage({
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', url);
+      xhr.withCredentials = true;
       if (typeof window !== 'undefined') {
         const token = localStorage.getItem('accessToken');
         if (token) {
