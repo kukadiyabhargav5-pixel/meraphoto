@@ -478,7 +478,7 @@ export default function EventUploadDedicatedPage({
           reject(new Error(`Server returned HTTP ${xhr.status}`));
         }
       };
-      xhr.onerror = () => reject(new Error('Network error during upload'));
+      xhr.onerror = () => reject(new Error(`Network error during direct cloud upload (Status ${xhr.status || 'Connection Reset'})`));
       xhr.ontimeout = () => reject(new Error('Upload timed out'));
       xhr.timeout = 600000;
       xhr.send(file);
@@ -725,7 +725,7 @@ export default function EventUploadDedicatedPage({
 
       // Ultra-Fast Parallel Stream Engine (Up to 6 streams directly to Cloudflare R2)
       // Uploads 100-200 photos in under 1 minute with accurate per-file status & auto-retry!
-      const concurrency = Math.min(6, Math.max(1, fileArray.length));
+      const concurrency = Math.min(3, Math.max(1, fileArray.length));
 
       const worker = async () => {
         while (currentFileIndex < fileArray.length) {
@@ -746,7 +746,7 @@ export default function EventUploadDedicatedPage({
 
           let uploadedSuccessfully = false;
           let attempt = 0;
-          const maxAttempts = 2; // Auto-retry up to 2 times for temporary network glitches
+          const maxAttempts = 3; // Auto-retry up to 3 times with exponential backoff for network glitches
 
           while (attempt < maxAttempts && !uploadedSuccessfully) {
             attempt++;
@@ -815,8 +815,12 @@ export default function EventUploadDedicatedPage({
                 // Non-blocking micro-flush: lets upload worker proceed instantly to next file
                 flushToBackend().catch(() => {});
                 break;
-              } catch (putErr) {
-                console.warn(`[Direct Cloud PUT Attempt ${attempt} for ${file.name} failed]:`, putErr);
+              } catch (putErr: any) {
+                console.warn(`[Direct Cloud PUT Attempt ${attempt} for ${file.name} failed]:`, putErr?.message || putErr);
+                if (attempt < maxAttempts) {
+                  await new Promise((r) => setTimeout(r, 1200 * attempt));
+                  continue;
+                }
               }
             }
 
