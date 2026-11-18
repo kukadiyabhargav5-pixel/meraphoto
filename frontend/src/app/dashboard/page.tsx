@@ -591,7 +591,13 @@ export default function DashboardOverview() {
 
         {/* Storage Credit Block Widget */}
         <div className="mb-4">
-          <StorageCreditBlock usage={storageUsage} loading={loadingStorage} />
+          <StorageCreditBlock 
+            usage={storageUsage} 
+            loading={loadingStorage && !hasPaidStorage} 
+            fallbackActive={hasPaidStorage}
+            fallbackTotalGb={storageUsage?.totalStorageGb || (studioPlanKey === 'PREMIUM' ? 500 : 75)}
+            fallbackPlanName={storageUsage?.activePlan?.name || `${studioPlanKey || 'Active'} Plan`}
+          />
         </div>
 
         {/* 6 Dedicated Storage Metric Cards */}
@@ -603,7 +609,7 @@ export default function DashboardOverview() {
             </div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Storage</div>
             <div className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 tracking-tight">
-              {storageUsage?.totalStorageGb ?? 2} GB
+              {storageUsage?.totalStorageGb ?? (hasPaidStudio ? 500 : 2)} GB
             </div>
           </div>
 
@@ -636,7 +642,7 @@ export default function DashboardOverview() {
             </div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Active Plan</div>
             <div className="text-xs sm:text-sm font-black text-slate-900 mt-0.5 truncate" title={storageUsage?.activePlan?.name}>
-              {storageUsage?.activePlan?.name || 'Free Starter'}
+              {storageUsage?.activePlan?.name || (hasPaidStudio ? `${studioPlanKey} Plan` : 'Free Starter')}
             </div>
           </div>
 
@@ -647,13 +653,15 @@ export default function DashboardOverview() {
             </div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Subscription Expiry</div>
             <div className="text-xs sm:text-sm font-black text-slate-900 mt-0.5 truncate">
-              {storageUsage?.activePlan?.isLifetime || !storageUsage?.activePlan?.expiresAt
-                ? 'Lifetime Free'
-                : new Date(storageUsage.activePlan.expiresAt).toLocaleDateString('en-IN', {
+              {(isSuperAdmin || storageUsage?.activePlan?.isLifetime)
+                ? 'Lifetime VIP'
+                : (storageUsage?.activePlan?.expiresAt || studio?.subscriptionExpiresAt)
+                ? new Date((storageUsage?.activePlan?.expiresAt || studio?.subscriptionExpiresAt) as string).toLocaleDateString('en-IN', {
                   day: 'numeric',
                   month: 'short',
                   year: '2-digit',
-                })}
+                })
+                : 'Active'}
             </div>
           </div>
 

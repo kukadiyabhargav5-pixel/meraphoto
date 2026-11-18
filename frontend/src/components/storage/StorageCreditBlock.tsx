@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Cloud, ArrowUpRight, Sparkles, HardDrive, AlertTriangle, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { StorageUsage, formatBytes } from '@/lib/storage';
+import { useAuth } from '@/lib/AuthContext';
 
 interface StorageCreditBlockProps {
   usage?: StorageUsage | null;
@@ -13,6 +14,9 @@ interface StorageCreditBlockProps {
   showUpgradeButton?: boolean;
   onUpgradeClick?: () => void;
   compact?: boolean;
+  fallbackActive?: boolean;
+  fallbackTotalGb?: number;
+  fallbackPlanName?: string;
 }
 
 export default function StorageCreditBlock({
@@ -22,8 +26,32 @@ export default function StorageCreditBlock({
   showUpgradeButton = true,
   onUpgradeClick,
   compact = false,
+  fallbackActive = false,
+  fallbackTotalGb,
+  fallbackPlanName,
 }: StorageCreditBlockProps) {
-  if (loading) {
+  const { user, studio } = useAuth();
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.email === 'maraphoto303@gmail.com';
+  const studioPlanKey = (studio?.subscriptionPlan || '').toUpperCase();
+  const studioExpiresAt = studio?.subscriptionExpiresAt;
+  const isStudioPaidActive = Boolean(
+    isSuperAdmin ||
+    (studioPlanKey &&
+     studioPlanKey !== 'BASIC' &&
+     (!studioExpiresAt || new Date(studioExpiresAt) > new Date()))
+  );
+
+  // Strict check: Is a plan actually active? Checks API usage, fallbackActive, and AuthContext studio
+  const isPlanActive = Boolean(
+    (usage?.hasActivePlan &&
+     usage?.activePlan?.status === 'ACTIVE' &&
+     usage?.activePlan?.planId &&
+     usage?.activePlan?.planId !== 'free-starter') ||
+    fallbackActive ||
+    isStudioPaidActive
+  );
+
+  if (loading && !isPlanActive) {
     return (
       <div className={`bg-white rounded-2xl border border-[#e8dfd3] p-5 shadow-xs animate-pulse ${className}`}>
         <div className="flex items-center justify-between mb-4">
@@ -37,21 +65,16 @@ export default function StorageCreditBlock({
     );
   }
 
-  // Strict check: Is a plan actually active? (Default is false/none)
-  const isPlanActive = Boolean(
-    usage?.hasActivePlan &&
-    usage?.activePlan?.status === 'ACTIVE' &&
-    usage?.activePlan?.planId &&
-    usage?.activePlan?.planId !== 'free-starter'
-  );
-
   // Authoritative numbers
   const usedGb = usage?.usedStorageGb ?? 0;
-  const totalGb = isPlanActive ? (usage?.totalStorageGb ?? 0) : 0;
+  const defaultTotalGb = isSuperAdmin ? 10000 : (studioPlanKey === 'PREMIUM' ? 500 : 75);
+  const totalGb = isPlanActive ? (usage?.totalStorageGb || fallbackTotalGb || defaultTotalGb) : 0;
   const availableGb = isPlanActive ? (usage?.availableStorageGb ?? Math.max(0, totalGb - usedGb)) : 0;
   const usagePercentage = isPlanActive && totalGb > 0 ? (usedGb / totalGb) * 100 : 0;
   const warningState = isPlanActive ? (usage?.warningState ?? 'NORMAL') : 'NONE';
-  const planName = isPlanActive ? (usage?.activePlan?.name || 'Active Plan') : 'No Active Plan';
+  const planName = isPlanActive
+    ? (usage?.activePlan?.name || fallbackPlanName || (isSuperAdmin ? 'VIP Admin Unlimited' : `${studioPlanKey || 'Active'} Plan`))
+    : 'No Active Plan';
 
   // Determine progress bar fill color in White & Gold luxury theme
   let progressColor = 'bg-gradient-to-r from-[#c5a880] via-[#b89665] to-[#9e7b4f]';
@@ -159,75 +182,45 @@ export default function StorageCreditBlock({
           <span className="font-medium text-slate-500">
             {isPlanActive ? `${usagePercentage.toFixed(1)}% used` : '0% allocated'}
           </span>
-          <span className={`font-semibold ${isPlanActive ? 'text-[#9e7b4f]' : 'text-slate-400'}`}>
-            {isPlanActive
-              ? `${availableGb >= 10 ? Math.round(availableGb) : availableGb.toFixed(1)} GB available`
-              : '0 GB available'}
+          <span className="font-medium text-slate-500">
+            {isPlanActive ? (
+              <>{usage?.formattedAvailableStorage || (availableGb >= 10 ? Math.round(availableGb) : availableGb.toFixed(1)) + ' GB'} available</>
+            ) : (
+              '0 GB available'
+            )}
           </span>
         </div>
-
-        {/* Banner if No Plan is Active */}
-        {!isPlanActive && (
-          <div className="mt-4 p-3 rounded-xl bg-gradient-to-r from-amber-500/10 via-[#c5a880]/10 to-amber-500/5 border border-amber-300/70 flex items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2 text-slate-800">
-              <Lock className="w-4 h-4 text-amber-700 shrink-0" />
-              <span>No active storage plan. Choose a plan to unlock photo storage & uploads.</span>
-            </div>
-            {onUpgradeClick ? (
-              <button
-                onClick={onUpgradeClick}
-                className="shrink-0 font-black text-[#9e7b4f] hover:underline cursor-pointer"
-              >
-                Select Plan →
-              </button>
-            ) : (
-              <Link
-                href="/dashboard/plans-billing"
-                className="shrink-0 font-black text-[#9e7b4f] hover:underline cursor-pointer"
-              >
-                Select Plan →
-              </Link>
-            )}
-          </div>
-        )}
-
-        {/* Warning Banner if storage is tight */}
-        {isPlanActive && (warningState === 'WARNING' || warningState === 'CRITICAL' || warningState === 'FULL') && (
-          <div
-            className={`mt-4 p-3 rounded-xl border flex items-center justify-between gap-3 text-xs ${
-              warningState === 'FULL'
-                ? 'bg-red-50 border-red-200 text-red-700'
-                : warningState === 'CRITICAL'
-                ? 'bg-rose-50 border-rose-200 text-rose-700'
-                : 'bg-amber-50 border-amber-200 text-amber-800'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>
-                {warningState === 'FULL'
-                  ? 'Your storage is 100% full. New photo uploads are blocked.'
-                  : `Storage usage is at ${usagePercentage.toFixed(1)}%. Upgrade soon to avoid upload interruption.`}
-              </span>
-            </div>
-            {onUpgradeClick ? (
-              <button
-                onClick={onUpgradeClick}
-                className="shrink-0 font-bold underline hover:opacity-80 cursor-pointer"
-              >
-                Upgrade Now
-              </button>
-            ) : (
-              <Link
-                href="/dashboard/plans-billing"
-                className="shrink-0 font-bold underline hover:opacity-80 cursor-pointer"
-              >
-                Upgrade Now
-              </Link>
-            )}
-          </div>
-        )}
       </div>
+
+      {/* Warning Alert Banner when storage is high */}
+      {isPlanActive && (warningState === 'WARNING' || warningState === 'CRITICAL' || warningState === 'FULL') && (
+        <div
+          className={`mt-4 p-3 rounded-xl flex items-center justify-between gap-3 text-xs ${
+            warningState === 'FULL'
+              ? 'bg-red-50 text-red-800 border border-red-200'
+              : warningState === 'CRITICAL'
+              ? 'bg-rose-50 text-rose-800 border border-rose-200'
+              : 'bg-amber-50 text-amber-800 border border-amber-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span className="font-medium">
+              {warningState === 'FULL'
+                ? 'Your storage is completely full. New uploads will be blocked.'
+                : warningState === 'CRITICAL'
+                ? 'Critical storage level: You are above 95% capacity.'
+                : 'Storage warning: You have used over 80% of your plan limit.'}
+            </span>
+          </div>
+          <Link
+            href="/dashboard/plans-billing"
+            className="font-bold underline shrink-0 hover:opacity-80"
+          >
+            Upgrade Now
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

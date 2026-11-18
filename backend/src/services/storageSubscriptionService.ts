@@ -187,12 +187,32 @@ export const getUserStorageUsage = async (
 
   // 3. Find active storage subscriptions (base plan + any active top-up packs)
   const now = new Date();
-  const activeSubs = await StorageSubscription.find({
-    studioId: sId,
+  const subQuery: any = {
+    $or: [
+      { studioId: sId },
+      { studioId: studioId.toString() }
+    ],
     status: 'ACTIVE',
-    paymentStatus: 'paid',
+    paymentStatus: { $in: ['paid', 'PAID', 'captured', 'COMPLETED', 'active', 'ACTIVE'] },
     expiresAt: { $gt: now },
-  })
+  };
+  if (userId) {
+    try {
+      subQuery.$or.push(
+        { userId: new mongoose.Types.ObjectId(userId.toString()) },
+        { userId: userId.toString() }
+      );
+    } catch {}
+  }
+  if (studioDoc?.ownerId) {
+    try {
+      subQuery.$or.push(
+        { userId: new mongoose.Types.ObjectId(studioDoc.ownerId.toString()) },
+        { userId: studioDoc.ownerId.toString() }
+      );
+    } catch {}
+  }
+  const activeSubs = await StorageSubscription.find(subQuery)
     .sort({ createdAt: -1 })
     .lean();
 
@@ -259,8 +279,8 @@ export const getUserStorageUsage = async (
       let billingCategory = '6_MONTHS';
 
       if (tier === 'PREMIUM' || tier === 'ENTERPRISE' || tier === 'BUSINESS') {
-        planGb = 100;
-        planName = '100 GB Storage';
+        planGb = 500;
+        planName = '500 GB Storage';
         durationMonths = 12;
         billingCategory = 'YEARLY';
       } else if (tier === 'STANDARD' || tier === 'ESSENTIAL' || tier === 'PROFESSIONAL') {

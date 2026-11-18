@@ -64,7 +64,15 @@ export default function PlansBillingPage() {
 
   // Storage Plans and Usage Data
   const [storagePlans, setStoragePlans] = useState<StoragePlan[]>(CANONICAL_STORAGE_PLANS);
-  const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null);
+  const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mara_cached_storage_usage');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return null;
+  });
   const [loadingStorage, setLoadingStorage] = useState(true);
 
   // Checkout states
@@ -98,7 +106,12 @@ export default function PlansBillingPage() {
         fetchStorageUsage(),
       ]);
       if (plans && plans.length > 0) setStoragePlans(plans);
-      if (usage) setStorageUsage(usage);
+      if (usage) {
+        setStorageUsage(usage);
+        try {
+          localStorage.setItem('mara_cached_storage_usage', JSON.stringify(usage));
+        } catch {}
+      }
     } catch (err) {
       console.error('Failed to load storage data:', err);
     } finally {
@@ -112,13 +125,24 @@ export default function PlansBillingPage() {
     return () => window.removeEventListener('storage_updated', refreshStorageData);
   }, []);
 
+  // Bulletproof Active Plan Detection:
+  const studioPlanKey = (studio?.subscriptionPlan || authStudio?.subscriptionPlan || '').toUpperCase();
+  const studioExpiresAt = studio?.subscriptionExpiresAt || authStudio?.subscriptionExpiresAt;
+  const isStudioPaidPlanActive = Boolean(
+    studioPlanKey &&
+    ['STARTUP', 'STARTER', 'STANDARD', 'ESSENTIAL', 'PREMIUM', 'BUSINESS', 'ENTERPRISE'].includes(studioPlanKey) &&
+    studioPlanKey !== 'BASIC' &&
+    (!studioExpiresAt || new Date(studioExpiresAt) > new Date())
+  );
+
   // Active Plan Detection
   const hasPaidActivePlan = Boolean(
     isSuperAdmin ||
     (storageUsage?.hasActivePlan &&
      storageUsage?.activePlan?.status === 'ACTIVE' &&
      storageUsage?.activePlan?.planId &&
-     storageUsage?.activePlan?.planId !== 'free-starter')
+     storageUsage?.activePlan?.planId !== 'free-starter') ||
+    isStudioPaidPlanActive
   );
 
   const freeTrialAlreadyClaimed = Boolean(
@@ -127,7 +151,19 @@ export default function PlansBillingPage() {
     authStudio?.freeTrialClaimed
   );
 
-  const activePlanInfo = storageUsage?.activePlan;
+  const activePlanInfo = storageUsage?.activePlan || (isStudioPaidPlanActive ? {
+    planId: `studio-${studioPlanKey.toLowerCase()}`,
+    name: studioPlanKey === 'PREMIUM' ? 'Premium Studio Plan' : `${studioPlanKey} Plan`,
+    storageGb: studioPlanKey === 'PREMIUM' ? 500 : 75,
+    billingCategory: 'YEARLY',
+    durationMonths: 12,
+    durationText: 'Active Subscription',
+    status: 'ACTIVE' as const,
+    startDate: studio?.subscriptionStartDate || authStudio?.subscriptionStartDate || new Date().toISOString(),
+    expiresAt: studioExpiresAt,
+    daysLeft: studioExpiresAt ? Math.max(0, Math.ceil((new Date(studioExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 365,
+    isLifetime: false,
+  } : null);
   const activePaidPlanId = hasPaidActivePlan ? activePlanInfo?.planId : null;
 
   // Plan Duration Label (Monthly / 6 Months / 1 Year)
@@ -376,8 +412,8 @@ export default function PlansBillingPage() {
 
   // Authoritative numbers for display
   const usedStorageFormatted = storageUsage?.formattedUsedStorage || formatBytes(storageUsage?.usedStorageBytes || 0);
-  const totalStorageFormatted = hasPaidActivePlan ? (storageUsage?.formattedTotalStorage || `${storageUsage?.totalStorageGb || 0} GB`) : '0 GB';
-  const availableStorageFormatted = hasPaidActivePlan ? (storageUsage?.formattedAvailableStorage || `${storageUsage?.availableStorageGb || 0} GB`) : '0 GB';
+  const totalStorageFormatted = hasPaidActivePlan ? (storageUsage?.formattedTotalStorage || `${storageUsage?.totalStorageGb || activePlanInfo?.storageGb || 500} GB`) : '0 GB';
+  const availableStorageFormatted = hasPaidActivePlan ? (storageUsage?.formattedAvailableStorage || `${storageUsage?.availableStorageGb || activePlanInfo?.storageGb || 500} GB`) : '0 GB';
   const usagePercentage = hasPaidActivePlan ? (storageUsage?.usagePercentage || 0) : 0;
 
   return (

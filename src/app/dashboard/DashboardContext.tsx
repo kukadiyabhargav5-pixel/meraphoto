@@ -83,6 +83,8 @@ export const DashboardProvider = ({ children }: { children: React.ReactNode }) =
         setStudio((prev: any) => ({
           ...prev,
           subscriptionPlan: res.data.studio.subscriptionPlan,
+          subscriptionExpiresAt: res.data.studio.subscriptionExpiresAt || prev?.subscriptionExpiresAt,
+          subscriptionStartDate: res.data.studio.subscriptionStartDate || prev?.subscriptionStartDate,
           name: res.data.studio.name || prev?.name,
           logoUrl: res.data.studio.logoUrl !== undefined ? res.data.studio.logoUrl : prev?.logoUrl
         }));

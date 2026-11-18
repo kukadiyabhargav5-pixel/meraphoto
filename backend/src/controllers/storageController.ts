@@ -77,9 +77,14 @@ export const getStorageSubscription = async (req: AuthRequest, res: Response) =>
     }
 
     const subscription = await StorageSubscription.findOne({
-      studioId: studio._id,
+      $or: [
+        { studioId: studio._id },
+        { studioId: studio._id.toString() },
+        { userId: req.user._id },
+        { userId: req.user._id.toString() },
+      ],
       status: 'ACTIVE',
-      paymentStatus: 'paid',
+      paymentStatus: { $in: ['paid', 'PAID', 'captured', 'COMPLETED', 'active', 'ACTIVE'] },
       expiresAt: { $gt: new Date() },
     })
       .sort({ createdAt: -1 })

@@ -1,16 +1,19 @@
-import { Response } from 'express';
+import fs from 'fs';
+import sharp from 'sharp';
+import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { AuthRequest, isSuperAdmin } from '../middlewares/auth';
-import { Studio, User, Media } from '../models';
+import { Studio, User, Media, Event, Customer } from '../models';
 import { getFileUrl } from '../services/StorageService';
 
 export const PLAN_STORAGE_LIMITS: Record<string, { photos: number; videos: number; name: string }> = {
-  BASIC: { photos: 5000, videos: 50, name: 'Basic Free' },
-  STARTUP: { photos: 50000, videos: 10, name: 'Startup' },
-  STARTER: { photos: 50000, videos: 10, name: 'Startup' },
-  STANDARD: { photos: 100000, videos: 20, name: 'Standard' },
-  ESSENTIAL: { photos: 150000, videos: 50, name: 'Essential' },
-  PREMIUM: { photos: 300000, videos: 100, name: 'Premium' },
-  ENTERPRISE: { photos: 300000, videos: 100, name: 'Premium' },
+  BASIC: { photos: 0, videos: 0, name: 'No Active Plan (0 GB)' },
+  STARTUP: { photos: 50000, videos: 50, name: 'Startup' },
+  STARTER: { photos: 50000, videos: 50, name: 'Startup' },
+  STANDARD: { photos: 100000, videos: 100, name: 'Standard' },
+  ESSENTIAL: { photos: 150000, videos: 200, name: 'Essential' },
+  PREMIUM: { photos: 300000, videos: 500, name: 'Premium' },
+  ENTERPRISE: { photos: 300000, videos: 500, name: 'Premium' },
   SUPER_ADMIN: { photos: 999999999, videos: 999999999, name: 'VIP Unlimited Admin (Free)' },
 };
 
@@ -71,19 +74,38 @@ export const calculateStudioCredits = async (studioId: any, plan: string, cached
     };
   }
 
-  // Expiration Check Logic - downgrade to BASIC if expired
+  // Expiration Check Logic - downgrade to BASIC only if truly expired and no active storage subscription exists
   if (studio?.subscriptionExpiresAt && new Date(studio.subscriptionExpiresAt) < new Date() && planKey !== 'BASIC') {
-    planKey = 'BASIC';
-    await Studio.findByIdAndUpdate(studioId, {
-      $set: {
-        subscriptionPlan: 'BASIC',
-        subscriptionStatus: 'ACTIVE',
-        subscriptionStartDate: new Date(),
-        subscriptionExpiresAt: null,
-        'usage.photosUploaded': 0,
-        'usage.videosUploaded': 0
-      }
+    const { StorageSubscription } = await import('../models/StorageSubscription');
+    const activeSub = await StorageSubscription.findOne({
+      studioId,
+      status: 'ACTIVE',
+      paymentStatus: { $in: ['paid', 'PAID', 'captured', 'COMPLETED'] },
+      expiresAt: { $gt: new Date() },
     });
+
+    if (activeSub) {
+      planKey = activeSub.storageLimitGb >= 100 ? 'PREMIUM' : activeSub.storageLimitGb >= 50 ? 'STANDARD' : 'STARTUP';
+      await Studio.findByIdAndUpdate(studioId, {
+        $set: {
+          subscriptionPlan: planKey,
+          subscriptionStatus: 'ACTIVE',
+          subscriptionExpiresAt: activeSub.expiresAt,
+        }
+      });
+    } else {
+      planKey = 'BASIC';
+      await Studio.findByIdAndUpdate(studioId, {
+        $set: {
+          subscriptionPlan: 'BASIC',
+          subscriptionStatus: 'ACTIVE',
+          subscriptionStartDate: new Date(),
+          subscriptionExpiresAt: null,
+          'usage.photosUploaded': 0,
+          'usage.videosUploaded': 0
+        }
+      });
+    }
   }
 
   const limits = PLAN_STORAGE_LIMITS[planKey] || PLAN_STORAGE_LIMITS.BASIC;
@@ -190,7 +212,25 @@ export const getMyStudio = async (req: AuthRequest, res: Response) => {
 
     const studioObj = studio.toObject ? studio.toObject() : { ...studio };
     if (studioObj.logoUrl) {
-      studioObj.logoUrl = getFileUrl(studioObj.logoUrl);
+      let rawL = studioObj.logoUrl;
+      if (typeof rawL === 'string' && rawL.startsWith('data:image/') && rawL.length > 2000) {
+        try {
+          const m = rawL.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+          if (m && m[2]) {
+            const buf = Buffer.from(m[2], 'base64');
+            const { uploadFile } = await import('../services/StorageService');
+            const comp = await sharp(buf).resize(512, 512, { fit: 'inside' }).png({ quality: 80, compressionLevel: 9 }).toBuffer();
+            const { url } = await uploadFile(comp, 'studios/' + studio._id + '/logo', 'image/png', 'logo.png');
+            studioObj.logoUrl = url;
+            studio.logoUrl = url;
+            Studio.findByIdAndUpdate(studio._id, { logoUrl: url }).exec();
+          }
+        } catch (e) {
+          studioObj.logoUrl = '';
+        }
+      } else {
+        studioObj.logoUrl = getFileUrl(rawL);
+      }
     }
     if (studioObj.watermark && studioObj.watermark.logoUrl) {
       studioObj.watermark.logoUrl = getFileUrl(studioObj.watermark.logoUrl);
@@ -211,7 +251,7 @@ export const getStudioCredits = async (req: AuthRequest, res: Response) => {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
     const adminUser = isSuperAdmin(req.user);
-    let studio: any = await Studio.findOne({ ownerId: req.user._id }).select('name subscriptionPlan usage subscriptionStartDate subscriptionExpiresAt').lean();
+    let studio: any = await Studio.findOne({ ownerId: req.user._id }).select('name logoUrl subscriptionPlan usage subscriptionStartDate subscriptionExpiresAt').lean();
     if (!studio && adminUser) {
       const created = await Studio.create({
         name: 'Super Admin Studio',
@@ -225,7 +265,8 @@ export const getStudioCredits = async (req: AuthRequest, res: Response) => {
     if (!studio) return res.status(404).json({ error: 'Studio profile not found' });
 
     const credits = await calculateStudioCredits(studio._id, studio.subscriptionPlan, studio, adminUser);
-    return res.json({ credits, studio: { name: studio.name, subscriptionPlan: studio.subscriptionPlan || (adminUser ? 'PREMIUM' : 'BASIC') } });
+    const logoUrl = studio.logoUrl ? getFileUrl(studio.logoUrl) : null;
+    return res.json({ credits, studio: { name: studio.name, logoUrl, subscriptionPlan: studio.subscriptionPlan || (adminUser ? 'PREMIUM' : 'BASIC') } });
   } catch (err: any) {
     console.error('getStudioCredits error:', err);
     return res.status(500).json({ error: err.message });
@@ -332,10 +373,37 @@ export const uploadStudioLogo = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'No logo image file uploaded' });
     }
 
-    // Validate MIME type
-    const validMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
-    if (file.mimetype && !validMimes.includes(file.mimetype)) {
-      return res.status(400).json({ error: 'Invalid file format. Please upload JPG, PNG, WEBP, or SVG.' });
+    // Support both Multer memoryStorage (file.buffer) and diskStorage (file.path)
+    let initialBuffer: Buffer | null = file.buffer || null;
+    if (!initialBuffer && file.path && fs.existsSync(file.path)) {
+      initialBuffer = fs.readFileSync(file.path);
+    }
+    if (!initialBuffer) {
+      return res.status(400).json({ error: 'Could not read uploaded logo file content' });
+    }
+
+    // Compress logo to minimum KB using sharp (max 512x512, transparent PNG or WebP)
+    let finalBuffer = initialBuffer;
+    let finalMime = file.mimetype || 'image/png';
+    let finalExtension = 'png';
+
+    try {
+      if (file.mimetype === 'image/svg+xml') {
+        finalBuffer = initialBuffer;
+        finalMime = 'image/svg+xml';
+        finalExtension = 'svg';
+      } else {
+        // High compression PNG preserving crisp edges and transparency, under 50KB
+        finalBuffer = await sharp(initialBuffer)
+          .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
+          .png({ quality: 80, compressionLevel: 9, effort: 7 })
+          .toBuffer();
+        finalMime = 'image/png';
+        finalExtension = 'png';
+      }
+    } catch (compressErr) {
+      console.warn('[LogoUpload] Sharp compression fallback:', compressErr);
+      finalBuffer = initialBuffer;
     }
 
     let studio = await Studio.findOne({ ownerId: req.user._id });
@@ -351,12 +419,22 @@ export const uploadStudioLogo = async (req: AuthRequest, res: Response) => {
     const { uploadFile, deleteFile } = await import('../services/StorageService');
 
     // Store in structured R2 path: studios/{studioId}/logo/{filename}
+    const cleanFileName = `logo_${Date.now()}.${finalExtension}`;
     const folder = `studios/${studio._id}/logo`;
-    const { url, publicId } = await uploadFile(file.buffer, folder, file.mimetype, file.originalname);
+    const { url, publicId } = await uploadFile(finalBuffer, folder, finalMime, cleanFileName);
 
     // If previous logo key exists and is different, cleanup old logo from R2
     if (studio.logoKey && studio.logoKey !== publicId) {
       deleteFile(studio.logoKey).catch((delErr) => console.warn('[Logo] Old logo cleanup notice:', delErr));
+    }
+
+    // Clean up temporary disk file if created by multer
+    if (file.path && fs.existsSync(file.path)) {
+      try {
+        fs.unlinkSync(file.path);
+      } catch (unlinkErr) {
+        // non-fatal
+      }
     }
 
     studio.logoUrl = url;
@@ -369,7 +447,7 @@ export const uploadStudioLogo = async (req: AuthRequest, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Studio logo uploaded and saved successfully',
+      message: 'Studio logo compressed and saved successfully',
       logoUrl: url,
       logoKey: publicId,
       studio,
@@ -454,5 +532,496 @@ export const updateStudioPlan = async (req: AuthRequest, res: Response) => {
   } catch (err: any) {
     console.error('updateStudioPlan error:', err);
     return res.status(500).json({ error: err.message });
+  }
+};
+
+
+/**
+ * Public Studio Profile & Branding Lookup (by slug, customDomain, or id)
+ * Strictly NO star ratings or rating counts returned.
+ */
+export const getPublicStudio = async (req: Request, res: Response) => {
+  try {
+    const rawParam = (req.params.slug || '').trim();
+    if (!rawParam) {
+      return res.status(400).json({ error: 'Studio slug or domain is required' });
+    }
+
+    const cleanSlug = rawParam.toLowerCase();
+
+    // 1. Try matching customDomain
+    let studio: any = await Studio.findOne({ customDomain: cleanSlug });
+
+    // 2. If not found and param is a valid ObjectId, try finding by _id
+    if (!studio && mongoose.isValidObjectId(rawParam)) {
+      studio = await Studio.findById(rawParam);
+    }
+
+    // 3. If still not found, try matching name (case-insensitive)
+    if (!studio) {
+      studio = await Studio.findOne({
+        name: { $regex: new RegExp('^' + cleanSlug.replace(/[-_]/g, ' ') + '$', 'i') }
+      });
+    }
+
+    // 4. If still not found, try regex match on customDomain or name contains
+    if (!studio) {
+      studio = await Studio.findOne({
+        $or: [
+          { customDomain: { $regex: new RegExp(cleanSlug, 'i') } },
+          { name: { $regex: new RegExp(cleanSlug.replace(/[-_]/g, ' '), 'i') } }
+        ]
+      });
+    }
+
+    if (!studio) {
+      return res.status(404).json({ error: 'Studio not found' });
+    }
+
+    const owner: any = await User.findById(studio.ownerId).select('name email phone').lean();
+
+    // Real metrics
+    const [eventsCount, dbCustomersCount, distinctClientMobiles] = await Promise.all([
+      Event.countDocuments({ studioId: studio._id }),
+      Customer.countDocuments({ studioId: studio._id }),
+      Event.distinct('clientMobile', { studioId: studio._id }),
+    ]);
+
+    const happyCustomersCount = Math.max(dbCustomersCount, distinctClientMobiles.length, eventsCount > 0 ? eventsCount : 0);
+
+    // Fetch portfolio events (STRICT: ONLY events explicitly marked with addToPortfolio: true)
+    // If no events are marked, portfolioEventsQuery will be empty [] and zero events will be shown.
+    const portfolioEventsQuery = await Event.find({ studioId: studio._id, addToPortfolio: true })
+      .sort({ date: -1, createdAt: -1 })
+      .lean();
+
+    // Enhance each portfolio event with resolved cover URL and exact photo count
+    const portfolioEvents = await Promise.all(
+      portfolioEventsQuery.map(async (ev: any) => {
+        const photosCount = await Media.countDocuments({ eventId: ev._id, type: 'PHOTO' });
+        let coverKey = ev.coverImageUrl;
+        const firstPhoto: any = await Media.findOne({ eventId: ev._id, type: 'PHOTO' })
+          .sort({ order: 1, createdAt: 1 })
+          .select('r2Key compressedUrl url')
+          .lean();
+        const firstPhotoUrl = firstPhoto ? getFileUrl(firstPhoto.compressedUrl || firstPhoto.r2Key || firstPhoto.url) : null;
+        if (!coverKey || typeof coverKey !== 'string' || !coverKey.trim()) {
+          coverKey = firstPhoto ? (firstPhoto.compressedUrl || firstPhoto.r2Key || firstPhoto.url) : null;
+        }
+        const resolvedCover = coverKey ? getFileUrl(coverKey) : firstPhotoUrl;
+        return {
+          id: ev._id,
+          name: ev.name,
+          code: ev.code,
+          type: ev.type,
+          date: ev.date,
+          location: ev.location,
+          clientName: ev.clientName,
+          coverImageUrl: resolvedCover,
+          firstPhotoUrl,
+          photosCount,
+        };
+      })
+    );
+
+    const branding = studio.branding || {};
+    let rawPubLogo = studio.logoUrl;
+    if (typeof rawPubLogo === 'string' && rawPubLogo.startsWith('data:image/') && rawPubLogo.length > 2000) {
+      try {
+        const m = rawPubLogo.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (m && m[2]) {
+          const buf = Buffer.from(m[2], 'base64');
+          const { uploadFile } = await import('../services/StorageService');
+          const comp = await sharp(buf).resize(512, 512, { fit: 'inside' }).png({ quality: 80, compressionLevel: 9 }).toBuffer();
+          const { url } = await uploadFile(comp, 'studios/' + studio._id + '/logo', 'image/png', 'logo.png');
+          rawPubLogo = url;
+          studio.logoUrl = url;
+          Studio.findByIdAndUpdate(studio._id, { logoUrl: url }).exec();
+        }
+      } catch (e) {
+        rawPubLogo = '';
+      }
+    }
+    const logoUrl = rawPubLogo ? getFileUrl(rawPubLogo) : null;
+    const rawBanner = (branding.bannerUrl && branding.bannerUrl !== '/wedding.jpg')
+      ? branding.bannerUrl
+      : (studio.bannerUrl && studio.bannerUrl !== '/wedding.jpg' ? studio.bannerUrl : (studio.bannerUrl || branding.bannerUrl || null));
+    const bannerUrl = rawBanner ? getFileUrl(rawBanner) : null;
+
+    return res.json({
+      success: true,
+      studio: {
+        id: studio._id,
+        name: studio.name,
+        slug: studio.customDomain || cleanSlug,
+        logoUrl,
+        bannerUrl,
+        tagline: studio.tagline || branding.tagline || 'Capturing Timeless Moments & Cherished Stories',
+        bio: studio.bio || branding.bio || 'We specialize in cinematic wedding, pre-wedding, and lifestyle photography crafted with passion.',
+        aboutUs: branding.aboutUs || studio.bio || '',
+        phone: studio.phone || branding.phone || owner?.phone || '',
+        mobile: studio.mobile || branding.mobile || owner?.phone || '',
+        email: studio.email || branding.email || owner?.email || '',
+        address: studio.address || branding.address || '',
+        city: studio.city || branding.city || '',
+        customEventsCount: studio.customEventsCount || branding.customEventsCount || '',
+        customCustomersCount: studio.customCustomersCount || branding.customCustomersCount || '',
+        instagramUrl: studio.instagramUrl || branding.instagramUrl || '',
+        facebookUrl: studio.facebookUrl || branding.facebookUrl || '',
+        whatsappNumber: branding.whatsappNumber || studio.whatsappUrl || '',
+        whatsappUrl: studio.whatsappUrl || '',
+        websiteUrl: branding.websiteUrl || '',
+      },
+      stats: {
+        eventsCount: studio.customEventsCount || branding.customEventsCount || (eventsCount > 0 ? eventsCount + '+' : '100+'),
+        customersCount: studio.customCustomersCount || branding.customCustomersCount || (happyCustomersCount > 0 ? happyCustomersCount + '+' : '250+'),
+      },
+      portfolioEvents,
+    });
+  } catch (err: any) {
+    console.error('getPublicStudio error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch studio profile' });
+  }
+};
+
+/**
+ * Get current studio branding settings for the authenticated studio owner
+ */
+export const getStudioBranding = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+    let studio = await Studio.findOne({ ownerId: req.user._id });
+    if (!studio) {
+      studio = await Studio.create({
+        name: (req.user.name || 'My') + ' Studio',
+        ownerId: req.user._id,
+        subscriptionPlan: 'BASIC',
+        subscriptionStatus: 'ACTIVE',
+        subscriptionStartDate: new Date(),
+      });
+    }
+
+    const owner: any = await User.findById(req.user._id).select('name email phone').lean();
+
+    // Fetch all events for this studio so user can select portfolio events
+    const events = await Event.find({ studioId: studio._id })
+      .select('name code type date location coverImageUrl addToPortfolio createdAt')
+      .sort({ date: -1, createdAt: -1 })
+      .lean();
+
+    const formattedEvents = await Promise.all(
+      events.map(async (ev: any) => {
+        const photosCount = await Media.countDocuments({ eventId: ev._id, type: 'PHOTO' });
+        return {
+          id: ev._id,
+          name: ev.name,
+          code: ev.code,
+          type: ev.type,
+          date: ev.date,
+          location: ev.location,
+          coverImageUrl: ev.coverImageUrl ? getFileUrl(ev.coverImageUrl) : null,
+          addToPortfolio: Boolean(ev.addToPortfolio),
+          photosCount,
+        };
+      })
+    );
+
+    const branding = studio.branding || {};
+    const logoUrl = studio.logoUrl ? getFileUrl(studio.logoUrl) : null;
+    const rawBanner = (branding.bannerUrl && branding.bannerUrl !== '/wedding.jpg')
+      ? branding.bannerUrl
+      : (studio.bannerUrl && studio.bannerUrl !== '/wedding.jpg' ? studio.bannerUrl : (studio.bannerUrl || branding.bannerUrl || null));
+    const bannerUrl = rawBanner ? getFileUrl(rawBanner) : null;
+
+    return res.json({
+      success: true,
+      studio: {
+        id: studio._id,
+        name: studio.name,
+        slug: studio.customDomain || '',
+        customDomain: studio.customDomain || '',
+        logoUrl,
+        bannerUrl,
+        tagline: studio.tagline || branding.tagline || '',
+        bio: studio.bio || branding.bio || '',
+        aboutUs: branding.aboutUs || '',
+        phone: studio.phone || branding.phone || owner?.phone || '',
+        mobile: studio.mobile || branding.mobile || owner?.phone || '',
+        email: studio.email || branding.email || owner?.email || '',
+        address: studio.address || branding.address || '',
+        city: studio.city || branding.city || '',
+        customEventsCount: studio.customEventsCount || branding.customEventsCount || '',
+        customCustomersCount: studio.customCustomersCount || branding.customCustomersCount || '',
+        instagramUrl: studio.instagramUrl || branding.instagramUrl || '',
+        facebookUrl: studio.facebookUrl || branding.facebookUrl || '',
+        whatsappNumber: branding.whatsappNumber || studio.whatsappUrl || '',
+        whatsappUrl: studio.whatsappUrl || '',
+        websiteUrl: branding.websiteUrl || '',
+      },
+      events: formattedEvents,
+    });
+  } catch (err: any) {
+    console.error('getStudioBranding error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch studio branding' });
+  }
+};
+
+/**
+ * Update studio branding details and manage portfolio events
+ */
+export const updateStudioBranding = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+    let studio = await Studio.findOne({ ownerId: req.user._id });
+    if (!studio) {
+      studio = await Studio.create({
+        name: (req.user.name || 'My') + ' Studio',
+        ownerId: req.user._id,
+        subscriptionPlan: 'BASIC',
+        subscriptionStatus: 'ACTIVE',
+        subscriptionStartDate: new Date(),
+      });
+    }
+
+    const {
+      name,
+      slug,
+      customDomain,
+      logoUrl,
+      bannerUrl,
+      tagline,
+      bio,
+      aboutUs,
+      phone,
+      mobile,
+      email,
+      address,
+      city,
+      customEventsCount,
+      customCustomersCount,
+      instagramUrl,
+      facebookUrl,
+      whatsappNumber,
+      websiteUrl,
+      portfolioEventIds,
+    } = req.body;
+
+    // Validate and update customDomain / slug
+    const targetSlug = (slug !== undefined ? slug : customDomain);
+    if (targetSlug !== undefined) {
+      const cleanSlug = targetSlug ? targetSlug.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '') : '';
+      if (cleanSlug) {
+        const existing = await Studio.findOne({ customDomain: cleanSlug, _id: { $ne: studio._id } });
+        if (existing) {
+          return res.status(400).json({ error: 'This slug or subdomain is already taken. Please choose another.' });
+        }
+        studio.customDomain = cleanSlug;
+      } else {
+        studio.customDomain = undefined;
+      }
+    }
+
+    if (name) studio.name = name;
+    if (tagline !== undefined) studio.tagline = tagline;
+    if (bio !== undefined) studio.bio = bio;
+    if (phone !== undefined) studio.phone = phone;
+    if (mobile !== undefined) studio.mobile = mobile;
+    if (email !== undefined) studio.email = email;
+    if (address !== undefined) studio.address = address;
+    if (city !== undefined) studio.city = city;
+    if (customEventsCount !== undefined) studio.customEventsCount = customEventsCount;
+    if (customCustomersCount !== undefined) studio.customCustomersCount = customCustomersCount;
+    if (instagramUrl !== undefined) studio.instagramUrl = instagramUrl;
+    if (facebookUrl !== undefined) studio.facebookUrl = facebookUrl;
+    if (whatsappNumber !== undefined) {
+      studio.whatsappUrl = whatsappNumber;
+    }
+
+    if (logoUrl !== undefined) studio.logoUrl = logoUrl;
+    if (bannerUrl !== undefined) studio.bannerUrl = bannerUrl;
+
+    // Update branding object
+    studio.branding = {
+      ...(studio.branding || {}),
+      tagline: tagline !== undefined ? tagline : studio.branding?.tagline,
+      bio: bio !== undefined ? bio : studio.branding?.bio,
+      aboutUs: aboutUs !== undefined ? aboutUs : studio.branding?.aboutUs,
+      phone: phone !== undefined ? phone : studio.branding?.phone,
+      mobile: mobile !== undefined ? mobile : studio.branding?.mobile,
+      email: email !== undefined ? email : studio.branding?.email,
+      address: address !== undefined ? address : studio.branding?.address,
+      city: city !== undefined ? city : studio.branding?.city,
+      customEventsCount: customEventsCount !== undefined ? customEventsCount : studio.branding?.customEventsCount,
+      customCustomersCount: customCustomersCount !== undefined ? customCustomersCount : studio.branding?.customCustomersCount,
+      instagramUrl: instagramUrl !== undefined ? instagramUrl : studio.branding?.instagramUrl,
+      facebookUrl: facebookUrl !== undefined ? facebookUrl : studio.branding?.facebookUrl,
+      whatsappNumber: whatsappNumber !== undefined ? whatsappNumber : studio.branding?.whatsappNumber,
+      websiteUrl: websiteUrl !== undefined ? websiteUrl : studio.branding?.websiteUrl,
+      bannerUrl: bannerUrl !== undefined ? bannerUrl : studio.branding?.bannerUrl,
+    };
+
+    // If portfolioEventIds array is supplied, update Event.addToPortfolio flags
+    if (Array.isArray(portfolioEventIds)) {
+      await Event.updateMany(
+        { studioId: studio._id, _id: { $in: portfolioEventIds } },
+        { $set: { addToPortfolio: true } }
+      );
+      await Event.updateMany(
+        { studioId: studio._id, _id: { $nin: portfolioEventIds } },
+        { $set: { addToPortfolio: false } }
+      );
+    }
+
+    await studio.save();
+
+    return res.json({
+      success: true,
+      message: 'Studio branding updated successfully',
+      studio: {
+        id: studio._id,
+        name: studio.name,
+        slug: studio.customDomain || '',
+        logoUrl: studio.logoUrl ? getFileUrl(studio.logoUrl) : null,
+        bannerUrl: studio.bannerUrl ? getFileUrl(studio.bannerUrl) : null,
+        tagline: studio.tagline,
+        bio: studio.bio,
+        phone: studio.phone,
+        mobile: studio.mobile,
+        email: studio.email,
+        address: studio.address,
+        city: studio.city,
+        customEventsCount: studio.customEventsCount || studio.branding?.customEventsCount || '',
+        customCustomersCount: studio.customCustomersCount || studio.branding?.customCustomersCount || '',
+        instagramUrl: studio.instagramUrl,
+        facebookUrl: studio.facebookUrl,
+        whatsappNumber: studio.whatsappUrl,
+        branding: studio.branding,
+      },
+    });
+  } catch (err: any) {
+    console.error('updateStudioBranding error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to update studio branding' });
+  }
+};
+
+/**
+ * Direct file upload for Studio Banner / Cover Photo
+ */
+export const uploadStudioBanner = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const file = req.file || (req.files && Array.isArray(req.files) ? req.files[0] : null);
+    if (!file) {
+      return res.status(400).json({ error: 'No banner image file uploaded' });
+    }
+
+    // Support both Multer memoryStorage (file.buffer) and diskStorage (file.path)
+    let initialBuffer: Buffer | null = file.buffer || null;
+    if (!initialBuffer && file.path && fs.existsSync(file.path)) {
+      initialBuffer = fs.readFileSync(file.path);
+    }
+    if (!initialBuffer) {
+      return res.status(400).json({ error: 'Could not read uploaded banner file content' });
+    }
+
+    const validMimes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (file.mimetype && !validMimes.includes(file.mimetype)) {
+      return res.status(400).json({ error: 'Invalid file format. Please upload JPG, PNG, or WEBP.' });
+    }
+
+    // Compress cover banner to minimum KB: 16:9 (1920x1080) high-efficiency JPEG at 82% quality
+    let finalBuffer = initialBuffer;
+    let mime = 'image/jpeg';
+    let safeName = `banner_${Date.now()}.jpg`;
+
+    try {
+      finalBuffer = await sharp(initialBuffer)
+        .rotate()
+        .resize({ width: 1920, height: 1080, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 82, mozjpeg: true })
+        .toBuffer();
+      mime = 'image/jpeg';
+      safeName = `banner_${Date.now()}.jpg`;
+    } catch (bannerOptErr) {
+      console.warn('[StudioBanner] Sharp optimization warning, using raw buffer:', bannerOptErr);
+      finalBuffer = initialBuffer;
+      mime = file.mimetype || 'image/jpeg';
+      safeName = file.originalname || 'banner.jpg';
+    }
+
+    let studio = await Studio.findOne({ ownerId: req.user._id });
+    if (!studio) {
+      studio = await Studio.create({
+        name: (req.user.name || 'Mara') + ' Studio',
+        ownerId: req.user._id,
+        subscriptionPlan: 'BASIC',
+        subscriptionStatus: 'ACTIVE',
+      });
+    }
+
+    const { uploadFile, deleteFile } = await import('../services/StorageService');
+    const folder = `studios/${studio._id}/banner`;
+    const { url, publicId } = await uploadFile(finalBuffer, folder, mime, safeName);
+
+    if (file.path && fs.existsSync(file.path)) {
+      fs.unlink(file.path, () => {});
+    }
+
+    if (studio.bannerKey && studio.bannerKey !== publicId) {
+      deleteFile(studio.bannerKey).catch((delErr) => console.warn('[Banner] Old banner cleanup notice:', delErr));
+    }
+
+    studio.bannerUrl = url;
+    studio.bannerKey = publicId;
+    studio.branding = {
+      ...(studio.branding || {}),
+      bannerUrl: url,
+    };
+    await studio.save();
+
+    return res.status(200).json({
+      success: true,
+      bannerUrl: getFileUrl(url),
+      bannerKey: publicId,
+      studio,
+    });
+  } catch (err: any) {
+    console.error('uploadStudioBanner error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to upload studio banner' });
+  }
+};
+
+/**
+ * Delete studio banner safely
+ */
+export const deleteStudioBanner = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const studio = await Studio.findOne({ ownerId: req.user._id });
+    if (!studio) return res.status(404).json({ error: 'Studio not found' });
+
+    if (studio.bannerKey) {
+      const { deleteFile } = await import('../services/StorageService');
+      await deleteFile(studio.bannerKey).catch((e) => console.warn('Could not delete old banner:', e));
+    }
+
+    studio.bannerUrl = undefined;
+    studio.bannerKey = undefined;
+    if (studio.branding) {
+      studio.branding.bannerUrl = undefined;
+    }
+    await studio.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Studio banner removed successfully',
+      studio,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to remove studio banner' });
   }
 };

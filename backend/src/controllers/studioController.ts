@@ -74,19 +74,46 @@ export const calculateStudioCredits = async (studioId: any, plan: string, cached
     };
   }
 
-  // Expiration Check Logic - downgrade to BASIC if expired
+  // Expiration Check Logic - downgrade to BASIC only if truly expired and no active storage subscription exists
   if (studio?.subscriptionExpiresAt && new Date(studio.subscriptionExpiresAt) < new Date() && planKey !== 'BASIC') {
-    planKey = 'BASIC';
-    await Studio.findByIdAndUpdate(studioId, {
-      $set: {
-        subscriptionPlan: 'BASIC',
-        subscriptionStatus: 'ACTIVE',
-        subscriptionStartDate: new Date(),
-        subscriptionExpiresAt: null,
-        'usage.photosUploaded': 0,
-        'usage.videosUploaded': 0
-      }
+    const { StorageSubscription } = await import('../models/StorageSubscription');
+    const sOid = new mongoose.Types.ObjectId(studioId.toString());
+    const activeSub = await StorageSubscription.findOne({
+      $or: [
+        { studioId: sOid },
+        { studioId: studioId.toString() },
+        ...(studio?.ownerId ? [
+          { userId: new mongoose.Types.ObjectId(studio.ownerId.toString()) },
+          { userId: studio.ownerId.toString() }
+        ] : [])
+      ],
+      status: 'ACTIVE',
+      paymentStatus: { $in: ['paid', 'PAID', 'captured', 'COMPLETED', 'active', 'ACTIVE'] },
+      expiresAt: { $gt: new Date() },
     });
+
+    if (activeSub) {
+      planKey = activeSub.storageLimitGb >= 100 ? 'PREMIUM' : activeSub.storageLimitGb >= 50 ? 'STANDARD' : 'STARTUP';
+      await Studio.findByIdAndUpdate(studioId, {
+        $set: {
+          subscriptionPlan: planKey,
+          subscriptionStatus: 'ACTIVE',
+          subscriptionExpiresAt: activeSub.expiresAt,
+        }
+      });
+    } else {
+      planKey = 'BASIC';
+      await Studio.findByIdAndUpdate(studioId, {
+        $set: {
+          subscriptionPlan: 'BASIC',
+          subscriptionStatus: 'ACTIVE',
+          subscriptionStartDate: new Date(),
+          subscriptionExpiresAt: null,
+          'usage.photosUploaded': 0,
+          'usage.videosUploaded': 0
+        }
+      });
+    }
   }
 
   const limits = PLAN_STORAGE_LIMITS[planKey] || PLAN_STORAGE_LIMITS.BASIC;
@@ -247,7 +274,16 @@ export const getStudioCredits = async (req: AuthRequest, res: Response) => {
 
     const credits = await calculateStudioCredits(studio._id, studio.subscriptionPlan, studio, adminUser);
     const logoUrl = studio.logoUrl ? getFileUrl(studio.logoUrl) : null;
-    return res.json({ credits, studio: { name: studio.name, logoUrl, subscriptionPlan: studio.subscriptionPlan || (adminUser ? 'PREMIUM' : 'BASIC') } });
+    return res.json({
+      credits,
+      studio: {
+        name: studio.name,
+        logoUrl,
+        subscriptionPlan: studio.subscriptionPlan || (adminUser ? 'PREMIUM' : 'BASIC'),
+        subscriptionExpiresAt: studio.subscriptionExpiresAt,
+        subscriptionStartDate: studio.subscriptionStartDate,
+      }
+    });
   } catch (err: any) {
     console.error('getStudioCredits error:', err);
     return res.status(500).json({ error: err.message });

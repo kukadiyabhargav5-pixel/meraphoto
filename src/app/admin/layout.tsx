@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, Camera, FolderOpen, LifeBuoy, Settings, LogOut, ChevronRight, Bell, Sparkles, Menu, X, CreditCard, Cloud } from 'lucide-react';
+import { LayoutDashboard, Users, Camera, FolderOpen, LifeBuoy, Settings, LogOut, ChevronRight, Bell, Sparkles, Menu, X, CreditCard, Cloud, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../lib/AuthContext';
 import './admin.css';
@@ -74,6 +74,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     {
       title: 'System',
       links: [
+        { href: '/admin/chatbot', icon: <MessageSquare className="w-5 h-5 text-[#c5a880]" />, label: 'Chatbot & Callbacks' },
         { href: '/admin/queries', icon: <LifeBuoy className="w-5 h-5" />, label: 'Studio Queries' },
         { href: '/admin/contacts', icon: <LifeBuoy className="w-5 h-5" />, label: 'Contact Queries' },
       ],

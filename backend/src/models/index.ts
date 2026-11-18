@@ -26,3 +26,5 @@ export * from './StoragePlan';
 export * from './StorageSubscription';
 export * from './StorageActivity';
 export { default as Team } from './Team';
+export * from './ChatLead';
+export { default as ChatLead } from './ChatLead';

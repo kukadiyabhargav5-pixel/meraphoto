@@ -6,6 +6,7 @@ import { AuthProvider } from "../lib/AuthContext";
 import NavigationProgress from "../components/NavigationProgress";
 import ToastProvider from "../components/ToastProvider";
 import GlobalLoader from "../components/GlobalLoader";
+import ChatWidget from "../components/ChatWidget";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -99,6 +100,7 @@ export default function RootLayout({
         <NavigationProgress />
         <AuthProvider>
           {children}
+          <ChatWidget />
         </AuthProvider>
         <ToastProvider />
       </body>
